@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signal History — Changes & Snapshots</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--dim:#8b949e;--green:#3fb950;--red:#f85149;--yellow:#d29922;--blue:#58a6ff;--purple:#bc8cff;--orange:#f0883e;--cyan:#39d2c0;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.5;}
+  a{color:var(--blue);text-decoration:none;}a:hover{text-decoration:underline;}
+
+  .header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  .header h1{font-size:20px;font-weight:600;}.header h1 span{color:var(--blue);}
+
+  .nav{padding:12px 28px;display:flex;gap:8px;border-bottom:1px solid var(--border);}
+  .nav a{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500;color:var(--dim);transition:all .15s;}
+  .nav a:hover{background:var(--surface2);color:var(--text);text-decoration:none;}
+  .nav a.active{background:var(--blue);color:#fff;}
+
+  .controls{padding:14px 28px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .pill{background:var(--surface2);border:1px solid var(--border);color:var(--dim);padding:5px 12px;border-radius:20px;cursor:pointer;font-size:11px;transition:all .15s;}
+  .pill:hover,.pill.on{background:var(--blue);color:#fff;border-color:var(--blue);}
+  .search{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 12px;border-radius:6px;font-size:12px;width:200px;}
+  .search::placeholder{color:var(--dim);}.search:focus{outline:none;border-color:var(--blue);}
+
+  .main{padding:16px 28px;}
+
+  .section-title{font-size:16px;font-weight:600;margin:20px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+  .section-title span{color:var(--dim);font-size:13px;font-weight:400;margin-left:8px;}
+
+  .timeline{position:relative;padding-left:28px;}
+  .timeline::before{content:'';position:absolute;left:10px;top:0;bottom:0;width:2px;background:var(--border);}
+  .event{position:relative;margin-bottom:12px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;transition:.15s;}
+  .event:hover{border-color:var(--blue);}
+  .event::before{content:'';position:absolute;left:-22px;top:16px;width:10px;height:10px;border-radius:50%;border:2px solid var(--border);background:var(--bg);}
+  .event.critical::before{background:var(--red);border-color:var(--red);}
+  .event.high::before{background:var(--orange);border-color:var(--orange);}
+  .event.medium::before{background:var(--yellow);border-color:var(--yellow);}
+  .event.low::before{background:var(--dim);border-color:var(--dim);}
+
+  .event-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+  .event-type{font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;padding:2px 8px;border-radius:3px;}
+  .type-signal_change{background:rgba(248,81,73,.12);color:var(--red);}
+  .type-group_signal_change{background:rgba(240,136,62,.12);color:var(--orange);}
+  .type-group_added{background:rgba(63,185,80,.12);color:var(--green);}
+  .type-group_removed{background:rgba(248,81,73,.12);color:var(--red);}
+  .type-ticker_added{background:rgba(63,185,80,.08);color:var(--green);}
+  .type-ticker_removed{background:rgba(248,81,73,.08);color:var(--red);}
+  .type-score_change{background:rgba(210,153,34,.12);color:var(--yellow);}
+  .type-group_rank_change{background:rgba(188,140,255,.12);color:var(--purple);}
+  .event-time{font-size:11px;color:var(--dim);}
+  .event-desc{font-size:13px;font-weight:500;}
+  .event-detail{font-size:11px;color:var(--dim);margin-top:4px;}
+  .event-group{font-size:11px;color:var(--cyan);}
+
+  .snap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;}
+  .snap{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;cursor:pointer;transition:.15s;}
+  .snap:hover{border-color:var(--blue);}
+  .snap-time{font-size:14px;font-weight:600;margin-bottom:6px;}
+  .snap-meta{font-size:12px;color:var(--dim);display:flex;gap:16px;}
+  .snap-badge{font-size:10px;background:var(--surface2);padding:2px 8px;border-radius:4px;color:var(--dim);}
+
+  .empty{text-align:center;padding:60px;color:var(--dim);}
+  .empty h2{font-size:18px;margin-bottom:8px;color:var(--text);}
+
+  .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;overflow-y:auto;}
+  .modal-overlay.open{display:flex;justify-content:center;padding:40px 20px;}
+  .modal{background:var(--bg);border:1px solid var(--border);border-radius:12px;max-width:1100px;width:100%;max-height:90vh;overflow-y:auto;padding:24px;}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+  .modal-head h2{font-size:18px;}
+  .modal-close{background:var(--surface2);border:1px solid var(--border);color:var(--text);width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
+  .modal-close:hover{border-color:var(--red);color:var(--red);}
+
+  .modal-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px;}
+  .modal-tab{padding:8px 16px;font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;}
+  .modal-tab:hover{color:var(--text);}
+  .modal-tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+  .modal-tab-content{display:none;}.modal-tab-content.active{display:block;}
+
+  .snap-table{width:100%;border-collapse:collapse;margin-top:12px;}
+  .snap-table th{text-align:left;padding:7px 10px;font-size:9px;color:var(--dim);text-transform:uppercase;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .snap-table td{padding:7px 10px;font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .snap-group-name{font-weight:600;color:var(--cyan);font-size:13px;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;justify-content:space-between;align-items:center;}
+  .snap-group-meta{font-size:10px;color:var(--dim);font-weight:400;}
+  .breaker-badge{padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;}
+  .breaker-critical{background:rgba(248,81,73,.18);color:var(--red);}
+  .breaker-warning{background:rgba(240,136,62,.15);color:var(--orange);}
+  .breaker-watch{background:rgba(210,153,34,.12);color:var(--yellow);}
+  .breaker-clear{background:rgba(63,185,80,.1);color:var(--green);}
+  .sig-badge{padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;text-transform:uppercase;}
+  .sig-strong-buy,.sig-buy{background:rgba(63,185,80,.12);color:var(--green);}
+  .sig-hold{background:rgba(210,153,34,.12);color:var(--yellow);}
+  .sig-sell,.sig-strong-sell{background:rgba(248,81,73,.12);color:var(--red);}
+  .mono{font-family:'SF Mono','Fira Code',monospace;font-size:11px;}
+  .tbl-scroll{overflow-x:auto;}
+
+  @media(max-width:768px){.main,.controls,.nav,.header{padding-left:14px;padding-right:14px;}}
+</style>
+</head>
+<body>
+
+<div class="header"><h1><span>&#9679;</span> Signal <span>History</span></h1></div>
+
+<div class="nav">
+  <a href="index.html">Dashboard</a>
+  <a href="history.html" class="active">History &amp; Changes</a>
+  <a href="architecture.html">Architecture</a>
+</div>
+
+<div class="controls">
+  <button class="pill on" onclick="filtType('all',this)">All Changes</button>
+  <button class="pill" onclick="filtType('signal_change',this)">Signal Changes</button>
+  <button class="pill" onclick="filtType('group_signal_change',this)">Group Changes</button>
+  <button class="pill" onclick="filtType('ticker_added',this)">Added</button>
+  <button class="pill" onclick="filtType('ticker_removed',this)">Removed</button>
+  <input class="search" type="text" placeholder="Search ticker or group..." oninput="searchH(this.value)">
+</div>
+
+<div class="main">
+  <div class="section-title">Signal Changes <span id="changeCount"></span></div>
+  <div id="timelineContent"><div class="empty"><p>Loading history...</p></div></div>
+
+  <div class="section-title" style="margin-top:32px;">Snapshots (Past States) <span id="snapCount"></span></div>
+  <div id="snapshotContent"><div class="empty"><p>Loading snapshots...</p></div></div>
+</div>
+
+<div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-head"><h2 id="modalTitle">Snapshot</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="modal-tabs" id="modalTabs"></div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+let HISTORY = null;
+let typeFilter = 'all';
+let searchQ = '';
+
+function fmtMcap(v){if(!v)return '—';if(v>=1e12)return '$'+(v/1e12).toFixed(1)+'T';if(v>=1e9)return '$'+(v/1e9).toFixed(1)+'B';if(v>=1e6)return '$'+(v/1e6).toFixed(0)+'M';return '$'+v;}
+function fmtPct(v){if(v===null||v===undefined)return '—';return (v*100).toFixed(1)+'%';}
+function fmtNum(v,d){if(v===null||v===undefined)return '—';return Number(v).toFixed(d||1);}
+function breakerIcon(s){return {critical:'🔴',warning:'🟠',watch:'🟡',clear:'🟢'}[s]||'⚪';}
+
+async function loadHistory(){
+  try{
+    const r = await fetch('history.json?t='+Date.now());
+    if(!r.ok) throw new Error();
+    HISTORY = await r.json();
+    renderChanges();
+    renderSnapshots();
+  }catch(e){
+    document.getElementById('timelineContent').innerHTML = `<div class="empty"><h2>No History Yet</h2><p>History is created after the second run of the signal engine.<br>Each run is compared against the previous to detect changes.</p></div>`;
+    document.getElementById('snapshotContent').innerHTML = '';
+  }
+}
+
+function renderChanges(){
+  if(!HISTORY) return;
+  let changes = HISTORY.changes||[];
+
+  if(typeFilter!=='all') changes = changes.filter(c=>c.type===typeFilter);
+  if(searchQ) changes = changes.filter(c=>(c.ticker||'').toLowerCase().includes(searchQ)||(c.group||'').toLowerCase().includes(searchQ)||c.description.toLowerCase().includes(searchQ));
+
+  document.getElementById('changeCount').textContent = `(${changes.length} events)`;
+
+  if(!changes.length){
+    document.getElementById('timelineContent').innerHTML = `<div class="empty"><h2>No changes match filter</h2><p>${typeFilter==='all'&&!searchQ?'Run the signal engine multiple times to generate change history.':'Try a different filter or search term.'}</p></div>`;
+    return;
+  }
+
+  const sorted = [...changes].reverse();
+
+  let html = '<div class="timeline">';
+  sorted.forEach(c=>{
+    const detail = c.detail||{};
+    let detailHtml = '';
+
+    if(c.type==='signal_change'){
+      detailHtml = `Score: ${detail.from_score} → ${detail.to_score} · YTD: ${detail.ytd_return}%${detail.rsi?' · RSI: '+detail.rsi.toFixed(1):''}`;
+    } else if(c.type==='group_signal_change'){
+      detailHtml = `Score: ${detail.from_score} → ${detail.to_score}`;
+    } else if(c.type==='group_added'){
+      detailHtml = `Signal: ${detail.group_signal} · Avg YTD: ${detail.avg_ytd}% · ${detail.stock_count} stocks`;
+    } else if(c.type==='group_removed'){
+      detailHtml = `Last signal: ${detail.last_signal} · Last avg YTD: ${detail.last_avg_ytd}%`;
+    } else if(c.type==='ticker_added'){
+      detailHtml = `Signal: ${detail.signal} · Score: ${detail.score} · YTD: ${detail.ytd_return}%`;
+    } else if(c.type==='ticker_removed'){
+      detailHtml = `Last signal: ${detail.last_signal} · Last score: ${detail.last_score} · Last YTD: ${detail.last_ytd_return}%`;
+    } else if(c.type==='score_change'){
+      detailHtml = `Signal remains: ${detail.signal}`;
+    } else if(c.type==='group_rank_change'){
+      detailHtml = `Rank moved ${detail.from_rank>detail.to_rank?'up':'down'}`;
+    }
+
+    html += `<div class="event ${c.severity}">
+      <div class="event-head">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span class="event-type type-${c.type}">${c.type.replace(/_/g,' ')}</span>
+          ${c.ticker?`<span style="font-family:monospace;font-weight:700;color:var(--blue);font-size:12px;">${c.ticker}</span>`:''}
+        </div>
+        <span class="event-time">${new Date(c.timestamp).toLocaleString()}</span>
+      </div>
+      <div class="event-desc">${c.description}</div>
+      <div class="event-group">${c.group||''}</div>
+      ${detailHtml?`<div class="event-detail">${detailHtml}</div>`:''}
+    </div>`;
+  });
+  html += '</div>';
+  document.getElementById('timelineContent').innerHTML = html;
+}
+
+function renderSnapshots(){
+  if(!HISTORY) return;
+  const snaps = HISTORY.snapshots||[];
+  document.getElementById('snapCount').textContent = `(${snaps.length} saved)`;
+
+  if(!snaps.length){
+    document.getElementById('snapshotContent').innerHTML = '<div class="empty"><p>No snapshots yet.</p></div>';
+    return;
+  }
+
+  const sorted = [...snaps].reverse();
+  let html = '<div class="snap-grid">';
+  sorted.forEach((s,i)=>{
+    const ts = new Date(s.timestamp);
+    html += `<div class="snap" onclick="viewSnapshot('${s.filename}')">
+      <div class="snap-time">${ts.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})} ${ts.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</div>
+      <div class="snap-meta">
+        <span>${s.total_groups} groups</span>
+        <span>${s.total_tickers} tickers</span>
+        <span>S&P: ${s.sp500_ytd>=0?'+':''}${s.sp500_ytd}%</span>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  document.getElementById('snapshotContent').innerHTML = html;
+}
+
+async function viewSnapshot(filename){
+  try{
+    const r = await fetch(`snapshots/${filename}?t=`+Date.now());
+    if(!r.ok) throw new Error();
+    const data = await r.json();
+    const ts = new Date(data.timestamp);
+    document.getElementById('modalTitle').textContent = `Snapshot — ${ts.toLocaleString()}`;
+
+    // Tab buttons
+    document.getElementById('modalTabs').innerHTML = `
+      <button class="modal-tab active" onclick="snapTab('signals')">Signals & Technicals</button>
+      <button class="modal-tab" onclick="snapTab('momentum')">Momentum</button>
+      <button class="modal-tab" onclick="snapTab('fundamentals')">Fundamentals</button>
+    `;
+
+    let badges = `<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+      <div class="snap-badge">S&P 500 YTD: ${data.sp500_ytd}%</div>
+      <div class="snap-badge">${data.total_groups} groups</div>
+      <div class="snap-badge">${data.total_tickers} tickers</div>
+    </div>`;
+
+    // Signals tab
+    let sigHtml = badges;
+    (data.groups||[]).forEach(g=>{
+      const bs = g.breaker_status||'clear';
+      sigHtml += `<div class="snap-group-name">
+        <span>#${g.rank} ${g.name} — Avg ${g.avg_ytd}% — <span class="sig-badge sig-${g.group_signal}">${g.group_signal}</span></span>
+        <span><span class="breaker-badge breaker-${bs}">${breakerIcon(bs)} ${bs.toUpperCase()}</span> <span class="snap-group-meta">${g.sector} · ${g.industry_group||''} · GICS ${g.gics_code||''}</span></span>
+      </div>`;
+      sigHtml += '<div class="tbl-scroll"><table class="snap-table"><thead><tr><th>Ticker</th><th>Price</th><th>YTD</th><th>Score</th><th>Signal</th><th>RSI</th><th>MACD</th><th>Vol Ratio</th></tr></thead><tbody>';
+      (g.stocks||[]).forEach(s=>{
+        sigHtml += `<tr>
+          <td style="font-weight:700;color:var(--blue);font-family:monospace">${s.ticker}</td>
+          <td class="mono">$${s.price?s.price.toFixed(2):'—'}</td>
+          <td style="color:${s.ytd_return>=0?'var(--green)':'var(--red)'}" class="mono">${s.ytd_return>=0?'+':''}${s.ytd_return}%</td>
+          <td class="mono">${s.score}</td>
+          <td><span class="sig-badge sig-${s.signal}">${s.signal}</span></td>
+          <td class="mono" style="color:${s.rsi>70?'var(--red)':s.rsi<30?'var(--green)':'var(--dim)'}">${s.rsi?s.rsi.toFixed(1):'—'}</td>
+          <td class="mono" style="color:${s.macd_histogram>0?'var(--green)':'var(--red)'}">${s.macd_histogram!=null?(s.macd_histogram>0?'▲':'▼')+' '+Math.abs(s.macd_histogram).toFixed(2):'—'}</td>
+          <td class="mono">${s.volume_ratio||'—'}x</td>
+        </tr>`;
+      });
+      sigHtml += '</tbody></table></div>';
+    });
+
+    // Momentum tab
+    let momHtml = badges;
+    (data.groups||[]).forEach(g=>{
+      momHtml += `<div class="snap-group-name"><span>#${g.rank} ${g.name}</span></div>`;
+      momHtml += '<div class="tbl-scroll"><table class="snap-table"><thead><tr><th>Ticker</th><th>Price</th><th>1M Ret</th><th>3M Ret</th><th>YTD</th><th>% from 52W Hi</th><th>RS vs MA50</th><th>Trend Str</th></tr></thead><tbody>';
+      (g.stocks||[]).forEach(s=>{
+        momHtml += `<tr>
+          <td style="font-weight:700;color:var(--blue);font-family:monospace">${s.ticker}</td>
+          <td class="mono">$${s.price?s.price.toFixed(2):'—'}</td>
+          <td class="mono" style="color:${(s.return_1m||0)>=0?'var(--green)':'var(--red)'}">${fmtNum(s.return_1m,1)}%</td>
+          <td class="mono" style="color:${(s.return_3m||0)>=0?'var(--green)':'var(--red)'}">${fmtNum(s.return_3m,1)}%</td>
+          <td class="mono" style="color:${s.ytd_return>=0?'var(--green)':'var(--red)'}">${s.ytd_return>=0?'+':''}${s.ytd_return}%</td>
+          <td class="mono" style="color:${(s.pct_from_52w_high||0)>-5?'var(--green)':'var(--red)'}">${fmtNum(s.pct_from_52w_high,1)}%</td>
+          <td class="mono" style="color:${(s.rs_vs_ma50||0)>=0?'var(--green)':'var(--red)'}">${fmtNum(s.rs_vs_ma50,1)}%</td>
+          <td class="mono">${s.trend_strength||'—'}/20</td>
+        </tr>`;
+      });
+      momHtml += '</tbody></table></div>';
+    });
+
+    // Fundamentals tab
+    let funHtml = badges;
+    (data.groups||[]).forEach(g=>{
+      funHtml += `<div class="snap-group-name"><span>#${g.rank} ${g.name}</span></div>`;
+      funHtml += '<div class="tbl-scroll"><table class="snap-table"><thead><tr><th>Ticker</th><th>Mkt Cap</th><th>Fwd P/E</th><th>Rev Growth</th><th>Op Margin</th><th>EPS Fwd</th><th>Beta</th><th>Short %</th><th>Target</th><th>Analyst</th></tr></thead><tbody>';
+      (g.stocks||[]).forEach(s=>{
+        const f = s.fundamentals||{};
+        funHtml += `<tr>
+          <td style="font-weight:700;color:var(--blue);font-family:monospace">${s.ticker}</td>
+          <td class="mono">${fmtMcap(f.market_cap)}</td>
+          <td class="mono">${fmtNum(f.forward_pe,1)}</td>
+          <td class="mono" style="color:${f.revenue_growth!=null?(f.revenue_growth>=0?'var(--green)':'var(--red)'):'var(--dim)'}">${f.revenue_growth!=null?fmtPct(f.revenue_growth):'—'}</td>
+          <td class="mono" style="color:${f.operating_margin!=null?(f.operating_margin>=0.1?'var(--green)':'var(--yellow)'):'var(--dim)'}">${f.operating_margin!=null?fmtPct(f.operating_margin):'—'}</td>
+          <td class="mono">${fmtNum(f.eps_forward,2)}</td>
+          <td class="mono">${fmtNum(f.beta,2)}</td>
+          <td class="mono">${f.short_pct_float!=null?fmtPct(f.short_pct_float):'—'}</td>
+          <td class="mono">${f.target_price?'$'+fmtNum(f.target_price,0):'—'}</td>
+          <td>${f.recommendation||'—'}</td>
+        </tr>`;
+      });
+      funHtml += '</tbody></table></div>';
+    });
+
+    // Store tab content and show
+    window._snapTabs = {signals:sigHtml, momentum:momHtml, fundamentals:funHtml};
+    document.getElementById('modalBody').innerHTML = sigHtml;
+    document.getElementById('modal').classList.add('open');
+  }catch(e){
+    alert('Could not load snapshot');
+  }
+}
+
+function snapTab(tab){
+  document.querySelectorAll('.modal-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.modal-tab').forEach(b=>{if(b.textContent.toLowerCase().includes(tab.substring(0,4)))b.classList.add('active');});
+  if(window._snapTabs && window._snapTabs[tab]){
+    document.getElementById('modalBody').innerHTML = window._snapTabs[tab];
+  }
+}
+
+function closeModal(){document.getElementById('modal').classList.remove('open');}
+function filtType(t,btn){typeFilter=t;document.querySelectorAll('.pill').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderChanges();}
+function searchH(v){searchQ=v.toLowerCase();renderChanges();}
+
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+loadHistory();
+// Auto-refresh history every 60s
+setInterval(()=>loadHistory(), 60000);
+</script>
+</body>
+</html>

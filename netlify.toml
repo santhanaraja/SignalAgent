@@ -1,0 +1,31 @@
+[build]
+  # No build command needed — we serve pre-built static files
+  # Signal engine runs via GitHub Actions and commits updated JSON
+  publish = "public"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+[[headers]]
+  for = "/signals.json"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma = "no-cache"
+    Expires = "0"
+
+[[headers]]
+  for = "/history.json"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma = "no-cache"
+    Expires = "0"
+
+[[headers]]
+  for = "/snapshots/*"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-cache"

@@ -1,0 +1,980 @@
+#!/usr/bin/env python3
+"""
+Signal Engine — Pulls market data + fundamentals, computes technical indicators,
+monitors thesis-breaker conditions, and generates buy/sell/hold signals.
+"""
+
+import json
+import os
+import sys
+import datetime
+import numpy as np
+import pandas as pd
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """Handle numpy types in JSON serialization."""
+    def default(self, obj):
+        if isinstance(obj, (np.integer,)):
+            return int(obj)
+        if isinstance(obj, (np.floating,)):
+            return float(obj)
+        if isinstance(obj, (np.bool_,)):
+            return bool(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
+
+# Try yfinance first, fall back to direct API
+try:
+    import yfinance as yf
+    USE_YFINANCE = True
+except ImportError:
+    import requests
+    USE_YFINANCE = False
+    print("[WARN] yfinance not installed, using direct Yahoo Finance API")
+
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+PUBLIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
+
+# ============================================================
+# GICS SUB-INDUSTRY DEFINITIONS
+# ============================================================
+# Names follow GICS Level 3/4 classification standard
+# Each group includes thesis-breaker conditions that can be
+# programmatically checked against market data
+# ============================================================
+INDUSTRY_GROUPS = {
+    "Technology Hardware, Storage & Peripherals": {
+        "gics_code": "45202030",
+        "gics_level": "Sub-Industry",
+        "sector": "Information Technology",
+        "industry_group": "Technology Hardware & Equipment",
+        "tickers": ["SNDK", "STX", "WDC", "PSTG", "NTAP"],
+        "thesis": "AI infrastructure buildout driving record demand for high-capacity storage. NAND pricing stabilizing; HDD nearline demand surging from hyperscaler data centers.",
+        "thesis_breaker": "AI capex slowdown, hyperscaler order deferrals, or NAND oversupply from Chinese fabs (YMTC).",
+        "cycle_stage": "mid",
+        "breaker_checks": {
+            "sp500_drawdown_10pct": "S&P 500 drops >10% from YTD high (proxy for macro risk-off / capex freeze)",
+            "group_avg_rsi_below_40": "Group avg RSI falls below 40 — momentum breakdown",
+            "majority_below_ma50": ">50% of stocks fall below 50-day MA — trend reversal",
+            "avg_ytd_negative": "Group avg YTD return turns negative — leadership lost"
+        }
+    },
+    "Semiconductors — Memory & HBM": {
+        "gics_code": "45301020",
+        "gics_level": "Sub-Industry",
+        "sector": "Information Technology",
+        "industry_group": "Semiconductors & Semiconductor Equipment",
+        "tickers": ["MU"],
+        "thesis": "HBM is the critical bottleneck for AI training/inference. Supply fully booked through 2026; prices rising ~20%. TAM from $35B to $100B by 2028.",
+        "thesis_breaker": "AI training efficiency gains reducing memory per GPU, Chinese HBM alternatives, or customer inventory digestion.",
+        "cycle_stage": "early-mid",
+        "breaker_checks": {
+            "sp500_drawdown_10pct": "S&P 500 drops >10% from YTD high",
+            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
+            "majority_below_ma50": ">50% of stocks fall below 50-day MA",
+            "avg_ytd_negative": "Group avg YTD return turns negative"
+        }
+    },
+    "Semiconductor Materials & Equipment": {
+        "gics_code": "45301010",
+        "gics_level": "Sub-Industry",
+        "sector": "Information Technology",
+        "industry_group": "Semiconductors & Semiconductor Equipment",
+        "tickers": ["ASML", "AMAT", "LRCX", "KLAC", "ENTG", "MKSI", "TER", "ALAB"],
+        "thesis": "AI capex supercycle driving record WFE spend — advanced packaging (CoWoS/HBM), EUV lithography, high-NA EUV, and AI connectivity (PCIe retimers, CXL). TSMC/Samsung/Intel all expanding capacity.",
+        "thesis_breaker": "WFE spending downturn, fab project delays/cancellations, China export restrictions tightening, or customer inventory correction.",
+        "cycle_stage": "mid",
+        "breaker_checks": {
+            "sp500_drawdown_10pct": "S&P 500 drops >10% from YTD high — macro risk-off / capex freeze",
+            "group_avg_rsi_below_40": "Group avg RSI falls below 40 — momentum breakdown",
+            "majority_below_ma50": ">50% of stocks fall below 50-day MA — trend reversal",
+            "avg_ytd_negative": "Group avg YTD return turns negative — leadership lost"
+        }
+    },
+    "Gold": {
+        "gics_code": "15104030",
+        "gics_level": "Sub-Industry",
+        "sector": "Materials",
+        "industry_group": "Metals & Mining",
+        "tickers": ["NEM", "GOLD", "AEM", "KGC", "AU", "HL", "CDE", "PAAS", "FNV", "RGLD", "EGO", "OR", "SSRM", "WPM"],
+        "thesis": "Record gold prices with massive operating leverage. Central bank buying, geopolitical risk, de-dollarization. Broadest group — 13+ stocks beating S&P.",
+        "thesis_breaker": "Sharp rise in real interest rates, USD strength, gold reversal below $2,400, or mining cost inflation.",
+        "cycle_stage": "mid",
+        "breaker_checks": {
+            "gold_below_threshold": "Gold (GLD) drops >8% from recent high — commodity thesis weakening",
+            "usd_strength": "DXY (UUP) rises >5% YTD — USD strength crushing gold",
+            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
+            "majority_below_ma50": ">50% of stocks fall below 50-day MA",
+            "breadth_collapse": "<50% of stocks beating S&P 500 (was 90%+) — breadth deteriorating"
+        }
+    },
+    "Copper": {
+        "gics_code": "15104025",
+        "gics_level": "Sub-Industry",
+        "sector": "Materials",
+        "industry_group": "Metals & Mining",
+        "tickers": ["FCX", "SCCO", "TECK", "HBM"],
+        "thesis": "Structural supply deficit from electrification, renewable energy buildout, and AI data center infrastructure. ICSG forecasts deficit in 2026. Mine supply growth lagging demand.",
+        "thesis_breaker": "Global recession crushing industrial demand, unexpected mine supply surge, or copper substitution in key applications.",
+        "cycle_stage": "mid",
+        "breaker_checks": {
+            "group_avg_rsi_below_40": "Group avg RSI falls below 40 — momentum breakdown",
+            "majority_below_ma50": ">50% of stocks fall below 50-day MA — trend reversal",
+            "avg_ytd_negative": "Group avg YTD return turns negative — leadership lost",
+            "sp500_drawdown_10pct": "S&P 500 drops >10% from YTD high — macro risk-off"
+        }
+    },
+    "Specialty Chemicals": {
+        "gics_code": "15101050",
+        "gics_level": "Sub-Industry",
+        "sector": "Materials",
+        "industry_group": "Chemicals",
+        "tickers": ["TROX", "CC", "KRO", "DOW", "LYB", "PPG", "ECL"],
+        "thesis": "Cyclical mean-reversion. TiO2 volumes recovering, supply being cut (plant closures). Destocking cycle ending across specialty chemicals.",
+        "thesis_breaker": "China TiO2 dumping, construction/auto demand double-dip, or energy cost spikes.",
+        "cycle_stage": "early",
+        "breaker_checks": {
+            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
+            "majority_below_ma50": ">50% of stocks fall below 50-day MA",
+            "avg_ytd_negative": "Group avg YTD return turns negative",
+            "energy_spike": "Energy (XLE) surges >15% YTD — energy cost pressure on margins"
+        }
+    },
+    "Oil & Gas Equipment & Services": {
+        "gics_code": "10101020",
+        "gics_level": "Sub-Industry",
+        "sector": "Energy",
+        "industry_group": "Energy Equipment & Services",
+        "tickers": ["VAL", "RIG", "HAL", "NOV", "FTI", "LBRT"],
+        "thesis": "Structural upcycle: no new deepwater rigs since 2014, aging fleet, accelerating project sanctioning. Day rates $400K/day.",
+        "thesis_breaker": "Oil below $60, OPEC+ supply surge, or rapid transition to onshore/unconventional.",
+        "cycle_stage": "mid",
+        "breaker_checks": {
+            "oil_below_60": "Crude oil (USO) drops >25% from recent high — approaching $60 breakeven",
+            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
+            "majority_below_ma50": ">50% of stocks fall below 50-day MA"
+        }
+    },
+    "Oil & Gas Exploration & Production": {
+        "gics_code": "10102020",
+        "gics_level": "Sub-Industry",
+        "sector": "Energy",
+        "industry_group": "Oil, Gas & Consumable Fuels",
+        "tickers": ["KOS", "EQT", "COP", "FANG", "APA", "SM"],
+        "thesis": "Nat gas E&P benefiting from LNG export additions 2026-27. Oil E&P supported by OPEC+ discipline. Selective, not broad.",
+        "thesis_breaker": "OPEC+ production increases, warm winters killing nat gas, or global recession.",
+        "cycle_stage": "mid",
+        "breaker_checks": {
+            "oil_below_60": "Crude oil drops >25% from recent high",
+            "natgas_collapse": "Natural gas (UNG) drops >30% from recent high",
+            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
+            "majority_below_ma50": ">50% of stocks fall below 50-day MA"
+        }
+    },
+    "Aerospace & Defense": {
+        "gics_code": "20101010",
+        "gics_level": "Sub-Industry",
+        "sector": "Industrials",
+        "industry_group": "Capital Goods",
+        "tickers": ["RKLB", "LHX", "LMT", "KTOS", "PLTR", "RTX", "NOC", "GD", "HII"],
+        "thesis": "European rearmament (NATO 3%+ GDP), Ukraine, Pacific tensions creating multi-year defense supercycle. Navy shipbuilding at $26-27B authorized for 2026.",
+        "thesis_breaker": "Peace deals, budget sequestration, CR-driven spending delays, or program cancellations.",
+        "cycle_stage": "early-mid",
+        "breaker_checks": {
+            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
+            "majority_below_ma50": ">50% of stocks fall below 50-day MA",
+            "avg_ytd_negative": "Group avg YTD return turns negative"
+        }
+    },
+    "Independent Power Producers & Energy Traders": {
+        "gics_code": "55105020",
+        "gics_level": "Sub-Industry",
+        "sector": "Utilities",
+        "industry_group": "Independent Power and Renewable Electricity Producers",
+        "tickers": ["CEG", "VST", "NRG", "OKLO", "SMR"],
+        "thesis": "AI data center power demand creating structural electricity shortage. Nuclear restarts and new builds accelerating. Capacity contracts at premium pricing. Electrification and reshoring compounding demand growth.",
+        "thesis_breaker": "Data center power demand forecasts miss, natural gas price spikes crushing margins, regulatory blocks on nuclear restarts, or grid interconnection delays.",
+        "cycle_stage": "early-mid",
+        "breaker_checks": {
+            "group_avg_rsi_below_40": "Group avg RSI falls below 40 — momentum breakdown",
+            "majority_below_ma50": ">50% of stocks fall below 50-day MA — trend reversal",
+            "avg_ytd_negative": "Group avg YTD return turns negative — leadership lost",
+            "sp500_drawdown_10pct": "S&P 500 drops >10% from YTD high — macro risk-off"
+        }
+    },
+    "Coal & Consumable Fuels (Uranium)": {
+        "gics_code": "10102050",
+        "gics_level": "Sub-Industry",
+        "sector": "Energy",
+        "industry_group": "Oil, Gas & Consumable Fuels",
+        "tickers": ["UEC", "LEU", "CCJ"],
+        "thesis": "Nuclear renaissance driven by AI data center power demand. Uranium supply structurally deficient. BofA targets $135/lb vs $81-88 current.",
+        "thesis_breaker": "Uranium price pullback, SMR delays, or return of Russian/Kazakh supply.",
+        "cycle_stage": "early",
+        "breaker_checks": {
+            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
+            "majority_below_ma50": ">50% of stocks fall below 50-day MA",
+            "avg_ytd_negative": "Group avg YTD return turns negative"
+        }
+    },
+    "Oil & Gas Refining & Marketing": {
+        "gics_code": "10102030",
+        "gics_level": "Sub-Industry",
+        "sector": "Energy",
+        "industry_group": "Oil, Gas & Consumable Fuels",
+        "tickers": ["MPC", "VLO", "PBF", "DK", "PSX"],
+        "thesis": "Crack spreads elevated as refining capacity additions lag closures. Export demand from Latin America supporting Gulf Coast economics.",
+        "thesis_breaker": "Crack spread compression from new ME/Asia capacity, demand destruction.",
+        "cycle_stage": "mid-late",
+        "breaker_checks": {
+            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
+            "majority_below_ma50": ">50% of stocks fall below 50-day MA",
+            "avg_ytd_negative": "Group avg YTD return turns negative"
+        }
+    }
+}
+
+# Macro proxy tickers for thesis-breaker checks
+MACRO_TICKERS = ["^GSPC", "GLD", "UUP", "USO", "UNG", "XLE"]
+
+
+# ============================================================
+# DATA FETCHING
+# ============================================================
+def fetch_price_data_yfinance(ticker, period="6mo"):
+    """Fetch historical price data using yfinance."""
+    try:
+        stock = yf.Ticker(ticker)
+        df = stock.history(period=period)
+        if df.empty:
+            return None
+        df.index = df.index.tz_localize(None)
+        return df
+    except Exception as e:
+        print(f"  [ERROR] {ticker}: {e}")
+        return None
+
+
+def fetch_price_data_api(ticker, period="6mo"):
+    """Fetch data via Yahoo Finance API directly (fallback)."""
+    try:
+        range_map = {"1mo": "1mo", "3mo": "3mo", "6mo": "6mo", "1y": "1y"}
+        r = range_map.get(period, "6mo")
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range={r}&interval=1d"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(url, headers=headers, timeout=15)
+        data = resp.json()
+        result = data["chart"]["result"][0]
+        timestamps = result["timestamp"]
+        quotes = result["indicators"]["quote"][0]
+        df = pd.DataFrame({
+            "Open": quotes["open"],
+            "High": quotes["high"],
+            "Low": quotes["low"],
+            "Close": quotes["close"],
+            "Volume": quotes["volume"]
+        }, index=pd.to_datetime(timestamps, unit="s"))
+        df.dropna(subset=["Close"], inplace=True)
+        return df
+    except Exception as e:
+        print(f"  [ERROR] {ticker}: {e}")
+        return None
+
+
+def fetch_data(ticker, period="6mo"):
+    if USE_YFINANCE:
+        return fetch_price_data_yfinance(ticker, period)
+    return fetch_price_data_api(ticker, period)
+
+
+def fetch_fundamentals_yfinance(ticker):
+    """Fetch fundamental data via yfinance .info and .financials."""
+    fundamentals = {
+        "market_cap": None,
+        "forward_pe": None,
+        "trailing_pe": None,
+        "revenue_growth_yoy": None,
+        "gross_margin": None,
+        "operating_margin": None,
+        "profit_margin": None,
+        "eps_trailing": None,
+        "eps_forward": None,
+        "dividend_yield": None,
+        "beta": None,
+        "short_pct_float": None,
+        "target_mean_price": None,
+        "recommendation": None,
+        "sector": None,
+        "industry": None,
+        "fifty_two_week_high": None,
+        "fifty_two_week_low": None
+    }
+    if not USE_YFINANCE:
+        return fundamentals
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info or {}
+        fundamentals["market_cap"] = info.get("marketCap")
+        fundamentals["forward_pe"] = info.get("forwardPE")
+        fundamentals["trailing_pe"] = info.get("trailingPE")
+        fundamentals["revenue_growth_yoy"] = info.get("revenueGrowth")
+        fundamentals["gross_margin"] = info.get("grossMargins")
+        fundamentals["operating_margin"] = info.get("operatingMargins")
+        fundamentals["profit_margin"] = info.get("profitMargins")
+        fundamentals["eps_trailing"] = info.get("trailingEps")
+        fundamentals["eps_forward"] = info.get("forwardEps")
+        fundamentals["dividend_yield"] = info.get("dividendYield")
+        fundamentals["beta"] = info.get("beta")
+        fundamentals["short_pct_float"] = info.get("shortPercentOfFloat")
+        fundamentals["target_mean_price"] = info.get("targetMeanPrice")
+        fundamentals["recommendation"] = info.get("recommendationKey")
+        fundamentals["sector"] = info.get("sector")
+        fundamentals["industry"] = info.get("industry")
+        fundamentals["fifty_two_week_high"] = info.get("fiftyTwoWeekHigh")
+        fundamentals["fifty_two_week_low"] = info.get("fiftyTwoWeekLow")
+    except Exception as e:
+        print(f"  [WARN] Fundamentals failed for {ticker}: {e}")
+    return fundamentals
+
+
+# ============================================================
+# TECHNICAL INDICATORS
+# ============================================================
+def compute_rsi(series, period=14):
+    """Compute RSI (Relative Strength Index)."""
+    delta = series.diff()
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
+    avg_gain = gain.rolling(window=period, min_periods=period).mean()
+    avg_loss = loss.rolling(window=period, min_periods=period).mean()
+    for i in range(period, len(avg_gain)):
+        avg_gain.iloc[i] = (avg_gain.iloc[i-1] * (period - 1) + gain.iloc[i]) / period
+        avg_loss.iloc[i] = (avg_loss.iloc[i-1] * (period - 1) + loss.iloc[i]) / period
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+
+def compute_macd(series, fast=12, slow=26, signal_period=9):
+    """Compute MACD, Signal Line, and Histogram."""
+    ema_fast = series.ewm(span=fast, adjust=False).mean()
+    ema_slow = series.ewm(span=slow, adjust=False).mean()
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
+    histogram = macd_line - signal_line
+    return macd_line, signal_line, histogram
+
+
+def compute_moving_averages(series):
+    """Compute 20, 50, 200 day moving averages."""
+    ma20 = series.rolling(window=20).mean()
+    ma50 = series.rolling(window=50).mean()
+    ma200 = series.rolling(window=200).mean() if len(series) >= 200 else pd.Series([np.nan]*len(series), index=series.index)
+    return ma20, ma50, ma200
+
+
+def compute_ytd_return(df):
+    """Compute YTD return from first trading day of current year."""
+    current_year = datetime.datetime.now().year
+    year_data = df[df.index.year == current_year]
+    if len(year_data) < 2:
+        return 0.0
+    first_close = year_data["Close"].iloc[0]
+    last_close = year_data["Close"].iloc[-1]
+    return round(((last_close - first_close) / first_close) * 100, 2)
+
+
+def compute_volume_trend(df, lookback=20):
+    """Compare recent volume to average."""
+    if len(df) < lookback:
+        return 1.0
+    recent_avg = df["Volume"].iloc[-5:].mean()
+    longer_avg = df["Volume"].iloc[-lookback:].mean()
+    if longer_avg == 0:
+        return 1.0
+    return round(recent_avg / longer_avg, 2)
+
+
+def compute_momentum_metrics(df):
+    """Compute additional momentum metrics beyond RSI/MACD."""
+    close = df["Close"]
+    high = df["High"]
+    metrics = {}
+
+    # % off 52-week high
+    if len(high) >= 20:
+        high_52w = high.iloc[-min(252, len(high)):].max()
+        metrics["high_52w"] = round(float(high_52w), 2)
+        metrics["pct_from_52w_high"] = round(((close.iloc[-1] - high_52w) / high_52w) * 100, 1)
+    else:
+        metrics["high_52w"] = round(float(close.iloc[-1]), 2)
+        metrics["pct_from_52w_high"] = 0.0
+
+    # 52-week low
+    if len(df) >= 20:
+        low_52w = df["Low"].iloc[-min(252, len(df)):].min()
+        metrics["low_52w"] = round(float(low_52w), 2)
+    else:
+        metrics["low_52w"] = round(float(close.iloc[-1]), 2)
+
+    # 1-month return
+    if len(close) >= 22:
+        metrics["return_1m"] = round(((close.iloc[-1] - close.iloc[-22]) / close.iloc[-22]) * 100, 2)
+    else:
+        metrics["return_1m"] = 0.0
+
+    # 3-month return
+    if len(close) >= 63:
+        metrics["return_3m"] = round(((close.iloc[-1] - close.iloc[-63]) / close.iloc[-63]) * 100, 2)
+    else:
+        metrics["return_3m"] = 0.0
+
+    # Relative strength (price vs MA50 as %)
+    ma50 = close.rolling(50).mean()
+    if not pd.isna(ma50.iloc[-1]):
+        metrics["rs_vs_ma50"] = round(((close.iloc[-1] - ma50.iloc[-1]) / ma50.iloc[-1]) * 100, 2)
+    else:
+        metrics["rs_vs_ma50"] = 0.0
+
+    # Trend strength: count of last 20 days where close > MA20
+    ma20 = close.rolling(20).mean()
+    if len(close) >= 20 and not pd.isna(ma20.iloc[-1]):
+        last_20 = close.iloc[-20:]
+        ma20_last = ma20.iloc[-20:]
+        above_count = int((last_20 > ma20_last).sum())
+        metrics["trend_strength"] = above_count  # 0-20, higher = stronger uptrend
+    else:
+        metrics["trend_strength"] = 10
+
+    return metrics
+
+
+# ============================================================
+# THESIS-BREAKER MONITORING
+# ============================================================
+def check_thesis_breakers(group_name, group_info, group_stocks, macro_data, sp500_ytd):
+    """
+    Check thesis-breaker conditions for a group.
+    Returns list of triggered alerts with severity.
+    """
+    alerts = []
+    checks = group_info.get("breaker_checks", {})
+
+    # Compute group-level metrics
+    rsi_values = [s["rsi"] for s in group_stocks if s.get("rsi")]
+    avg_rsi = np.mean(rsi_values) if rsi_values else 50
+    below_ma50_count = sum(1 for s in group_stocks if s.get("price", 0) < s.get("ma50", 0))
+    total_stocks = len(group_stocks)
+    pct_below_ma50 = (below_ma50_count / total_stocks * 100) if total_stocks > 0 else 0
+    ytd_values = [s["ytd_return"] for s in group_stocks if s.get("ytd_return") is not None]
+    avg_ytd = np.mean(ytd_values) if ytd_values else 0
+    beating_count = sum(1 for s in group_stocks if s.get("beating_sp500"))
+    pct_beating = (beating_count / total_stocks * 100) if total_stocks > 0 else 0
+
+    # --- Check each condition ---
+    if "sp500_drawdown_10pct" in checks:
+        sp_data = macro_data.get("^GSPC")
+        if sp_data is not None and len(sp_data) > 20:
+            current_year = datetime.datetime.now().year
+            ytd_data = sp_data[sp_data.index.year == current_year]
+            if len(ytd_data) > 0:
+                ytd_high = ytd_data["High"].max()
+                current = ytd_data["Close"].iloc[-1]
+                drawdown = ((current - ytd_high) / ytd_high) * 100
+                if drawdown < -10:
+                    alerts.append({
+                        "check": "sp500_drawdown_10pct",
+                        "severity": "critical",
+                        "triggered": True,
+                        "message": f"S&P 500 down {drawdown:.1f}% from YTD high — macro risk-off",
+                        "description": checks["sp500_drawdown_10pct"],
+                        "value": round(drawdown, 1)
+                    })
+
+    if "group_avg_rsi_below_40" in checks:
+        if avg_rsi < 40:
+            alerts.append({
+                "check": "group_avg_rsi_below_40",
+                "severity": "high",
+                "triggered": True,
+                "message": f"Group avg RSI at {avg_rsi:.1f} — momentum breakdown",
+                "description": checks["group_avg_rsi_below_40"],
+                "value": round(avg_rsi, 1)
+            })
+
+    if "majority_below_ma50" in checks:
+        if pct_below_ma50 > 50:
+            alerts.append({
+                "check": "majority_below_ma50",
+                "severity": "high",
+                "triggered": True,
+                "message": f"{below_ma50_count}/{total_stocks} stocks ({pct_below_ma50:.0f}%) below 50-day MA — trend reversal",
+                "description": checks["majority_below_ma50"],
+                "value": round(pct_below_ma50, 0)
+            })
+
+    if "avg_ytd_negative" in checks:
+        if avg_ytd < 0:
+            alerts.append({
+                "check": "avg_ytd_negative",
+                "severity": "critical",
+                "triggered": True,
+                "message": f"Group avg YTD return is {avg_ytd:.1f}% — leadership lost",
+                "description": checks["avg_ytd_negative"],
+                "value": round(avg_ytd, 1)
+            })
+
+    if "breadth_collapse" in checks:
+        if pct_beating < 50:
+            alerts.append({
+                "check": "breadth_collapse",
+                "severity": "high",
+                "triggered": True,
+                "message": f"Only {beating_count}/{total_stocks} ({pct_beating:.0f}%) beating S&P — breadth collapsing",
+                "description": checks["breadth_collapse"],
+                "value": round(pct_beating, 0)
+            })
+
+    if "gold_below_threshold" in checks:
+        gld_data = macro_data.get("GLD")
+        if gld_data is not None and len(gld_data) > 20:
+            recent_high = gld_data["High"].iloc[-60:].max() if len(gld_data) >= 60 else gld_data["High"].max()
+            current = gld_data["Close"].iloc[-1]
+            gld_drop = ((current - recent_high) / recent_high) * 100
+            if gld_drop < -8:
+                alerts.append({
+                    "check": "gold_below_threshold",
+                    "severity": "critical",
+                    "triggered": True,
+                    "message": f"Gold (GLD) down {gld_drop:.1f}% from recent high — commodity thesis weakening",
+                    "description": checks["gold_below_threshold"],
+                    "value": round(gld_drop, 1)
+                })
+
+    if "usd_strength" in checks:
+        uup_data = macro_data.get("UUP")
+        if uup_data is not None and len(uup_data) > 20:
+            uup_ytd = compute_ytd_return(uup_data)
+            if uup_ytd > 5:
+                alerts.append({
+                    "check": "usd_strength",
+                    "severity": "high",
+                    "triggered": True,
+                    "message": f"USD (UUP) up {uup_ytd:.1f}% YTD — dollar strength crushing gold",
+                    "description": checks["usd_strength"],
+                    "value": round(uup_ytd, 1)
+                })
+
+    if "oil_below_60" in checks:
+        uso_data = macro_data.get("USO")
+        if uso_data is not None and len(uso_data) > 20:
+            recent_high = uso_data["High"].iloc[-60:].max() if len(uso_data) >= 60 else uso_data["High"].max()
+            current = uso_data["Close"].iloc[-1]
+            uso_drop = ((current - recent_high) / recent_high) * 100
+            if uso_drop < -25:
+                alerts.append({
+                    "check": "oil_below_60",
+                    "severity": "critical",
+                    "triggered": True,
+                    "message": f"Crude oil (USO) down {uso_drop:.1f}% from recent high — approaching breakeven",
+                    "description": checks["oil_below_60"],
+                    "value": round(uso_drop, 1)
+                })
+
+    if "natgas_collapse" in checks:
+        ung_data = macro_data.get("UNG")
+        if ung_data is not None and len(ung_data) > 20:
+            recent_high = ung_data["High"].iloc[-60:].max() if len(ung_data) >= 60 else ung_data["High"].max()
+            current = ung_data["Close"].iloc[-1]
+            ung_drop = ((current - recent_high) / recent_high) * 100
+            if ung_drop < -30:
+                alerts.append({
+                    "check": "natgas_collapse",
+                    "severity": "high",
+                    "triggered": True,
+                    "message": f"Natural gas (UNG) down {ung_drop:.1f}% from recent high",
+                    "description": checks["natgas_collapse"],
+                    "value": round(ung_drop, 1)
+                })
+
+    if "energy_spike" in checks:
+        xle_data = macro_data.get("XLE")
+        if xle_data is not None and len(xle_data) > 20:
+            xle_ytd = compute_ytd_return(xle_data)
+            if xle_ytd > 15:
+                alerts.append({
+                    "check": "energy_spike",
+                    "severity": "medium",
+                    "triggered": True,
+                    "message": f"Energy (XLE) up {xle_ytd:.1f}% YTD — cost pressure on chemical margins",
+                    "description": checks["energy_spike"],
+                    "value": round(xle_ytd, 1)
+                })
+
+    # Build untriggered checks list (for "all clear" display)
+    triggered_ids = {a["check"] for a in alerts}
+    for check_id, desc in checks.items():
+        if check_id not in triggered_ids:
+            alerts.append({
+                "check": check_id,
+                "severity": "clear",
+                "triggered": False,
+                "message": "Not triggered",
+                "description": desc,
+                "value": None
+            })
+
+    return alerts
+
+
+# ============================================================
+# SIGNAL SCORING
+# ============================================================
+def score_stock(df, group_info):
+    """
+    Compute a composite score (0-100) and signal for a stock.
+    """
+    close = df["Close"]
+    score = 50
+    details = {}
+
+    # --- RSI ---
+    rsi = compute_rsi(close)
+    current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
+    details["rsi"] = round(current_rsi, 1)
+
+    if current_rsi < 30:
+        score += 15
+    elif current_rsi < 40:
+        score += 8
+    elif current_rsi < 60:
+        score += 3
+    elif current_rsi < 70:
+        score -= 3
+    elif current_rsi < 80:
+        score -= 8
+    else:
+        score -= 15
+
+    # --- MACD ---
+    macd_line, signal_line, histogram = compute_macd(close)
+    current_macd = macd_line.iloc[-1] if not pd.isna(macd_line.iloc[-1]) else 0
+    current_signal = signal_line.iloc[-1] if not pd.isna(signal_line.iloc[-1]) else 0
+    current_hist = histogram.iloc[-1] if not pd.isna(histogram.iloc[-1]) else 0
+    prev_hist = histogram.iloc[-2] if len(histogram) > 1 and not pd.isna(histogram.iloc[-2]) else 0
+
+    details["macd"] = round(current_macd, 3)
+    details["macd_signal"] = round(current_signal, 3)
+    details["macd_histogram"] = round(current_hist, 3)
+
+    if current_macd > current_signal:
+        score += 8
+        if current_hist > prev_hist:
+            score += 5
+    else:
+        score -= 8
+        if current_hist < prev_hist:
+            score -= 5
+
+    # --- Moving Averages ---
+    ma20, ma50, ma200 = compute_moving_averages(close)
+    current_price = close.iloc[-1]
+    ma20_val = ma20.iloc[-1] if not pd.isna(ma20.iloc[-1]) else current_price
+    ma50_val = ma50.iloc[-1] if not pd.isna(ma50.iloc[-1]) else current_price
+    ma200_val = ma200.iloc[-1] if not pd.isna(ma200.iloc[-1]) else None
+
+    details["price"] = round(current_price, 2)
+    details["ma20"] = round(ma20_val, 2)
+    details["ma50"] = round(ma50_val, 2)
+    details["ma200"] = round(ma200_val, 2) if ma200_val else None
+
+    if current_price > ma20_val:
+        score += 4
+    else:
+        score -= 4
+    if current_price > ma50_val:
+        score += 6
+    else:
+        score -= 6
+    if ma20_val > ma50_val:
+        score += 4
+    else:
+        score -= 4
+
+    # --- YTD Momentum ---
+    ytd_return = compute_ytd_return(df)
+    details["ytd_return"] = ytd_return
+
+    if ytd_return > 50:
+        score += 8
+    elif ytd_return > 20:
+        score += 12
+    elif ytd_return > 5:
+        score += 6
+    elif ytd_return > 0:
+        score += 2
+    elif ytd_return > -10:
+        score -= 4
+    else:
+        score -= 10
+
+    if ytd_return > 100:
+        score -= 10
+    elif ytd_return > 150:
+        score -= 15
+
+    # --- Volume ---
+    vol_ratio = compute_volume_trend(df)
+    details["volume_ratio"] = vol_ratio
+    if vol_ratio > 1.5:
+        score += 3
+    elif vol_ratio < 0.7:
+        score -= 3
+
+    # --- Momentum Metrics ---
+    momentum = compute_momentum_metrics(df)
+    details.update(momentum)
+
+    score = max(0, min(100, score))
+    details["composite_score"] = score
+
+    if score >= 75:
+        signal = "strong-buy"
+    elif score >= 60:
+        signal = "buy"
+    elif score >= 45:
+        signal = "hold"
+    elif score >= 30:
+        signal = "sell"
+    else:
+        signal = "strong-sell"
+
+    details["signal"] = signal
+    return score, signal, details
+
+
+# ============================================================
+# MAIN PIPELINE
+# ============================================================
+def get_sp500_ytd():
+    print("Fetching S&P 500 benchmark...")
+    df = fetch_data("^GSPC", period="6mo")
+    if df is not None:
+        return compute_ytd_return(df)
+    return 0.0
+
+
+def run_engine():
+    """Main entry point — runs the full signal pipeline."""
+    timestamp = datetime.datetime.now().isoformat()
+    print(f"\n{'='*60}")
+    print(f"Signal Engine Run — {timestamp}")
+    print(f"{'='*60}\n")
+
+    sp500_ytd = get_sp500_ytd()
+    print(f"S&P 500 YTD: {sp500_ytd}%\n")
+
+    # Fetch macro proxy tickers for thesis-breaker checks
+    print("Fetching macro proxy tickers...")
+    macro_data = {}
+    for ticker in MACRO_TICKERS:
+        df = fetch_data(ticker, period="6mo")
+        if df is not None and len(df) > 5:
+            macro_data[ticker] = df
+            print(f"  {ticker}: OK")
+        else:
+            print(f"  {ticker}: SKIP")
+
+    # Collect all unique tickers
+    all_tickers = set()
+    for group_name, group_info in INDUSTRY_GROUPS.items():
+        all_tickers.update(group_info["tickers"])
+
+    print(f"\nFetching data for {len(all_tickers)} unique tickers...")
+    ticker_data = {}
+    ticker_signals = {}
+
+    for ticker in sorted(all_tickers):
+        print(f"  Fetching {ticker}...", end=" ")
+        df = fetch_data(ticker, period="6mo")
+        if df is not None and len(df) > 20:
+            ticker_data[ticker] = df
+            print(f"OK ({len(df)} days)")
+        else:
+            print("SKIP (insufficient data)")
+
+    # Fetch fundamentals
+    print(f"\nFetching fundamentals for {len(ticker_data)} tickers...")
+    ticker_fundamentals = {}
+    for ticker in sorted(ticker_data.keys()):
+        print(f"  {ticker}...", end=" ")
+        fund = fetch_fundamentals_yfinance(ticker)
+        ticker_fundamentals[ticker] = fund
+        mcap = fund.get("market_cap")
+        fpe = fund.get("forward_pe")
+        print(f"MCap={'${:,.0f}'.format(mcap) if mcap else 'N/A'}, FwdPE={fpe or 'N/A'}")
+
+    print(f"\nComputing signals for {len(ticker_data)} tickers...")
+    for ticker, df in ticker_data.items():
+        groups_for_ticker = [g for g, info in INDUSTRY_GROUPS.items() if ticker in info["tickers"]]
+        group_info = INDUSTRY_GROUPS.get(groups_for_ticker[0], {}) if groups_for_ticker else {}
+
+        score, signal, details = score_stock(df, group_info)
+        details["beating_sp500"] = bool(details.get("ytd_return", 0) > sp500_ytd)
+
+        # Merge fundamentals
+        fund = ticker_fundamentals.get(ticker, {})
+        details["fundamentals"] = {
+            "market_cap": fund.get("market_cap"),
+            "forward_pe": fund.get("forward_pe"),
+            "trailing_pe": fund.get("trailing_pe"),
+            "revenue_growth": fund.get("revenue_growth_yoy"),
+            "gross_margin": fund.get("gross_margin"),
+            "operating_margin": fund.get("operating_margin"),
+            "profit_margin": fund.get("profit_margin"),
+            "eps_trailing": fund.get("eps_trailing"),
+            "eps_forward": fund.get("eps_forward"),
+            "dividend_yield": fund.get("dividend_yield"),
+            "beta": fund.get("beta"),
+            "short_pct_float": fund.get("short_pct_float"),
+            "target_price": fund.get("target_mean_price"),
+            "recommendation": fund.get("recommendation"),
+            "industry": fund.get("industry")
+        }
+
+        ticker_signals[ticker] = {
+            "score": score,
+            "signal": signal,
+            "details": details,
+            "groups": groups_for_ticker
+        }
+        print(f"  {ticker}: Score={score}, Signal={signal}, YTD={details.get('ytd_return', 'N/A')}%")
+
+    # Build group-level data
+    groups_output = []
+    for group_name, group_info in INDUSTRY_GROUPS.items():
+        stocks_in_group = []
+        ytd_returns = []
+
+        for ticker in group_info["tickers"]:
+            if ticker in ticker_signals:
+                sig = ticker_signals[ticker]
+                d = sig["details"]
+                stocks_in_group.append({
+                    "ticker": ticker,
+                    "score": sig["score"],
+                    "signal": sig["signal"],
+                    "ytd_return": d.get("ytd_return", 0),
+                    "price": d.get("price", 0),
+                    "rsi": d.get("rsi", 50),
+                    "macd": d.get("macd", 0),
+                    "macd_signal": d.get("macd_signal", 0),
+                    "macd_histogram": d.get("macd_histogram", 0),
+                    "ma20": d.get("ma20", 0),
+                    "ma50": d.get("ma50", 0),
+                    "ma200": d.get("ma200"),
+                    "volume_ratio": d.get("volume_ratio", 1),
+                    "beating_sp500": d.get("beating_sp500", False),
+                    # Momentum
+                    "high_52w": d.get("high_52w", 0),
+                    "low_52w": d.get("low_52w", 0),
+                    "pct_from_52w_high": d.get("pct_from_52w_high", 0),
+                    "return_1m": d.get("return_1m", 0),
+                    "return_3m": d.get("return_3m", 0),
+                    "rs_vs_ma50": d.get("rs_vs_ma50", 0),
+                    "trend_strength": d.get("trend_strength", 10),
+                    # Fundamentals
+                    "fundamentals": d.get("fundamentals", {})
+                })
+                ytd_returns.append(d.get("ytd_return", 0))
+
+        if not stocks_in_group:
+            continue
+
+        stocks_in_group.sort(key=lambda x: x["ytd_return"], reverse=True)
+        avg_ytd = round(np.mean(ytd_returns), 2) if ytd_returns else 0
+        avg_score = round(np.mean([s["score"] for s in stocks_in_group]), 1)
+        beating_count = sum(1 for s in stocks_in_group if s["beating_sp500"])
+
+        if avg_score >= 70:
+            group_signal = "strong-buy"
+        elif avg_score >= 58:
+            group_signal = "buy"
+        elif avg_score >= 45:
+            group_signal = "hold"
+        else:
+            group_signal = "sell"
+
+        # Check thesis breakers
+        breaker_alerts = check_thesis_breakers(
+            group_name, group_info, stocks_in_group, macro_data, sp500_ytd
+        )
+        triggered_alerts = [a for a in breaker_alerts if a["triggered"]]
+        breaker_status = "clear"
+        if any(a["severity"] == "critical" for a in triggered_alerts):
+            breaker_status = "critical"
+        elif any(a["severity"] == "high" for a in triggered_alerts):
+            breaker_status = "warning"
+        elif any(a["severity"] == "medium" for a in triggered_alerts):
+            breaker_status = "watch"
+
+        groups_output.append({
+            "name": group_name,
+            "gics_code": group_info.get("gics_code", ""),
+            "gics_level": group_info.get("gics_level", ""),
+            "sector": group_info["sector"],
+            "industry_group": group_info.get("industry_group", ""),
+            "thesis": group_info["thesis"],
+            "thesis_breaker": group_info["thesis_breaker"],
+            "cycle_stage": group_info["cycle_stage"],
+            "avg_ytd": avg_ytd,
+            "avg_score": avg_score,
+            "group_signal": group_signal,
+            "stock_count": len(stocks_in_group),
+            "beating_sp500_count": beating_count,
+            "breaker_status": breaker_status,
+            "breaker_alerts": breaker_alerts,
+            "stocks": stocks_in_group
+        })
+
+    groups_output.sort(key=lambda x: x["avg_ytd"], reverse=True)
+    for i, group in enumerate(groups_output):
+        group["rank"] = i + 1
+
+    output = {
+        "timestamp": timestamp,
+        "sp500_ytd": sp500_ytd,
+        "total_tickers": len(ticker_signals),
+        "total_groups": len(groups_output),
+        "groups": groups_output
+    }
+
+    signals_path = os.path.join(DATA_DIR, "signals.json")
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(signals_path, "w") as f:
+        json.dump(output, f, indent=2, cls=NumpyEncoder)
+    print(f"\nSignals written to {signals_path}")
+
+    public_signals_path = os.path.join(PUBLIC_DIR, "signals.json")
+    os.makedirs(PUBLIC_DIR, exist_ok=True)
+    with open(public_signals_path, "w") as f:
+        json.dump(output, f, indent=2, cls=NumpyEncoder)
+
+    # Print thesis-breaker summary
+    print(f"\n{'='*60}")
+    print("THESIS-BREAKER STATUS")
+    print(f"{'='*60}")
+    for g in groups_output:
+        triggered = [a for a in g["breaker_alerts"] if a["triggered"]]
+        icon = {"critical": "🔴", "warning": "🟠", "watch": "🟡", "clear": "🟢"}.get(g["breaker_status"], "⚪")
+        print(f"  {icon} {g['name']}: {g['breaker_status'].upper()}")
+        for a in triggered:
+            print(f"      ⚠ {a['message']}")
+
+    return output
+
+
+if __name__ == "__main__":
+    run_engine()
