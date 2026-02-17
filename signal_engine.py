@@ -755,6 +755,173 @@ def score_stock(df, group_info):
     return score, signal, details
 
 
+def compute_trade_signal(details, breaker_status="clear"):
+    """
+    Compute an actionable trade signal and reasoning for position trading.
+    Uses all available technical indicators to determine entry timing.
+
+    Returns:
+        trade_signal: "BUY NOW", "WAIT FOR PULLBACK", "ACCUMULATE ON DIP",
+                      "HOLD POSITION", "REDUCE/EXIT", "AVOID"
+        trade_reasoning: human-readable explanation
+    """
+    rsi = details.get("rsi", 50)
+    macd_hist = details.get("macd_histogram", 0)
+    macd = details.get("macd", 0)
+    macd_sig = details.get("macd_signal", 0)
+    price = details.get("price", 0)
+    ma20 = details.get("ma20", price)
+    ma50 = details.get("ma50", price)
+    ma200 = details.get("ma200")
+    score = details.get("composite_score", 50)
+    signal = details.get("signal", "hold")
+    ytd = details.get("ytd_return", 0)
+    vol_ratio = details.get("volume_ratio", 1.0)
+    pct_from_high = details.get("pct_from_52w_high", 0)
+    trend_strength = details.get("trend_strength", 0)
+    rs_vs_ma50 = details.get("rs_vs_ma50", 0)
+    return_1m = details.get("return_1m", 0)
+
+    reasons = []
+    bullish = 0
+    bearish = 0
+
+    # --- Breaker check (overrides everything) ---
+    if breaker_status in ("critical", "warning"):
+        reasons.append(f"Thesis breaker {breaker_status.upper()} — macro headwinds active")
+        bearish += 3
+
+    # --- Trend structure ---
+    above_ma50 = price > ma50
+    above_ma200 = ma200 is not None and price > ma200
+    ma_aligned = ma20 > ma50  # short MA above long MA = uptrend
+
+    if above_ma50 and ma_aligned:
+        bullish += 2
+        reasons.append("Price above MA50, MAs aligned bullish")
+    elif above_ma50:
+        bullish += 1
+        reasons.append("Price above MA50 but MAs converging")
+    else:
+        bearish += 2
+        reasons.append("Price below MA50 — trend weakening")
+
+    if above_ma200:
+        bullish += 1
+        reasons.append("Above MA200 — long-term uptrend intact")
+    elif ma200 is not None:
+        bearish += 1
+        reasons.append("Below MA200 — long-term trend broken")
+
+    # --- RSI assessment ---
+    if rsi >= 75:
+        bearish += 2
+        reasons.append(f"RSI {rsi:.0f} — overbought, high pullback risk")
+    elif rsi >= 65:
+        bearish += 1
+        reasons.append(f"RSI {rsi:.0f} — getting extended")
+    elif 40 <= rsi <= 60:
+        bullish += 1
+        reasons.append(f"RSI {rsi:.0f} — neutral zone, room to run")
+    elif rsi <= 35:
+        bullish += 2
+        reasons.append(f"RSI {rsi:.0f} — oversold, potential bounce")
+
+    # --- MACD momentum ---
+    macd_bullish_cross = macd > macd_sig
+    hist_increasing = macd_hist > 0
+
+    if macd_bullish_cross and hist_increasing:
+        bullish += 2
+        reasons.append("MACD bullish cross, histogram expanding")
+    elif macd_bullish_cross:
+        bullish += 1
+        reasons.append("MACD above signal but histogram fading")
+    elif not macd_bullish_cross and macd_hist < 0:
+        bearish += 2
+        reasons.append("MACD bearish, histogram negative")
+
+    # --- Volume confirmation ---
+    if vol_ratio >= 1.5:
+        bullish += 1
+        reasons.append(f"Volume {vol_ratio:.1f}x avg — institutional interest")
+    elif vol_ratio <= 0.7:
+        bearish += 1
+        reasons.append(f"Volume {vol_ratio:.1f}x avg — low conviction")
+
+    # --- Proximity to 52W high ---
+    if pct_from_high is not None:
+        if pct_from_high > -3:
+            bearish += 1
+            reasons.append(f"{pct_from_high:.1f}% from 52W high — near resistance")
+        elif pct_from_high < -20:
+            bearish += 1
+            reasons.append(f"{pct_from_high:.1f}% from 52W high — deep correction")
+        elif -15 <= pct_from_high <= -5:
+            bullish += 1
+            reasons.append(f"{pct_from_high:.1f}% from 52W high — healthy pullback zone")
+
+    # --- Trend strength ---
+    if trend_strength >= 16:
+        bullish += 1
+        reasons.append(f"Trend strength {trend_strength}/20 — strong sustained uptrend")
+    elif trend_strength <= 5:
+        bearish += 1
+        reasons.append(f"Trend strength {trend_strength}/20 — no uptrend present")
+
+    # --- 1M return (recent momentum) ---
+    if return_1m is not None:
+        if return_1m > 15:
+            bearish += 1
+            reasons.append(f"1M return +{return_1m:.1f}% — parabolic, needs cooling")
+        elif return_1m < -10:
+            reasons.append(f"1M return {return_1m:.1f}% — sharp decline, watch for base")
+
+    # --- Determine trade signal ---
+    net = bullish - bearish
+
+    if breaker_status == "critical":
+        trade_signal = "AVOID"
+    elif breaker_status == "warning" and net <= 0:
+        trade_signal = "AVOID"
+    elif signal in ("sell", "strong-sell"):
+        if net <= -2:
+            trade_signal = "AVOID"
+        else:
+            trade_signal = "REDUCE/EXIT"
+    elif signal == "hold":
+        if net >= 2:
+            trade_signal = "ACCUMULATE ON DIP"
+        elif net <= -1:
+            trade_signal = "REDUCE/EXIT"
+        else:
+            trade_signal = "HOLD POSITION"
+    elif signal in ("buy", "strong-buy"):
+        # Strong buy/buy signal — now determine timing
+        if rsi >= 70 and pct_from_high is not None and pct_from_high > -5:
+            trade_signal = "WAIT FOR PULLBACK"
+        elif rsi <= 60 and macd_bullish_cross and above_ma50:
+            trade_signal = "BUY NOW"
+        elif rsi <= 65 and hist_increasing and above_ma50:
+            trade_signal = "BUY NOW"
+        elif vol_ratio >= 1.5 and macd_bullish_cross:
+            trade_signal = "BUY NOW"  # breakout on volume
+        elif net >= 3:
+            trade_signal = "BUY NOW"
+        elif rsi >= 65:
+            trade_signal = "WAIT FOR PULLBACK"
+        else:
+            trade_signal = "ACCUMULATE ON DIP"
+    else:
+        trade_signal = "HOLD POSITION"
+
+    # Build concise reasoning (top 3 most relevant)
+    top_reasons = reasons[:4]
+    trade_reasoning = "; ".join(top_reasons)
+
+    return trade_signal, trade_reasoning
+
+
 # ============================================================
 # MAIN PIPELINE
 # ============================================================
@@ -956,6 +1123,32 @@ def run_engine():
             breaker_status = "warning"
         elif any(a["severity"] == "medium" for a in triggered_alerts):
             breaker_status = "watch"
+
+        # Compute trade signal for each stock in the group
+        for stock in stocks_in_group:
+            trade_sig, trade_reason = compute_trade_signal(
+                {
+                    "rsi": stock.get("rsi", 50),
+                    "macd_histogram": stock.get("macd_histogram", 0),
+                    "macd": stock.get("macd", 0),
+                    "macd_signal": stock.get("macd_signal", 0),
+                    "price": stock.get("price", 0),
+                    "ma20": stock.get("ma20", 0),
+                    "ma50": stock.get("ma50", 0),
+                    "ma200": stock.get("ma200"),
+                    "composite_score": stock.get("score", 50),
+                    "signal": stock.get("signal", "hold"),
+                    "ytd_return": stock.get("ytd_return", 0),
+                    "volume_ratio": stock.get("volume_ratio", 1.0),
+                    "pct_from_52w_high": stock.get("pct_from_52w_high", 0),
+                    "trend_strength": stock.get("trend_strength", 10),
+                    "rs_vs_ma50": stock.get("rs_vs_ma50", 0),
+                    "return_1m": stock.get("return_1m", 0),
+                },
+                breaker_status=breaker_status
+            )
+            stock["trade_signal"] = trade_sig
+            stock["trade_reasoning"] = trade_reason
 
         groups_output.append({
             "name": group_name,

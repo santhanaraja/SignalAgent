@@ -177,6 +177,16 @@
   .rec-hold{background:rgba(210,153,34,.1);color:var(--yellow);}
   .rec-sell,.rec-strong_sell,.rec-underperform{background:rgba(248,81,73,.1);color:var(--red);}
 
+  /* Trade signal badges */
+  .ts-badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.3px;white-space:nowrap;}
+  .ts-buy-now{background:rgba(63,185,80,.2);color:#3fb950;border:1px solid rgba(63,185,80,.3);}
+  .ts-wait{background:rgba(210,153,34,.15);color:#d29922;border:1px solid rgba(210,153,34,.25);}
+  .ts-accumulate{background:rgba(88,166,255,.12);color:#58a6ff;border:1px solid rgba(88,166,255,.25);}
+  .ts-hold{background:rgba(139,148,158,.1);color:#8b949e;border:1px solid rgba(139,148,158,.2);}
+  .ts-reduce{background:rgba(240,136,62,.15);color:#f0883e;border:1px solid rgba(240,136,62,.25);}
+  .ts-avoid{background:rgba(248,81,73,.18);color:#f85149;border:1px solid rgba(248,81,73,.3);}
+  .reasoning{font-size:10px;color:var(--dim);max-width:300px;white-space:normal;line-height:1.4;}
+
   .legend{padding:14px 28px;display:flex;gap:20px;flex-wrap:wrap;font-size:11px;color:var(--dim);border-top:1px solid var(--border);margin-top:12px;}
   .legend-i{display:flex;align-items:center;gap:5px;}
   .empty{text-align:center;padding:60px;color:var(--dim);}
@@ -298,6 +308,17 @@ function fmtPct(v){if(v===null||v===undefined)return '—';return (v*100).toFixe
 function fmtNum(v,d){if(v===null||v===undefined)return '—';return Number(v).toFixed(d||1);}
 function fmtComma(v){return v?v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';}
 function breakerIcon(status){return {critical:'🔴',warning:'🟠',watch:'🟡',clear:'🟢'}[status]||'⚪';}
+function tsClass(ts){
+  if(!ts) return 'ts-hold';
+  const t = ts.toUpperCase();
+  if(t==='BUY NOW') return 'ts-buy-now';
+  if(t.includes('WAIT')) return 'ts-wait';
+  if(t.includes('ACCUMULATE')) return 'ts-accumulate';
+  if(t.includes('HOLD')) return 'ts-hold';
+  if(t.includes('REDUCE')) return 'ts-reduce';
+  if(t==='AVOID') return 'ts-avoid';
+  return 'ts-hold';
+}
 
 async function loadData(){
   try{
@@ -370,7 +391,7 @@ function renderHeatmap(){
 
     html += `<div class="hm-group-label" onclick="drillToGroup(${gi})">#${g.rank} ${g.name} (${g.avg_ytd>=0?'+':''}${g.avg_ytd}%) ${breakerIcon(g.breaker_status||'clear')}</div>`;
     stocks.forEach(s=>{
-      html += `<div class="hm-tile" style="background:${scoreBg(s.score)}" onmouseenter="showTT(event,this)" onmouseleave="hideTT()" data-ticker="${s.ticker}" data-score="${s.score}" data-signal="${s.signal}" data-ytd="${s.ytd_return}" data-price="${s.price?s.price.toFixed(2):'—'}" data-rsi="${fmtNum(s.rsi,1)}" data-group="${g.name}">
+      html += `<div class="hm-tile" style="background:${scoreBg(s.score)}" onmouseenter="showTT(event,this)" onmouseleave="hideTT()" data-ticker="${s.ticker}" data-score="${s.score}" data-signal="${s.signal}" data-ytd="${s.ytd_return}" data-price="${s.price?s.price.toFixed(2):'—'}" data-rsi="${fmtNum(s.rsi,1)}" data-group="${g.name}" data-trade="${s.trade_signal||'—'}">
         <div class="hm-ticker">${s.ticker}</div>
         <div class="hm-score">${s.score}</div>
       </div>`;
@@ -537,7 +558,7 @@ function renderGroups(){
       </div>
       <div class="tab-content active" id="tab-signals-${i}">
         <div class="tbl-scroll"><table><thead><tr>
-          <th onclick="sortG(${i},'ticker')">Ticker</th><th onclick="sortG(${i},'price')">Price</th><th onclick="sortG(${i},'ytd_return')">YTD %</th><th onclick="sortG(${i},'score')">Score</th><th>Signal</th><th onclick="sortG(${i},'rsi')">RSI</th><th>MACD</th><th>Price vs MA</th><th onclick="sortG(${i},'volume_ratio')">Volume</th>
+          <th onclick="sortG(${i},'ticker')">Ticker</th><th onclick="sortG(${i},'price')">Price</th><th onclick="sortG(${i},'ytd_return')">YTD %</th><th onclick="sortG(${i},'score')">Score</th><th>Signal</th><th>Trade Signal</th><th onclick="sortG(${i},'rsi')">RSI</th><th>MACD</th><th>Price vs MA</th><th onclick="sortG(${i},'volume_ratio')">Vol</th><th>Reasoning</th>
         </tr></thead><tbody>
         ${(query?stocks:g.stocks).map(s=>`<tr>
           <td><span class="tk">${s.ticker}</span>${s.beating_sp500?'<span class="sp">S&P✓</span>':''}</td>
@@ -545,10 +566,12 @@ function renderGroups(){
           <td class="ytd ${s.ytd_return>=0?'up':'dn'}">${s.ytd_return>=0?'+':''}${s.ytd_return}%</td>
           <td><div style="display:flex;align-items:center;gap:6px"><div class="bar"><div class="bar-fill" style="width:${s.score}%;background:${scoreColor(s.score)}"></div></div><span style="font-size:11px;font-weight:600;color:${scoreColor(s.score)}">${s.score}</span></div></td>
           <td><div class="dot ${s.signal}"></div><span style="font-size:11px;font-weight:600;color:${scoreColor(s.score)}">${s.signal.toUpperCase()}</span></td>
+          <td><span class="ts-badge ${tsClass(s.trade_signal)}">${s.trade_signal||'—'}</span></td>
           <td style="color:${s.rsi>70?'var(--red)':s.rsi<30?'var(--green)':'var(--dim)'}" class="mono">${fmtNum(s.rsi,1)}</td>
           <td style="color:${s.macd_histogram>0?'var(--green)':'var(--red)'}" class="mono">${s.macd_histogram>0?'▲':'▼'} ${Math.abs(s.macd_histogram||0).toFixed(2)}</td>
-          <td style="font-size:11px;">${s.price>s.ma50?'<span style="color:var(--green)">Above MA50</span>':'<span style="color:var(--red)">Below MA50</span>'}${s.ma200!=null?(s.price>s.ma200?' · <span style="color:var(--green)">Above MA200</span>':' · <span style="color:var(--red)">Below MA200</span>'):''}</td>
+          <td style="font-size:11px;">${s.price>s.ma50?'<span style="color:var(--green)">▲MA50</span>':'<span style="color:var(--red)">▼MA50</span>'}${s.ma200!=null?(s.price>s.ma200?' <span style="color:var(--green)">▲200</span>':' <span style="color:var(--red)">▼200</span>'):''}</td>
           <td style="color:${s.volume_ratio>1.2?'var(--green)':s.volume_ratio<0.8?'var(--red)':'var(--dim)'}" class="mono">${s.volume_ratio||1}x</td>
+          <td class="reasoning">${s.trade_reasoning||'—'}</td>
         </tr>`).join('')}
         </tbody></table></div>
       </div>
@@ -607,6 +630,7 @@ function showTT(e,el){
     <div class="tt-row"><span class="tt-label">Signal:</span> <span style="text-transform:uppercase">${el.dataset.signal}</span></div>
     <div class="tt-row"><span class="tt-label">YTD:</span> <span style="color:${+el.dataset.ytd>=0?'var(--green)':'var(--red)'}">${+el.dataset.ytd>=0?'+':''}${el.dataset.ytd}%</span></div>
     <div class="tt-row"><span class="tt-label">RSI:</span> <span>${el.dataset.rsi}</span></div>
+    <div class="tt-row"><span class="tt-label">Trade:</span> <span class="ts-badge ${tsClass(el.dataset.trade)}" style="font-size:9px;padding:1px 6px;">${el.dataset.trade}</span></div>
   `;
   tt.style.display = 'block';
   tt.style.left = Math.min(e.clientX+12, window.innerWidth-280)+'px';
