@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Industry Group Signal Dashboard — Live</title>
+<title>Market Pulse Dashboard — Live</title>
 <style>
   :root {
     --bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;
@@ -17,16 +17,22 @@
   .header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
   .header h1{font-size:20px;font-weight:600;} .header h1 span{color:var(--blue);}
   .header-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
-  .badge{background:var(--surface2);padding:5px 12px;border-radius:6px;font-size:12px;color:var(--dim);border:1px solid var(--border);}
-  .badge strong{color:var(--text);}
   .btn{border:none;padding:7px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px;transition:all .15s;}
   .btn-primary{background:var(--blue);color:#fff;}.btn-primary:hover{filter:brightness(1.15);}
-  .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}.btn-secondary:hover{border-color:var(--blue);}
   .btn.spinning svg{animation:spin 1s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
   .live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
   .ts{font-size:11px;color:var(--dim);padding:3px 28px;}
+
+  /* Index ticker bar */
+  .index-bar{display:flex;gap:0;padding:0 28px;border-bottom:1px solid var(--border);background:var(--surface);overflow-x:auto;}
+  .idx{padding:10px 18px;border-right:1px solid var(--border);min-width:140px;flex-shrink:0;}
+  .idx:last-child{border-right:none;}
+  .idx-name{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;font-weight:700;}
+  .idx-level{font-size:16px;font-weight:700;font-family:'SF Mono','Fira Code',monospace;margin:2px 0;}
+  .idx-change{font-size:11px;font-family:'SF Mono',monospace;display:flex;gap:8px;}
+  .idx-ytd{font-size:10px;color:var(--dim);margin-top:1px;}
 
   .nav{padding:12px 28px;display:flex;gap:8px;border-bottom:1px solid var(--border);}
   .nav a{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500;color:var(--dim);transition:all .15s;}
@@ -50,10 +56,55 @@
   .stale-banner{background:rgba(248,81,73,.1);border:1px solid var(--red);border-radius:6px;padding:8px 16px;margin:8px 28px;font-size:12px;color:var(--red);display:none;align-items:center;gap:8px;}
   .stale-banner.show{display:flex;}
 
+  /* Dashboard view toggle */
+  .view-toggle{display:flex;gap:0;background:var(--surface2);border-radius:6px;border:1px solid var(--border);overflow:hidden;}
+  .view-btn{padding:5px 14px;font-size:11px;font-weight:600;color:var(--dim);cursor:pointer;border:none;background:none;transition:.15s;}
+  .view-btn:hover{color:var(--text);}
+  .view-btn.active{background:var(--blue);color:#fff;}
+
   .grid{padding:0 28px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}
   .stat{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;}
   .stat .l{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
   .stat .v{font-size:22px;font-weight:700;}.stat .s{font-size:11px;color:var(--dim);margin-top:1px;}
+
+  /* Charts row */
+  .charts-row{padding:0 28px 16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;overflow:hidden;}
+  .chart-card h3{font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text);}
+
+  /* Bar chart */
+  .bar-chart{display:flex;flex-direction:column;gap:6px;}
+  .bar-row{display:flex;align-items:center;gap:8px;}
+  .bar-label{font-size:10px;color:var(--dim);width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;text-align:right;}
+  .bar-track{flex:1;height:18px;background:var(--surface2);border-radius:3px;position:relative;overflow:hidden;}
+  .bar-fill2{height:100%;border-radius:3px;transition:width .3s;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;}
+  .bar-val{font-size:10px;font-weight:700;color:#fff;white-space:nowrap;}
+
+  /* Pie chart */
+  .pie-container{display:flex;align-items:center;gap:24px;justify-content:center;}
+  .pie-legend{display:flex;flex-direction:column;gap:6px;}
+  .pie-legend-item{display:flex;align-items:center;gap:8px;font-size:12px;}
+  .pie-swatch{width:12px;height:12px;border-radius:2px;flex-shrink:0;}
+
+  /* Heatmap */
+  .heatmap-section{padding:0 28px 16px;}
+  .heatmap-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;overflow:hidden;}
+  .heatmap-card h3{font-size:13px;font-weight:600;margin-bottom:4px;}
+  .heatmap-card .subtitle{font-size:11px;color:var(--dim);margin-bottom:12px;}
+  .heatmap-grid{display:flex;flex-wrap:wrap;gap:3px;}
+  .hm-tile{border-radius:4px;padding:4px 6px;cursor:pointer;transition:all .15s;text-align:center;min-width:52px;border:1px solid transparent;}
+  .hm-tile:hover{border-color:var(--blue);transform:scale(1.05);z-index:2;}
+  .hm-ticker{font-size:10px;font-weight:700;font-family:'SF Mono',monospace;color:#fff;}
+  .hm-score{font-size:9px;font-weight:600;color:rgba(255,255,255,.8);}
+  .hm-group-label{width:100%;font-size:11px;font-weight:600;color:var(--cyan);margin:8px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--border);cursor:pointer;}
+  .hm-group-label:first-child{margin-top:0;}
+  .hm-group-label:hover{color:var(--blue);text-decoration:underline;}
+
+  /* Tooltip */
+  .tooltip{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:11px;z-index:100;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.5);max-width:260px;}
+  .tooltip .tt-ticker{font-size:14px;font-weight:700;color:var(--blue);font-family:'SF Mono',monospace;}
+  .tooltip .tt-row{display:flex;justify-content:space-between;gap:16px;margin-top:3px;}
+  .tooltip .tt-label{color:var(--dim);}
 
   .main{padding:0 28px 28px;}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden;transition:border-color .2s;}
@@ -86,11 +137,9 @@
 
   .card-body{display:none;}.card-body.open{display:block;}
 
-  /* Thesis + breaker panel */
   .info-panel{padding:14px 18px;background:var(--surface2);border-bottom:1px solid var(--border);}
   .thesis-text{font-size:12px;color:var(--dim);line-height:1.7;margin-bottom:8px;}
   .thesis-breaker-text{font-size:11px;color:var(--red);padding:6px 10px;background:rgba(248,81,73,.06);border-left:3px solid var(--red);border-radius:0 4px 4px 0;margin-bottom:10px;}
-
   .breaker-panel{margin-top:8px;}
   .breaker-panel-header{font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;align-items:center;gap:8px;}
   .breaker-item{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px;}
@@ -102,7 +151,6 @@
   .breaker-msg{color:var(--text);}
   .breaker-msg.clear{color:var(--dim);}
 
-  /* Tabs inside group */
   .tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--surface);}
   .tab-btn{padding:8px 16px;font-size:11px;font-weight:600;color:var(--dim);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;transition:.15s;}
   .tab-btn:hover{color:var(--text);}
@@ -134,18 +182,16 @@
   .empty{text-align:center;padding:60px;color:var(--dim);}
   .empty h2{font-size:18px;margin-bottom:8px;color:var(--text);}
   .loader{display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;}
-
   .tbl-scroll{overflow-x:auto;}
 
-  @media(max-width:768px){.header,.nav,.controls,.main,.grid{padding-left:14px;padding-right:14px;}.g-right{flex-direction:column;align-items:flex-end;gap:4px;}.grid{grid-template-columns:1fr 1fr;}}
+  @media(max-width:768px){.header,.nav,.controls,.main,.grid,.charts-row,.heatmap-section{padding-left:14px;padding-right:14px;}.g-right{flex-direction:column;align-items:flex-end;gap:4px;}.grid{grid-template-columns:1fr 1fr;}.charts-row{grid-template-columns:1fr;}.index-bar{padding:0 14px;}}
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1><span>&#9679;</span> Signal Dashboard <span>LIVE</span></h1>
+  <h1><span>&#9679;</span> Market <span>Pulse</span> Dashboard</h1>
   <div class="header-right">
-    <div class="badge">S&P 500 YTD: <strong id="spBadge">—</strong></div>
     <div style="display:flex;align-items:center;gap:6px;"><div class="live-dot"></div><span style="font-size:11px;color:var(--green)">Live</span></div>
     <button class="btn btn-primary" id="refreshBtn" onclick="manualRefresh()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -153,8 +199,14 @@
     </button>
   </div>
 </div>
+
+<!-- Index ticker bar -->
+<div class="index-bar" id="indexBar">
+  <div class="idx"><div class="idx-name">Loading indexes...</div></div>
+</div>
+
 <div class="ts" id="tsLine"></div>
-<div class="stale-banner" id="staleBanner">&#9888; Data is stale — signal engine hasn't run recently. The pipeline runs every 15 min during market hours (Mon–Fri 9:30 AM – 4:30 PM ET).</div>
+<div class="stale-banner" id="staleBanner">&#9888; Data is stale — signal engine hasn't run recently. Pipeline runs every 15 min during market hours (Mon–Fri 9:30 AM – 4:30 PM ET).</div>
 
 <div class="nav">
   <a href="index.html" class="active">Dashboard</a>
@@ -170,6 +222,10 @@
   <button class="pill" onclick="filt('sell',this)">Sell</button>
   <button class="pill" id="breakerFilter" onclick="filtBreaker(this)">Breaker Alerts Only</button>
   <input class="search" type="text" placeholder="Search ticker or group..." oninput="search(this.value)">
+  <div class="view-toggle">
+    <button class="view-btn active" onclick="setView('overview',this)">Overview</button>
+    <button class="view-btn" onclick="setView('groups',this)">Groups</button>
+  </div>
   <div class="auto-label">
     Auto-refresh <span class="countdown" id="countdown">60s</span>
     <div class="toggle on" id="autoToggle" onclick="toggleAuto()"></div>
@@ -177,7 +233,30 @@
 </div>
 
 <div class="grid" id="statsGrid"></div>
-<div class="main" id="mainContent"><div class="empty"><div class="loader"></div><p style="margin-top:12px">Loading signals...</p></div></div>
+
+<!-- Overview: Heatmap + Charts (shown by default) -->
+<div id="overviewSection">
+  <div class="heatmap-section">
+    <div class="heatmap-card">
+      <h3>Signal Heatmap</h3>
+      <div class="subtitle">All tickers colored by score. Click any group to drill down.</div>
+      <div class="heatmap-grid" id="heatmapGrid"></div>
+    </div>
+  </div>
+  <div class="charts-row">
+    <div class="chart-card">
+      <h3>Group Avg YTD Return (%)</h3>
+      <div id="barChart" class="bar-chart"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Signal Distribution</h3>
+      <div id="pieChart" class="pie-container"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Groups detail view -->
+<div class="main" id="mainContent" style="display:none;"><div class="empty"><div class="loader"></div><p style="margin-top:12px">Loading signals...</p></div></div>
 
 <div class="legend">
   <div class="legend-i"><div class="dot strong-buy"></div>Strong Buy</div>
@@ -188,6 +267,9 @@
   <div class="legend-i"><span style="color:var(--red)">&#9679;</span> Thesis Breaker Active</div>
 </div>
 
+<!-- Tooltip -->
+<div class="tooltip" id="tooltip" style="display:none;"></div>
+
 <script>
 let DATA = null;
 let prevTimestamp = null;
@@ -195,16 +277,26 @@ let filter = 'all';
 let query = '';
 let breakerOnly = false;
 let autoRefresh = true;
-let autoTimer = null;
 let countdownSec = 60;
 let countdownTimer = null;
-const REFRESH_INTERVAL = 60; // seconds
+let currentView = 'overview';
+const REFRESH_INTERVAL = 60;
 
 function scoreColor(s){return s>=70?'var(--green)':s>=55?'var(--yellow)':'var(--red)';}
+function scoreHex(s){return s>=70?'#3fb950':s>=55?'#d29922':'#f85149';}
+function scoreBg(s){
+  if(s>=80) return '#1a6334';
+  if(s>=70) return '#1e5a2a';
+  if(s>=60) return '#5a4a10';
+  if(s>=50) return '#6b4b0a';
+  if(s>=40) return '#6e3a0a';
+  return '#6e1a1a';
+}
 function sigClass(s){return 'sig-'+(s||'hold');}
-function fmtMcap(v){if(!v)return '—';if(v>=1e12)return '$'+( v/1e12).toFixed(1)+'T';if(v>=1e9)return '$'+(v/1e9).toFixed(1)+'B';if(v>=1e6)return '$'+(v/1e6).toFixed(0)+'M';return '$'+v;}
+function fmtMcap(v){if(!v)return '—';if(v>=1e12)return '$'+(v/1e12).toFixed(1)+'T';if(v>=1e9)return '$'+(v/1e9).toFixed(1)+'B';if(v>=1e6)return '$'+(v/1e6).toFixed(0)+'M';return '$'+v;}
 function fmtPct(v){if(v===null||v===undefined)return '—';return (v*100).toFixed(1)+'%';}
 function fmtNum(v,d){if(v===null||v===undefined)return '—';return Number(v).toFixed(d||1);}
+function fmtComma(v){return v?v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';}
 function breakerIcon(status){return {critical:'🔴',warning:'🟠',watch:'🟡',clear:'🟢'}[status]||'⚪';}
 
 async function loadData(){
@@ -217,13 +309,14 @@ async function loadData(){
     DATA = newData;
     render();
     if(dataChanged){
-      // Flash the stats grid to signal new data arrived
       document.getElementById('statsGrid').classList.add('flash');
       setTimeout(()=>document.getElementById('statsGrid').classList.remove('flash'),700);
-      document.title = '🔄 NEW DATA — Signal Dashboard';
-      setTimeout(()=>{document.title='Industry Group Signal Dashboard — Live';},5000);
+      document.title = '🔄 NEW DATA — Market Pulse Dashboard';
+      setTimeout(()=>{document.title='Market Pulse Dashboard — Live';},5000);
     }
   }catch(e){
+    document.getElementById('mainContent').style.display='block';
+    document.getElementById('overviewSection').style.display='none';
     document.getElementById('mainContent').innerHTML = `<div class="empty"><h2>No Live Data Yet</h2><p>Run the signal engine first:<br><code style="background:var(--surface2);padding:4px 8px;border-radius:4px;font-size:13px">python signal_engine.py && python history_manager.py</code></p></div>`;
   }
 }
@@ -241,9 +334,127 @@ function updateTimestampDisplay(){
   if(stale){banner.classList.add('show');}else{banner.classList.remove('show');}
 }
 
+function renderIndexBar(){
+  const indexes = DATA.indexes || {};
+  const order = ['^GSPC','^IXIC','^DJI','^RUT','^VIX'];
+  let html = '';
+  order.forEach(sym=>{
+    const idx = indexes[sym];
+    if(!idx) return;
+    const isVix = sym === '^VIX';
+    const up = isVix ? idx.day_change <= 0 : idx.day_change >= 0;
+    const col = up ? 'var(--green)' : 'var(--red)';
+    const arrow = idx.day_change >= 0 ? '▲' : '▼';
+    const ytdUp = isVix ? idx.ytd <= 0 : idx.ytd >= 0;
+    html += `<div class="idx">
+      <div class="idx-name">${idx.name}</div>
+      <div class="idx-level">${fmtComma(idx.level)}</div>
+      <div class="idx-change">
+        <span style="color:${col}">${arrow} ${Math.abs(idx.day_change).toFixed(2)}</span>
+        <span style="color:${col}">(${idx.day_change_pct >= 0 ? '+' : ''}${idx.day_change_pct}%)</span>
+      </div>
+      <div class="idx-ytd">YTD: <span style="color:${ytdUp?'var(--green)':'var(--red)'}">${idx.ytd >= 0 ? '+' : ''}${idx.ytd}%</span></div>
+    </div>`;
+  });
+  document.getElementById('indexBar').innerHTML = html || '<div class="idx"><div class="idx-name">No index data</div></div>';
+}
+
+function renderHeatmap(){
+  const groups = DATA.groups||[];
+  let html = '';
+  groups.forEach((g,gi)=>{
+    if(filter!=='all' && g.group_signal!==filter) return;
+    if(breakerOnly && (!g.breaker_status || g.breaker_status==='clear')) return;
+    const stocks = query ? g.stocks.filter(s=>s.ticker.toLowerCase().includes(query)||g.name.toLowerCase().includes(query)) : g.stocks;
+    if(query && !stocks.length && !g.name.toLowerCase().includes(query)) return;
+
+    html += `<div class="hm-group-label" onclick="drillToGroup(${gi})">#${g.rank} ${g.name} (${g.avg_ytd>=0?'+':''}${g.avg_ytd}%) ${breakerIcon(g.breaker_status||'clear')}</div>`;
+    stocks.forEach(s=>{
+      html += `<div class="hm-tile" style="background:${scoreBg(s.score)}" onmouseenter="showTT(event,this)" onmouseleave="hideTT()" data-ticker="${s.ticker}" data-score="${s.score}" data-signal="${s.signal}" data-ytd="${s.ytd_return}" data-price="${s.price?s.price.toFixed(2):'—'}" data-rsi="${fmtNum(s.rsi,1)}" data-group="${g.name}">
+        <div class="hm-ticker">${s.ticker}</div>
+        <div class="hm-score">${s.score}</div>
+      </div>`;
+    });
+  });
+  document.getElementById('heatmapGrid').innerHTML = html || '<div style="padding:20px;color:var(--dim)">No data</div>';
+}
+
+function renderBarChart(){
+  const groups = DATA.groups||[];
+  const filtered = groups.filter(g=>{
+    if(filter!=='all' && g.group_signal!==filter) return false;
+    if(breakerOnly && (!g.breaker_status || g.breaker_status==='clear')) return false;
+    if(query && !g.name.toLowerCase().includes(query)) return false;
+    return true;
+  });
+  const maxYtd = Math.max(...filtered.map(g=>Math.abs(g.avg_ytd)),1);
+  let html = '';
+  filtered.forEach(g=>{
+    const pct = Math.abs(g.avg_ytd)/maxYtd*100;
+    const col = g.avg_ytd >= 0 ? 'var(--green)' : 'var(--red)';
+    html += `<div class="bar-row">
+      <div class="bar-label" title="${g.name}">${g.name}</div>
+      <div class="bar-track"><div class="bar-fill2" style="width:${pct}%;background:${col}"><span class="bar-val">${g.avg_ytd>=0?'+':''}${g.avg_ytd}%</span></div></div>
+    </div>`;
+  });
+  document.getElementById('barChart').innerHTML = html;
+}
+
+function renderPieChart(){
+  const groups = DATA.groups||[];
+  let counts = {'strong-buy':0, buy:0, hold:0, sell:0, 'strong-sell':0};
+  groups.forEach(g=>{
+    g.stocks.forEach(s=>{
+      if(counts[s.signal] !== undefined) counts[s.signal]++;
+    });
+  });
+  const total = Object.values(counts).reduce((a,b)=>a+b,0)||1;
+  const colors = {'strong-buy':'#2ea043','buy':'#3fb950','hold':'#d29922','sell':'#f85149','strong-sell':'#da3633'};
+  const labels = {'strong-buy':'Strong Buy','buy':'Buy','hold':'Hold','sell':'Sell','strong-sell':'Strong Sell'};
+
+  // SVG pie
+  let cumulativePercent = 0;
+  let paths = '';
+  const entries = Object.entries(counts).filter(([,v])=>v>0);
+
+  if(entries.length === 0){
+    document.getElementById('pieChart').innerHTML = '<div style="color:var(--dim);padding:20px;">No data</div>';
+    return;
+  }
+
+  entries.forEach(([signal,count])=>{
+    const percent = count/total;
+    const startAngle = cumulativePercent * 2 * Math.PI;
+    cumulativePercent += percent;
+    const endAngle = cumulativePercent * 2 * Math.PI;
+    const largeArc = percent > 0.5 ? 1 : 0;
+    const x1 = 80 + 70 * Math.cos(startAngle - Math.PI/2);
+    const y1 = 80 + 70 * Math.sin(startAngle - Math.PI/2);
+    const x2 = 80 + 70 * Math.cos(endAngle - Math.PI/2);
+    const y2 = 80 + 70 * Math.sin(endAngle - Math.PI/2);
+
+    if(entries.length === 1){
+      paths += `<circle cx="80" cy="80" r="70" fill="${colors[signal]}"/>`;
+    } else {
+      paths += `<path d="M80,80 L${x1},${y1} A70,70 0 ${largeArc},1 ${x2},${y2} Z" fill="${colors[signal]}"/>`;
+    }
+  });
+
+  let legendHtml = '';
+  entries.forEach(([signal,count])=>{
+    const pct = ((count/total)*100).toFixed(0);
+    legendHtml += `<div class="pie-legend-item"><div class="pie-swatch" style="background:${colors[signal]}"></div><span>${labels[signal]}: ${count} (${pct}%)</span></div>`;
+  });
+
+  document.getElementById('pieChart').innerHTML = `
+    <svg width="160" height="160" viewBox="0 0 160 160">${paths}</svg>
+    <div class="pie-legend">${legendHtml}</div>
+  `;
+}
+
 function render(){
   if(!DATA) return;
-  document.getElementById('spBadge').innerHTML = `<span style="color:${DATA.sp500_ytd>=0?'var(--green)':'var(--red)'}">${DATA.sp500_ytd>=0?'+':''}${DATA.sp500_ytd}%</span>`;
+  renderIndexBar();
   updateTimestampDisplay();
 
   const groups = DATA.groups||[];
@@ -262,6 +473,23 @@ function render(){
     <div class="stat"><div class="l">Breaker Alerts</div><div class="v" style="color:${breakerCount>0?'var(--red)':'var(--green)'}">${breakerCount>0?breakerCount+' ⚠':'0 ✓'}</div></div>
   `;
 
+  renderHeatmap();
+  renderBarChart();
+  renderPieChart();
+  renderGroups();
+
+  // Show correct view
+  if(currentView === 'overview'){
+    document.getElementById('overviewSection').style.display='';
+    document.getElementById('mainContent').style.display='none';
+  } else {
+    document.getElementById('overviewSection').style.display='none';
+    document.getElementById('mainContent').style.display='';
+  }
+}
+
+function renderGroups(){
+  const groups = DATA.groups||[];
   let html = '';
   groups.forEach((g,i)=>{
     if(filter!=='all' && g.group_signal!==filter) return;
@@ -272,7 +500,7 @@ function render(){
     const bs = g.breaker_status||'clear';
     const triggeredAlerts = (g.breaker_alerts||[]).filter(a=>a.triggered);
 
-    html += `<div class="card ${bs!=='clear'?'breaker-'+bs:''}"><div class="card-head" onclick="tog(${i})">
+    html += `<div class="card ${bs!=='clear'?'breaker-'+bs:''}" id="group-card-${i}"><div class="card-head" onclick="tog(${i})">
       <div class="g-left"><div class="rank ${g.rank<=3?'top':''}">${g.rank}</div>
         <div>
           <div class="g-name">${g.name} ${bs!=='clear'?breakerIcon(bs):''}</div>
@@ -288,7 +516,6 @@ function render(){
       </div>
     </div>
     <div class="card-body" id="bd${i}">
-
       <div class="info-panel">
         <div class="thesis-text"><strong>Thesis:</strong> ${g.thesis}</div>
         <div class="thesis-breaker-text"><strong>THESIS BREAKER:</strong> ${g.thesis_breaker}</div>
@@ -303,25 +530,14 @@ function render(){
           `).join('')}
         </div>`:''}
       </div>
-
       <div class="tab-bar">
         <button class="tab-btn active" onclick="switchTab(${i},'signals')">Signals & Technicals</button>
         <button class="tab-btn" onclick="switchTab(${i},'momentum')">Momentum</button>
         <button class="tab-btn" onclick="switchTab(${i},'fundamentals')">Fundamentals</button>
       </div>
-
-      <!-- Signals Tab -->
       <div class="tab-content active" id="tab-signals-${i}">
         <div class="tbl-scroll"><table><thead><tr>
-          <th onclick="sortG(${i},'ticker')">Ticker</th>
-          <th onclick="sortG(${i},'price')">Price</th>
-          <th onclick="sortG(${i},'ytd_return')">YTD %</th>
-          <th onclick="sortG(${i},'score')">Score</th>
-          <th>Signal</th>
-          <th onclick="sortG(${i},'rsi')">RSI</th>
-          <th>MACD</th>
-          <th>Price vs MA</th>
-          <th onclick="sortG(${i},'volume_ratio')">Volume</th>
+          <th onclick="sortG(${i},'ticker')">Ticker</th><th onclick="sortG(${i},'price')">Price</th><th onclick="sortG(${i},'ytd_return')">YTD %</th><th onclick="sortG(${i},'score')">Score</th><th>Signal</th><th onclick="sortG(${i},'rsi')">RSI</th><th>MACD</th><th>Price vs MA</th><th onclick="sortG(${i},'volume_ratio')">Volume</th>
         </tr></thead><tbody>
         ${(query?stocks:g.stocks).map(s=>`<tr>
           <td><span class="tk">${s.ticker}</span>${s.beating_sp500?'<span class="sp">S&P✓</span>':''}</td>
@@ -336,20 +552,9 @@ function render(){
         </tr>`).join('')}
         </tbody></table></div>
       </div>
-
-      <!-- Momentum Tab -->
       <div class="tab-content" id="tab-momentum-${i}">
         <div class="tbl-scroll"><table><thead><tr>
-          <th onclick="sortG(${i},'ticker')">Ticker</th>
-          <th onclick="sortG(${i},'price')">Price</th>
-          <th onclick="sortG(${i},'return_1m')">1M Ret</th>
-          <th onclick="sortG(${i},'return_3m')">3M Ret</th>
-          <th onclick="sortG(${i},'ytd_return')">YTD</th>
-          <th onclick="sortG(${i},'pct_from_52w_high')">% From 52W Hi</th>
-          <th>52W Range</th>
-          <th onclick="sortG(${i},'rs_vs_ma50')">RS vs MA50</th>
-          <th onclick="sortG(${i},'trend_strength')">Trend Str</th>
-          <th>Signal</th>
+          <th onclick="sortG(${i},'ticker')">Ticker</th><th onclick="sortG(${i},'price')">Price</th><th onclick="sortG(${i},'return_1m')">1M Ret</th><th onclick="sortG(${i},'return_3m')">3M Ret</th><th onclick="sortG(${i},'ytd_return')">YTD</th><th onclick="sortG(${i},'pct_from_52w_high')">% From 52W Hi</th><th>52W Range</th><th onclick="sortG(${i},'rs_vs_ma50')">RS vs MA50</th><th onclick="sortG(${i},'trend_strength')">Trend Str</th><th>Signal</th>
         </tr></thead><tbody>
         ${(query?stocks:g.stocks).map(s=>`<tr>
           <td><span class="tk">${s.ticker}</span></td>
@@ -365,22 +570,9 @@ function render(){
         </tr>`).join('')}
         </tbody></table></div>
       </div>
-
-      <!-- Fundamentals Tab -->
       <div class="tab-content" id="tab-fundamentals-${i}">
         <div class="tbl-scroll"><table><thead><tr>
-          <th onclick="sortG(${i},'ticker')">Ticker</th>
-          <th>Mkt Cap</th>
-          <th>Fwd P/E</th>
-          <th>Trail P/E</th>
-          <th>Rev Growth</th>
-          <th>Op Margin</th>
-          <th>Profit Margin</th>
-          <th>EPS (Fwd)</th>
-          <th>Beta</th>
-          <th>Short %</th>
-          <th>Target</th>
-          <th>Analyst</th>
+          <th onclick="sortG(${i},'ticker')">Ticker</th><th>Mkt Cap</th><th>Fwd P/E</th><th>Trail P/E</th><th>Rev Growth</th><th>Op Margin</th><th>Profit Margin</th><th>EPS (Fwd)</th><th>Beta</th><th>Short %</th><th>Target</th><th>Analyst</th>
         </tr></thead><tbody>
         ${(query?stocks:g.stocks).map(s=>{const f=s.fundamentals||{};return `<tr>
           <td><span class="tk">${s.ticker}</span></td>
@@ -398,11 +590,56 @@ function render(){
         </tr>`}).join('')}
         </tbody></table></div>
       </div>
-
     </div></div>`;
   });
 
   document.getElementById('mainContent').innerHTML = html || '<div class="empty"><h2>No groups match filter</h2></div>';
+}
+
+/* Tooltip for heatmap tiles */
+function showTT(e,el){
+  const tt = document.getElementById('tooltip');
+  tt.innerHTML = `
+    <div class="tt-ticker">${el.dataset.ticker}</div>
+    <div class="tt-row"><span class="tt-label">Group:</span> <span>${el.dataset.group}</span></div>
+    <div class="tt-row"><span class="tt-label">Price:</span> <span>$${el.dataset.price}</span></div>
+    <div class="tt-row"><span class="tt-label">Score:</span> <span style="color:${scoreHex(+el.dataset.score)}">${el.dataset.score}</span></div>
+    <div class="tt-row"><span class="tt-label">Signal:</span> <span style="text-transform:uppercase">${el.dataset.signal}</span></div>
+    <div class="tt-row"><span class="tt-label">YTD:</span> <span style="color:${+el.dataset.ytd>=0?'var(--green)':'var(--red)'}">${+el.dataset.ytd>=0?'+':''}${el.dataset.ytd}%</span></div>
+    <div class="tt-row"><span class="tt-label">RSI:</span> <span>${el.dataset.rsi}</span></div>
+  `;
+  tt.style.display = 'block';
+  tt.style.left = Math.min(e.clientX+12, window.innerWidth-280)+'px';
+  tt.style.top = (e.clientY+12)+'px';
+}
+function hideTT(){document.getElementById('tooltip').style.display='none';}
+
+/* Drill from heatmap group label to group card */
+function drillToGroup(gi){
+  setView('groups', document.querySelector('.view-btn:last-child'));
+  setTimeout(()=>{
+    const card = document.getElementById('group-card-'+gi);
+    if(card){
+      card.scrollIntoView({behavior:'smooth',block:'start'});
+      const bd = document.getElementById('bd'+gi);
+      const ch = document.getElementById('ch'+gi);
+      const hd = bd.previousElementSibling;
+      bd.classList.add('open');ch.classList.add('open');hd.classList.add('open');
+    }
+  },50);
+}
+
+function setView(view, btn){
+  currentView = view;
+  document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(view === 'overview'){
+    document.getElementById('overviewSection').style.display='';
+    document.getElementById('mainContent').style.display='none';
+  } else {
+    document.getElementById('overviewSection').style.display='none';
+    document.getElementById('mainContent').style.display='';
+  }
 }
 
 function tog(i){
@@ -410,13 +647,10 @@ function tog(i){
   b.classList.toggle('open');c.classList.toggle('open');h.classList.toggle('open');
 }
 function switchTab(gi,tab){
-  // Deactivate all tabs in this group
   const body=document.getElementById('bd'+gi);
   body.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   body.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
-  // Activate selected
   document.getElementById('tab-'+tab+'-'+gi).classList.add('active');
-  // Find and activate button
   body.querySelectorAll('.tab-btn').forEach(b=>{if(b.textContent.toLowerCase().includes(tab.substring(0,4)))b.classList.add('active');});
 }
 function filt(f,btn){
@@ -439,6 +673,7 @@ function sortG(gi,field){
   });
   render();
   setTimeout(()=>{
+    setView('groups', document.querySelector('.view-btn:last-child'));
     const b=document.getElementById('bd'+gi),c=document.getElementById('ch'+gi),h=b.previousElementSibling;
     b.classList.add('open');c.classList.add('open');h.classList.add('open');
   },10);
@@ -448,7 +683,7 @@ function manualRefresh(){
   const btn=document.getElementById('refreshBtn');btn.classList.add('spinning');btn.disabled=true;
   loadData().then(()=>{
     setTimeout(()=>{btn.classList.remove('spinning');btn.disabled=false;},500);
-    countdownSec=REFRESH_INTERVAL; // reset countdown on manual refresh
+    countdownSec=REFRESH_INTERVAL;
   });
 }
 function toggleAuto(){
@@ -474,9 +709,7 @@ function stopAuto(){
   const el=document.getElementById('countdown');if(el) el.textContent='off';
 }
 
-// Update the age display every 30s even between refreshes
 setInterval(updateTimestampDisplay, 30000);
-
 loadData();
 if(autoRefresh)startAuto();
 </script>

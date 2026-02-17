@@ -758,6 +758,41 @@ def score_stock(df, group_info):
 # ============================================================
 # MAIN PIPELINE
 # ============================================================
+INDEX_TICKERS = {
+    "^GSPC": "S&P 500",
+    "^IXIC": "NASDAQ",
+    "^DJI": "DOW 30",
+    "^RUT": "Russell 2000",
+    "^VIX": "VIX",
+}
+
+
+def get_index_data():
+    """Fetch YTD return and current level for major indexes."""
+    print("Fetching market indexes...")
+    indexes = {}
+    for ticker, name in INDEX_TICKERS.items():
+        print(f"  {name} ({ticker})...", end=" ")
+        df = fetch_data(ticker, period="6mo")
+        if df is not None and len(df) > 5:
+            ytd = compute_ytd_return(df)
+            level = round(float(df["Close"].iloc[-1]), 2)
+            prev_close = round(float(df["Close"].iloc[-2]), 2) if len(df) > 1 else level
+            day_change = round(level - prev_close, 2)
+            day_change_pct = round((day_change / prev_close) * 100, 2) if prev_close else 0
+            indexes[ticker] = {
+                "name": name,
+                "level": level,
+                "ytd": ytd,
+                "day_change": day_change,
+                "day_change_pct": day_change_pct,
+            }
+            print(f"OK — {level:,.2f} (YTD {ytd}%)")
+        else:
+            print("SKIP")
+    return indexes
+
+
 def get_sp500_ytd():
     print("Fetching S&P 500 benchmark...")
     df = fetch_data("^GSPC", period="6mo")
@@ -773,7 +808,9 @@ def run_engine():
     print(f"Signal Engine Run — {timestamp}")
     print(f"{'='*60}\n")
 
-    sp500_ytd = get_sp500_ytd()
+    # Fetch all market indexes
+    indexes = get_index_data()
+    sp500_ytd = indexes.get("^GSPC", {}).get("ytd", 0.0)
     print(f"S&P 500 YTD: {sp500_ytd}%\n")
 
     # Fetch macro proxy tickers for thesis-breaker checks
@@ -946,6 +983,7 @@ def run_engine():
     output = {
         "timestamp": timestamp,
         "sp500_ytd": sp500_ytd,
+        "indexes": indexes,
         "total_tickers": len(ticker_signals),
         "total_groups": len(groups_output),
         "groups": groups_output
