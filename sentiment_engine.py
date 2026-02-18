@@ -1,13 +1,27 @@
 #!/usr/bin/env python3
 """
-Sentiment Analysis Engine — Fetches social media data from StockTwits
-public API and runs VADER sentiment scoring to classify tickers as
-Bullish, Bearish, or Trending.
+Sentiment Analysis Engine — Multi-source sentiment analysis using
+StockTwits, Yahoo Finance news headlines, and VADER scoring.
+Classifies tickers as Bullish, Bearish, or Trending.
 """
 
 import time
+import json
+import os
 import requests
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+try:
+    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+    _analyzer = SentimentIntensityAnalyzer()
+except ImportError:
+    _analyzer = None
+    print("[WARN] vaderSentiment not installed — sentiment scoring disabled")
+
+try:
+    import yfinance as yf
+    USE_YFINANCE = True
+except ImportError:
+    USE_YFINANCE = False
 
 # ------------------------------------------------------------------
 # Config
@@ -16,11 +30,19 @@ STOCKTWITS_BASE = "https://api.stocktwits.com/api/2"
 CACHE_TTL = 900  # 15 minutes
 REQUEST_TIMEOUT = 10
 
-_analyzer = SentimentIntensityAnalyzer()
-
 # In-memory caches
 _trending_cache = {"data": None, "ts": 0}
 _symbol_cache = {}  # { "AAPL": { "data": {...}, "ts": timestamp } }
+
+# Dashboard tickers for fallback trending list
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+
+# Browser-like headers (StockTwits blocks simple User-Agents)
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 
 # ------------------------------------------------------------------
@@ -29,14 +51,11 @@ _symbol_cache = {}  # { "AAPL": { "data": {...}, "ts": timestamp } }
 def fetch_trending_tickers():
     """
     Fetch currently trending ticker symbols from StockTwits.
-    Uses public endpoint — no authentication required.
     Returns list of dicts: [{symbol, title, watchlist_count}, ...]
     """
     try:
         url = f"{STOCKTWITS_BASE}/trending/symbols.json"
-        resp = requests.get(url, timeout=REQUEST_TIMEOUT, headers={
-            "User-Agent": "SignalAgent/1.0"
-        })
+        resp = requests.get(url, timeout=REQUEST_TIMEOUT, headers=_HEADERS)
         if resp.status_code != 200:
             print(f"  StockTwits trending API returned {resp.status_code}")
             return []
@@ -52,33 +71,29 @@ def fetch_trending_tickers():
             })
         return result
     except Exception as e:
-        print(f"  Error fetching trending tickers: {e}")
+        print(f"  StockTwits trending unavailable: {e}")
         return []
 
 
 def fetch_stocktwits_messages(symbol, limit=30):
     """
     Fetch recent messages for a symbol from StockTwits.
-    Public endpoint, no auth. Rate limited (200 req/hour for unauthenticated).
     Returns list of dicts: [{body, created_at, sentiment}, ...]
     """
     try:
         url = f"{STOCKTWITS_BASE}/streams/symbol/{symbol}.json"
-        resp = requests.get(url, timeout=REQUEST_TIMEOUT, headers={
-            "User-Agent": "SignalAgent/1.0"
-        })
+        resp = requests.get(url, timeout=REQUEST_TIMEOUT, headers=_HEADERS)
         if resp.status_code == 429:
-            print(f"  Rate limited for {symbol}, skipping")
+            print(f"  StockTwits rate limited for {symbol}")
             return []
         if resp.status_code != 200:
-            print(f"  StockTwits messages API returned {resp.status_code} for {symbol}")
+            print(f"  StockTwits messages returned {resp.status_code} for {symbol}")
             return []
 
         data = resp.json()
         messages = data.get("messages", [])
         result = []
         for msg in messages[:limit]:
-            # StockTwits sometimes has user-tagged sentiment
             user_sentiment = None
             if msg.get("entities", {}).get("sentiment"):
                 user_sentiment = msg["entities"]["sentiment"].get("basic")
@@ -87,12 +102,87 @@ def fetch_stocktwits_messages(symbol, limit=30):
                 "body": msg.get("body", ""),
                 "created_at": msg.get("created_at", ""),
                 "user": msg.get("user", {}).get("username", ""),
-                "user_sentiment": user_sentiment,  # "Bullish" / "Bearish" / None
+                "user_sentiment": user_sentiment,
                 "likes": msg.get("likes", {}).get("total", 0),
+                "source": "stocktwits",
             })
         return result
     except Exception as e:
-        print(f"  Error fetching messages for {symbol}: {e}")
+        print(f"  StockTwits error for {symbol}: {e}")
+        return []
+
+
+# ------------------------------------------------------------------
+# Yahoo Finance News Headlines (Fallback data source)
+# ------------------------------------------------------------------
+def fetch_yahoo_news_headlines(symbol):
+    """
+    Fetch recent news headlines for a ticker from Yahoo Finance via yfinance.
+    Returns list of message-like dicts compatible with analyze_sentiment().
+    """
+    if not USE_YFINANCE:
+        return []
+
+    try:
+        ticker = yf.Ticker(symbol)
+        news = ticker.news
+        if not news:
+            return []
+
+        messages = []
+        for item in news[:20]:
+            title = item.get("title", "")
+            # Some yfinance versions use different field names
+            publisher = item.get("publisher", item.get("source", ""))
+            pub_date = item.get("providerPublishTime", item.get("publishedDate", ""))
+            link = item.get("link", "")
+
+            if title:
+                messages.append({
+                    "body": title,
+                    "created_at": str(pub_date) if pub_date else "",
+                    "user": publisher or "Yahoo Finance",
+                    "user_sentiment": None,
+                    "likes": 0,
+                    "source": "yahoo_news",
+                    "link": link,
+                })
+        return messages
+    except Exception as e:
+        print(f"  Yahoo news error for {symbol}: {e}")
+        return []
+
+
+def get_dashboard_tickers():
+    """
+    Get the list of tickers from the dashboard's signals.json
+    to use as a fallback trending list when StockTwits is unavailable.
+    Returns top movers (highest absolute YTD return).
+    """
+    try:
+        signals_path = os.path.join(DATA_DIR, "signals.json")
+        if not os.path.exists(signals_path):
+            return []
+
+        with open(signals_path, "r") as f:
+            data = json.load(f)
+
+        tickers = []
+        for group in data.get("groups", []):
+            for stock in group.get("stocks", []):
+                tickers.append({
+                    "symbol": stock.get("ticker", ""),
+                    "title": group.get("name", ""),
+                    "watchlist_count": 0,
+                    "ytd_return": stock.get("ytd_return", 0),
+                    "score": stock.get("score", 50),
+                })
+
+        # Sort by absolute YTD return (biggest movers = most interesting)
+        tickers.sort(key=lambda t: abs(t.get("ytd_return", 0)), reverse=True)
+        return tickers[:20]  # Top 20 movers
+    except Exception as e:
+        print(f"  Error loading dashboard tickers: {e}")
         return []
 
 
@@ -122,7 +212,7 @@ def analyze_sentiment(messages):
 
     for msg in messages:
         body = msg.get("body", "")
-        if not body:
+        if not body or not _analyzer:
             continue
 
         vs = _analyzer.polarity_scores(body)
@@ -189,6 +279,9 @@ def analyze_sentiment(messages):
 def get_trending_with_sentiment():
     """
     Fetch trending tickers and analyze sentiment for each.
+    Uses multi-source approach:
+      1. Try StockTwits trending + messages
+      2. If StockTwits fails, use dashboard tickers + Yahoo Finance news
     Results are cached for 15 minutes.
     Returns list of ticker sentiment dicts sorted by message activity.
     """
@@ -198,33 +291,51 @@ def get_trending_with_sentiment():
     if _trending_cache["data"] is not None and (now - _trending_cache["ts"]) < CACHE_TTL:
         return _trending_cache["data"]
 
+    # Attempt 1: StockTwits trending
     print("Fetching trending tickers from StockTwits...")
     trending = fetch_trending_tickers()
+    source_label = "StockTwits"
+
+    # Attempt 2: Fallback to dashboard tickers if StockTwits unavailable
+    if not trending:
+        print("  StockTwits unavailable — falling back to dashboard tickers + Yahoo Finance news...")
+        trending = get_dashboard_tickers()
+        source_label = "Yahoo Finance News"
 
     if not trending:
-        # Return cached data if available, even if stale
         if _trending_cache["data"]:
             return _trending_cache["data"]
         return []
 
     results = []
-    for i, ticker_info in enumerate(trending[:20]):  # Top 20 trending
+    for i, ticker_info in enumerate(trending[:20]):
         symbol = ticker_info["symbol"]
         print(f"  Analyzing sentiment for {symbol} ({i+1}/{min(len(trending),20)})...")
 
-        messages = fetch_stocktwits_messages(symbol, limit=30)
+        # Gather messages from all available sources
+        messages = []
+
+        # Try StockTwits messages
+        st_msgs = fetch_stocktwits_messages(symbol, limit=30)
+        messages.extend(st_msgs)
+
+        # Always try Yahoo Finance news headlines (supplements StockTwits)
+        yf_msgs = fetch_yahoo_news_headlines(symbol)
+        messages.extend(yf_msgs)
+
         sentiment = analyze_sentiment(messages)
 
         results.append({
             "symbol": symbol,
             "title": ticker_info.get("title", ""),
             "watchlist_count": ticker_info.get("watchlist_count", 0),
+            "data_source": source_label,
             **sentiment,
         })
 
         # Small delay to avoid rate limiting
         if i < len(trending) - 1:
-            time.sleep(0.3)
+            time.sleep(0.2)
 
     # Sort by message count (most discussed first)
     results.sort(key=lambda x: x["message_count"], reverse=True)
@@ -236,6 +347,7 @@ def get_trending_with_sentiment():
 def get_symbol_sentiment(symbol):
     """
     Get sentiment analysis for a specific ticker symbol.
+    Uses multi-source: StockTwits + Yahoo Finance news.
     Results cached for 15 minutes per symbol.
     """
     symbol = symbol.upper().strip()
@@ -245,11 +357,27 @@ def get_symbol_sentiment(symbol):
         return _symbol_cache[symbol]["data"]
 
     print(f"Analyzing sentiment for {symbol}...")
-    messages = fetch_stocktwits_messages(symbol, limit=30)
+    messages = []
+
+    # Try StockTwits
+    st_msgs = fetch_stocktwits_messages(symbol, limit=30)
+    messages.extend(st_msgs)
+
+    # Always try Yahoo Finance news
+    yf_msgs = fetch_yahoo_news_headlines(symbol)
+    messages.extend(yf_msgs)
+
     sentiment = analyze_sentiment(messages)
+
+    sources = []
+    if st_msgs:
+        sources.append(f"StockTwits ({len(st_msgs)})")
+    if yf_msgs:
+        sources.append(f"Yahoo News ({len(yf_msgs)})")
 
     result = {
         "symbol": symbol,
+        "data_sources": ", ".join(sources) if sources else "No data available",
         **sentiment,
     }
 
