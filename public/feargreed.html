@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fear & Greed Index — Market Pulse</title>
+<style>
+  :root {
+    --bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;
+    --text:#e6edf3;--dim:#8b949e;--green:#3fb950;--red:#f85149;
+    --yellow:#d29922;--blue:#58a6ff;--purple:#bc8cff;--orange:#f0883e;--cyan:#39d2c0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.5;}
+  a{color:var(--blue);text-decoration:none;}a:hover{text-decoration:underline;}
+
+  .header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  .header h1{font-size:20px;font-weight:600;} .header h1 span{color:var(--blue);}
+
+  .nav{padding:12px 28px;display:flex;gap:8px;border-bottom:1px solid var(--border);}
+  .nav a{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500;color:var(--dim);transition:all .15s;}
+  .nav a:hover{background:var(--surface2);color:var(--text);text-decoration:none;}
+  .nav a.active{background:var(--blue);color:#fff;}
+
+  .main{padding:24px 28px;max-width:900px;margin:0 auto;}
+
+  /* Gauge section */
+  .gauge-section{text-align:center;margin-bottom:28px;}
+  .gauge-container{position:relative;width:320px;height:180px;margin:0 auto;}
+  .gauge-score{font-size:52px;font-weight:800;font-family:'SF Mono','Fira Code',monospace;position:absolute;bottom:8px;left:50%;transform:translateX(-50%);}
+  .gauge-label{font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-top:4px;}
+  .gauge-sublabel{font-size:12px;color:var(--dim);margin-top:4px;}
+
+  /* Scale labels under gauge */
+  .scale-labels{display:flex;justify-content:space-between;width:320px;margin:4px auto 0;padding:0 8px;}
+  .scale-labels span{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.3px;}
+
+  /* Info line */
+  .info-line{text-align:center;font-size:11px;color:var(--dim);margin-bottom:20px;}
+
+  /* Indicators */
+  .indicators{display:flex;flex-direction:column;gap:8px;}
+  .indicator{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px;cursor:pointer;transition:all .15s;}
+  .indicator:hover{border-color:rgba(88,166,255,.3);}
+  .indicator.expanded{border-color:var(--blue);background:rgba(88,166,255,.03);}
+  .ind-top{display:flex;align-items:center;gap:14px;}
+  .ind-name{font-size:14px;font-weight:600;flex:1;}
+  .ind-score{font-size:20px;font-weight:800;font-family:'SF Mono','Fira Code',monospace;min-width:40px;text-align:right;}
+  .ind-label{font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;text-transform:uppercase;letter-spacing:.3px;min-width:90px;text-align:center;}
+  .lbl-extreme-fear{background:rgba(248,81,73,.2);color:var(--red);}
+  .lbl-fear{background:rgba(240,136,62,.15);color:var(--orange);}
+  .lbl-neutral{background:rgba(139,148,158,.12);color:var(--dim);}
+  .lbl-greed{background:rgba(63,185,80,.12);color:var(--green);}
+  .lbl-extreme-greed{background:rgba(63,185,80,.25);color:var(--green);}
+
+  /* Score bar */
+  .ind-bar-wrap{flex:1;max-width:200px;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;}
+  .ind-bar{height:100%;border-radius:3px;transition:width .5s ease;}
+
+  /* Expandable detail */
+  .ind-detail{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--dim);line-height:1.7;}
+  .ind-detail.show{display:block;}
+  .ind-detail .raw{font-family:'SF Mono',monospace;color:var(--cyan);font-weight:600;}
+
+  /* Loading */
+  .loading{text-align:center;padding:60px 20px;color:var(--dim);}
+  .spinner{display:inline-block;width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .error-state{text-align:center;padding:40px;color:var(--red);font-size:14px;}
+
+  @media(max-width:600px){.main{padding:16px;}.gauge-container{width:260px;height:150px;}.gauge-score{font-size:40px;}.ind-bar-wrap{display:none;}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>&#128168;</span> Fear & <span>Greed</span> Index</h1>
+</div>
+
+<div class="nav">
+  <a href="index.html">Dashboard</a>
+  <a href="search.html">Ticker Search</a>
+  <a href="sentiment.html">Sentiment</a>
+  <a href="feargreed.html" class="active">Fear & Greed</a>
+  <a href="history.html">History &amp; Changes</a>
+  <a href="architecture.html">Architecture</a>
+</div>
+
+<div class="main">
+
+  <!-- Gauge -->
+  <div class="gauge-section" id="gaugeSection">
+    <div class="loading" id="loadingState">
+      <div class="spinner"></div>
+      <div style="margin-top:12px;">Computing Fear & Greed Index...</div>
+      <div style="font-size:11px;margin-top:4px;">Fetching data for 7 market indicators</div>
+    </div>
+    <div style="display:none;" id="gaugeContent">
+      <div class="gauge-container">
+        <svg viewBox="0 0 320 180" id="gaugeSvg">
+          <defs>
+            <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" style="stop-color:#f85149"/>
+              <stop offset="25%" style="stop-color:#f0883e"/>
+              <stop offset="50%" style="stop-color:#d29922"/>
+              <stop offset="75%" style="stop-color:#3fb950"/>
+              <stop offset="100%" style="stop-color:#238636"/>
+            </linearGradient>
+          </defs>
+          <!-- Arc background -->
+          <path d="M 30 160 A 130 130 0 0 1 290 160" fill="none" stroke="#21262d" stroke-width="20" stroke-linecap="round"/>
+          <!-- Arc gradient -->
+          <path d="M 30 160 A 130 130 0 0 1 290 160" fill="none" stroke="url(#gaugeGrad)" stroke-width="20" stroke-linecap="round"/>
+          <!-- Tick marks -->
+          <line x1="30" y1="160" x2="30" y2="145" stroke="#484f58" stroke-width="1.5"/>
+          <line x1="95" y1="47" x2="99" y2="60" stroke="#484f58" stroke-width="1.5"/>
+          <line x1="160" y1="30" x2="160" y2="45" stroke="#484f58" stroke-width="1.5"/>
+          <line x1="225" y1="47" x2="221" y2="60" stroke="#484f58" stroke-width="1.5"/>
+          <line x1="290" y1="160" x2="290" y2="145" stroke="#484f58" stroke-width="1.5"/>
+          <!-- Needle (will be rotated by JS) -->
+          <g id="needle" transform="rotate(-90, 160, 160)">
+            <line x1="160" y1="160" x2="160" y2="50" stroke="#e6edf3" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="160" cy="160" r="6" fill="#e6edf3"/>
+          </g>
+        </svg>
+        <div class="gauge-score" id="gaugeScore">—</div>
+      </div>
+      <div class="scale-labels">
+        <span>Extreme Fear</span>
+        <span>Fear</span>
+        <span>Neutral</span>
+        <span>Greed</span>
+        <span>Extreme Greed</span>
+      </div>
+      <div class="gauge-label" id="gaugeLabel">—</div>
+      <div class="gauge-sublabel" id="gaugeSublabel">—</div>
+    </div>
+  </div>
+
+  <div class="info-line" id="infoLine">Loading...</div>
+
+  <!-- 7 Indicators -->
+  <div class="indicators" id="indicators"></div>
+
+</div>
+
+<script>
+function scoreColor(s){
+  if(s<=25) return 'var(--red)';
+  if(s<=45) return 'var(--orange)';
+  if(s<=55) return 'var(--yellow)';
+  if(s<=75) return 'var(--green)';
+  return '#238636';
+}
+
+function lblClass(label){
+  const l = label.toLowerCase();
+  if(l==='extreme fear') return 'lbl-extreme-fear';
+  if(l==='fear') return 'lbl-fear';
+  if(l==='neutral') return 'lbl-neutral';
+  if(l==='greed') return 'lbl-greed';
+  if(l==='extreme greed') return 'lbl-extreme-greed';
+  return 'lbl-neutral';
+}
+
+function setNeedle(score){
+  // Score 0 → -90deg (left), score 100 → +90deg (right)
+  const angle = -90 + (score / 100) * 180;
+  document.getElementById('needle').setAttribute('transform', `rotate(${angle}, 160, 160)`);
+}
+
+async function loadFearGreed(){
+  try {
+    const r = await fetch('/api/fear-greed');
+    const d = await r.json();
+
+    if(d.status !== 'success'){
+      document.getElementById('loadingState').innerHTML = `<div class="error-state">${d.error || 'Failed to load'}</div>`;
+      return;
+    }
+
+    // Show gauge
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('gaugeContent').style.display = 'block';
+
+    const score = d.composite_score;
+    const label = d.composite_label;
+
+    document.getElementById('gaugeScore').textContent = score;
+    document.getElementById('gaugeScore').style.color = scoreColor(score);
+    document.getElementById('gaugeLabel').textContent = label;
+    document.getElementById('gaugeLabel').style.color = scoreColor(score);
+    document.getElementById('gaugeSublabel').textContent = 'Market sentiment based on 7 indicators';
+
+    setNeedle(score);
+
+    // Update info line
+    document.getElementById('infoLine').textContent =
+      `Last updated: ${new Date(d.timestamp).toLocaleString()} — Auto-refreshes every 15 minutes`;
+
+    // Render indicators
+    const indicators = d.indicators || [];
+    const container = document.getElementById('indicators');
+
+    container.innerHTML = indicators.map((ind, i) => {
+      const col = scoreColor(ind.score);
+      return `<div class="indicator" onclick="toggleDetail(${i})">
+        <div class="ind-top">
+          <div class="ind-name">${ind.name}</div>
+          <div class="ind-bar-wrap"><div class="ind-bar" style="width:${ind.score}%;background:${col};"></div></div>
+          <div class="ind-score" style="color:${col}">${ind.score}</div>
+          <div class="ind-label ${lblClass(ind.label)}">${ind.label}</div>
+        </div>
+        <div class="ind-detail" id="detail-${i}">
+          ${ind.detail} <span class="raw">(Raw: ${ind.value})</span>
+        </div>
+      </div>`;
+    }).join('');
+
+  } catch(e) {
+    document.getElementById('loadingState').innerHTML =
+      `<div class="error-state">Connection error — is the API server running?</div>`;
+  }
+}
+
+function toggleDetail(idx){
+  const el = document.getElementById('detail-'+idx);
+  if(!el) return;
+  el.classList.toggle('show');
+  el.closest('.indicator').classList.toggle('expanded');
+}
+
+// Load on page load
+loadFearGreed();
+
+// Auto-refresh every 15 minutes
+setInterval(loadFearGreed, 900000);
+</script>
+</body>
+</html>

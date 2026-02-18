@@ -10,16 +10,23 @@ import os
 import time
 import datetime
 from flask import Flask, jsonify, request, send_from_directory
+from flask_cors import CORS
 
 from signal_engine import (
     fetch_data,
     fetch_fundamentals_yfinance,
     score_stock,
     compute_trade_signal,
+    compute_swing_trade_signal,
+    compute_intraday_trade_signal,
+    compute_stage_analysis,
     NumpyEncoder,
 )
+from sentiment_engine import get_trending_with_sentiment, get_symbol_sentiment
+from fear_greed_engine import get_fear_greed_index
 
 app = Flask(__name__, static_folder="public", static_url_path="")
+CORS(app)  # Enable CORS for flexibility
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 HISTORY_FILE = os.path.join(DATA_DIR, "search_history.json")
@@ -64,8 +71,11 @@ def _analyze_ticker(symbol):
     fundamentals = fetch_fundamentals_yfinance(symbol)
     details["fundamentals"] = fundamentals
 
-    # Trade signal (no breaker context for ad-hoc)
+    # Trade signals (no breaker context for ad-hoc)
     trade_sig, trade_reason = compute_trade_signal(details, breaker_status="clear")
+    swing_signal = compute_swing_trade_signal(details, df)
+    intraday_signal = compute_intraday_trade_signal(details, df)
+    stage_analysis = compute_stage_analysis(details, df)
 
     result = {
         "ticker": symbol,
@@ -95,6 +105,11 @@ def _analyze_ticker(symbol):
         "trend_strength": details.get("trend_strength", 0),
         # Fundamentals
         "fundamentals": fundamentals,
+        # Swing & Intraday signals
+        "swing_signal": swing_signal,
+        "intraday_signal": intraday_signal,
+        # Stage Analysis
+        "stage_analysis": stage_analysis,
     }
 
     # Cache it
@@ -159,6 +174,67 @@ def clear_history():
 
 
 # ------------------------------------------------------------------
+# Sentiment API Routes
+# ------------------------------------------------------------------
+@app.route("/api/sentiment/trending")
+def sentiment_trending():
+    """Return trending tickers with sentiment analysis."""
+    try:
+        tickers = get_trending_with_sentiment()
+        return app.response_class(
+            response=json.dumps({
+                "status": "success",
+                "timestamp": datetime.datetime.now().isoformat(),
+                "tickers": tickers,
+            }, cls=NumpyEncoder),
+            mimetype="application/json",
+        )
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/sentiment/<symbol>")
+def sentiment_symbol(symbol):
+    """Return sentiment analysis for a specific ticker."""
+    symbol = symbol.upper().strip()
+    if not symbol or len(symbol) > 10:
+        return jsonify({"status": "error", "error": "Invalid ticker symbol"}), 400
+
+    try:
+        result = get_symbol_sentiment(symbol)
+        return app.response_class(
+            response=json.dumps({
+                "status": "success",
+                "timestamp": datetime.datetime.now().isoformat(),
+                **result,
+            }, cls=NumpyEncoder),
+            mimetype="application/json",
+        )
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+# ------------------------------------------------------------------
+# Fear & Greed API Route
+# ------------------------------------------------------------------
+@app.route("/api/fear-greed")
+def fear_greed():
+    """Return the composite Fear & Greed Index with all 7 indicators."""
+    try:
+        result = get_fear_greed_index()
+        return app.response_class(
+            response=json.dumps({
+                "status": "success",
+                "timestamp": datetime.datetime.now().isoformat(),
+                **result,
+            }, cls=NumpyEncoder),
+            mimetype="application/json",
+        )
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+# ------------------------------------------------------------------
 # Static file serving
 # ------------------------------------------------------------------
 @app.route("/")
@@ -175,12 +251,13 @@ def static_files(path):
 # Main
 # ------------------------------------------------------------------
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5002))
     print("\n" + "=" * 60)
     print("  SignalAgent Ticker Search API")
     print("=" * 60)
-    print(f"  Dashboard:     http://localhost:5001/")
-    print(f"  Ticker Search: http://localhost:5001/search.html")
-    print(f"  API Endpoint:  http://localhost:5001/api/ticker/<SYMBOL>")
-    print(f"  History:       http://localhost:5001/api/history")
+    print(f"  Dashboard:     http://localhost:{port}/")
+    print(f"  Ticker Search: http://localhost:{port}/search.html")
+    print(f"  API Endpoint:  http://localhost:{port}/api/ticker/<SYMBOL>")
+    print(f"  History:       http://localhost:{port}/api/history")
     print("=" * 60 + "\n")
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)

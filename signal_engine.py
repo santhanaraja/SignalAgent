@@ -632,7 +632,7 @@ def check_thesis_breakers(group_name, group_info, group_stocks, macro_data, sp50
 # ============================================================
 # SIGNAL SCORING
 # ============================================================
-def score_stock(df, group_info):
+def score_stock(df, group_info=None):
     """
     Compute a composite score (0-100) and signal for a stock.
     """
@@ -922,6 +922,555 @@ def compute_trade_signal(details, breaker_status="clear"):
     return trade_signal, trade_reasoning
 
 
+# ------------------------------------------------------------------
+# SWING TRADE SIGNAL (2-10 day holds)
+# ------------------------------------------------------------------
+def compute_swing_trade_signal(details, df):
+    """
+    Compute swing trade signal with specific entry/stop/target prices.
+    Swing trading = 2-10 day holds focused on mean reversion and short-term momentum.
+
+    Returns dict: {signal, reasoning, entry_price, stop_loss, target_price, risk_reward}
+    """
+    rsi = details.get("rsi", 50)
+    macd_hist = details.get("macd_histogram", 0)
+    macd = details.get("macd", 0)
+    macd_sig = details.get("macd_signal", 0)
+    price = details.get("price", 0)
+    ma20 = details.get("ma20", price)
+    ma50 = details.get("ma50", price)
+    vol_ratio = details.get("volume_ratio", 1.0)
+    pct_from_high = details.get("pct_from_52w_high", 0)
+    trend_strength = details.get("trend_strength", 0)
+
+    if price == 0 or df is None or len(df) < 10:
+        return {
+            "signal": "NO SETUP", "reasoning": "Insufficient data",
+            "entry_price": None, "stop_loss": None, "target_price": None, "risk_reward": None
+        }
+
+    # --- Compute swing-specific price levels from recent data ---
+    recent = df.tail(10)
+    swing_low_5 = float(df.tail(5)["Low"].min())
+    swing_low_10 = float(recent["Low"].min())
+    swing_high_10 = float(recent["High"].max())
+    swing_high_5 = float(df.tail(5)["High"].max())
+
+    # ATR for buffer calculations
+    if len(df) >= 14:
+        highs = df["High"].values[-14:]
+        lows = df["Low"].values[-14:]
+        closes = df["Close"].values[-15:-1]
+        tr = []
+        for i in range(len(highs)):
+            tr_val = max(float(highs[i]) - float(lows[i]),
+                         abs(float(highs[i]) - float(closes[i])) if i < len(closes) else 0,
+                         abs(float(lows[i]) - float(closes[i])) if i < len(closes) else 0)
+            tr.append(tr_val)
+        atr = sum(tr) / len(tr) if tr else price * 0.02
+    else:
+        atr = price * 0.02
+
+    reasons = []
+    bullish = 0
+    bearish = 0
+
+    # --- MA20 is primary for swing trading ---
+    above_ma20 = price > ma20
+    if above_ma20:
+        bullish += 1
+        reasons.append(f"Price above MA20 ({ma20:.2f})")
+    else:
+        bearish += 1
+        reasons.append(f"Price below MA20 ({ma20:.2f})")
+
+    # Price near MA20 = pullback opportunity
+    ma20_dist = abs(price - ma20) / price * 100
+    if ma20_dist < 2 and above_ma20:
+        bullish += 1
+        reasons.append("Price near MA20 support — pullback entry zone")
+
+    # --- RSI for swing (mean reversion focus) ---
+    if rsi <= 35:
+        bullish += 3
+        reasons.append(f"RSI {rsi:.0f} — oversold bounce setup")
+    elif rsi <= 45:
+        bullish += 2
+        reasons.append(f"RSI {rsi:.0f} — approaching oversold, favorable entry")
+    elif rsi >= 75:
+        bearish += 3
+        reasons.append(f"RSI {rsi:.0f} — overbought, fade/short setup")
+    elif rsi >= 65:
+        bearish += 1
+        reasons.append(f"RSI {rsi:.0f} — extended, risk of reversal")
+    else:
+        reasons.append(f"RSI {rsi:.0f} — neutral zone")
+
+    # --- MACD histogram direction (key swing trigger) ---
+    if len(df) >= 3:
+        # Check if histogram is turning (direction change)
+        try:
+            ema12 = df["Close"].ewm(span=12).mean()
+            ema26 = df["Close"].ewm(span=26).mean()
+            macd_line = ema12 - ema26
+            sig_line = macd_line.ewm(span=9).mean()
+            hist = macd_line - sig_line
+            hist_today = float(hist.iloc[-1])
+            hist_yesterday = float(hist.iloc[-2])
+            hist_turning_up = hist_today > hist_yesterday and hist_yesterday < float(hist.iloc[-3])
+            hist_turning_down = hist_today < hist_yesterday and hist_yesterday > float(hist.iloc[-3])
+        except Exception:
+            hist_turning_up = False
+            hist_turning_down = False
+    else:
+        hist_turning_up = False
+        hist_turning_down = False
+
+    if hist_turning_up:
+        bullish += 2
+        reasons.append("MACD histogram turning up — momentum shift bullish")
+    elif hist_turning_down:
+        bearish += 2
+        reasons.append("MACD histogram turning down — momentum fading")
+    elif macd > macd_sig:
+        bullish += 1
+        reasons.append("MACD above signal line")
+    else:
+        bearish += 1
+        reasons.append("MACD below signal line")
+
+    # --- Volume spike for conviction ---
+    if vol_ratio >= 1.5:
+        bullish += 1
+        reasons.append(f"Volume {vol_ratio:.1f}x avg — high conviction move")
+    elif vol_ratio <= 0.6:
+        reasons.append(f"Volume {vol_ratio:.1f}x avg — low activity, weak setup")
+
+    # --- Determine signal ---
+    net = bullish - bearish
+
+    if net >= 4 and rsi <= 45:
+        signal = "BUY SWING"
+    elif net >= 3 and hist_turning_up:
+        signal = "BUY SWING"
+    elif net >= 2 and above_ma20:
+        signal = "WAIT FOR DIP"
+    elif net <= -3 and rsi >= 70:
+        signal = "FADE THE RALLY"
+    elif net <= -2:
+        signal = "EXIT SWING"
+    elif net >= 1:
+        signal = "HOLD SWING"
+    elif net <= -1:
+        signal = "EXIT SWING"
+    else:
+        signal = "NO SETUP"
+
+    # --- Compute entry/stop/target ---
+    buffer = atr * 0.3
+
+    if signal in ("BUY SWING", "WAIT FOR DIP", "HOLD SWING"):
+        # Long setup
+        entry_price = round(min(ma20, swing_low_5 + buffer), 2)
+        if entry_price > price * 1.02:
+            entry_price = round(price, 2)  # Don't set entry too far above current
+        stop_loss = round(swing_low_10 - buffer, 2)
+        risk = entry_price - stop_loss
+        if risk <= 0:
+            risk = atr
+        target_price = round(entry_price + (risk * 2), 2)  # 2:1 R/R target
+        # Cap target at recent swing high if it's closer
+        if swing_high_10 > entry_price and swing_high_10 < target_price:
+            target_price = round(swing_high_10, 2)
+        rr = round((target_price - entry_price) / risk, 1) if risk > 0 else 0
+        risk_reward = f"1:{rr}"
+    elif signal in ("FADE THE RALLY", "EXIT SWING"):
+        # Short/exit setup
+        entry_price = round(max(ma20, swing_high_5 - buffer), 2)
+        if entry_price < price * 0.98:
+            entry_price = round(price, 2)
+        stop_loss = round(swing_high_10 + buffer, 2)
+        risk = stop_loss - entry_price
+        if risk <= 0:
+            risk = atr
+        target_price = round(entry_price - (risk * 2), 2)
+        if swing_low_10 < entry_price and swing_low_10 > target_price:
+            target_price = round(swing_low_10, 2)
+        rr = round((entry_price - target_price) / risk, 1) if risk > 0 else 0
+        risk_reward = f"1:{rr}"
+    else:
+        entry_price = None
+        stop_loss = None
+        target_price = None
+        risk_reward = None
+
+    reasoning = "; ".join(reasons[:4])
+
+    return {
+        "signal": signal,
+        "reasoning": reasoning,
+        "entry_price": entry_price,
+        "stop_loss": stop_loss,
+        "target_price": target_price,
+        "risk_reward": risk_reward,
+    }
+
+
+# ------------------------------------------------------------------
+# INTRADAY TRADE SIGNAL (same-day trades)
+# ------------------------------------------------------------------
+def compute_intraday_trade_signal(details, df):
+    """
+    Compute intraday trade signal with specific entry/stop/target prices.
+    Uses previous day's levels, ATR, gap analysis, and momentum indicators.
+
+    Returns dict: {signal, reasoning, entry_price, stop_loss, target_price, risk_reward}
+    """
+    rsi = details.get("rsi", 50)
+    macd_hist = details.get("macd_histogram", 0)
+    macd = details.get("macd", 0)
+    macd_sig = details.get("macd_signal", 0)
+    price = details.get("price", 0)
+    vol_ratio = details.get("volume_ratio", 1.0)
+
+    if price == 0 or df is None or len(df) < 15:
+        return {
+            "signal": "NO SETUP", "reasoning": "Insufficient data",
+            "entry_price": None, "stop_loss": None, "target_price": None, "risk_reward": None
+        }
+
+    # --- Key intraday levels from previous days ---
+    prev_high = float(df["High"].iloc[-2])
+    prev_low = float(df["Low"].iloc[-2])
+    prev_close = float(df["Close"].iloc[-2])
+    today_open = float(df["Open"].iloc[-1])
+    today_high = float(df["High"].iloc[-1])
+    today_low = float(df["Low"].iloc[-1])
+
+    # --- ATR(14) for volatility-based stops/targets ---
+    highs = df["High"].values[-15:-1]
+    lows = df["Low"].values[-15:-1]
+    closes = df["Close"].values[-16:-2]
+    tr_list = []
+    for i in range(len(highs)):
+        tr_val = max(float(highs[i]) - float(lows[i]),
+                     abs(float(highs[i]) - float(closes[i])) if i < len(closes) else 0,
+                     abs(float(lows[i]) - float(closes[i])) if i < len(closes) else 0)
+        tr_list.append(tr_val)
+    atr = sum(tr_list) / len(tr_list) if tr_list else price * 0.02
+
+    # --- Gap analysis ---
+    gap = today_open - prev_close
+    gap_pct = (gap / prev_close) * 100 if prev_close > 0 else 0
+
+    # --- Previous day range ---
+    prev_range = prev_high - prev_low
+    range_ratio = prev_range / atr if atr > 0 else 1
+
+    reasons = []
+    bullish = 0
+    bearish = 0
+
+    # --- Gap direction ---
+    if gap_pct > 0.5:
+        bullish += 1
+        reasons.append(f"Gap up +{gap_pct:.1f}% — bullish opening")
+    elif gap_pct < -0.5:
+        bearish += 1
+        reasons.append(f"Gap down {gap_pct:.1f}% — bearish opening")
+    else:
+        reasons.append(f"Flat open ({gap_pct:+.1f}%) — no gap bias")
+
+    # --- Price vs previous day levels ---
+    if price > prev_high:
+        bullish += 2
+        reasons.append(f"Price above prev high ({prev_high:.2f}) — breakout")
+    elif price > prev_close:
+        bullish += 1
+        reasons.append(f"Price above prev close ({prev_close:.2f}) — bullish bias")
+    elif price < prev_low:
+        bearish += 2
+        reasons.append(f"Price below prev low ({prev_low:.2f}) — breakdown")
+    elif price < prev_close:
+        bearish += 1
+        reasons.append(f"Price below prev close ({prev_close:.2f}) — bearish bias")
+
+    # --- RSI for intraday momentum ---
+    if rsi >= 70:
+        bearish += 1
+        reasons.append(f"RSI {rsi:.0f} — overbought, reversal risk")
+    elif rsi <= 30:
+        bullish += 1
+        reasons.append(f"RSI {rsi:.0f} — oversold, bounce likely")
+    elif 40 <= rsi <= 60:
+        bullish += 1
+        reasons.append(f"RSI {rsi:.0f} — room for directional move")
+
+    # --- MACD momentum ---
+    macd_bullish = macd > macd_sig
+    if macd_bullish and macd_hist > 0:
+        bullish += 1
+        reasons.append("MACD bullish with expanding histogram")
+    elif not macd_bullish and macd_hist < 0:
+        bearish += 1
+        reasons.append("MACD bearish with contracting histogram")
+
+    # --- Volume conviction ---
+    if vol_ratio >= 1.5:
+        bullish += 1 if price > prev_close else 0
+        bearish += 1 if price < prev_close else 0
+        reasons.append(f"Volume {vol_ratio:.1f}x avg — strong conviction")
+    elif vol_ratio <= 0.5:
+        reasons.append(f"Volume {vol_ratio:.1f}x avg — thin, avoid")
+
+    # --- Volatility check ---
+    if atr / price * 100 < 0.5:
+        reasons.append(f"Low volatility (ATR {atr:.2f}) — tight range expected")
+    elif atr / price * 100 > 3:
+        reasons.append(f"High volatility (ATR {atr:.2f}) — widen stops")
+
+    # --- Determine signal ---
+    net = bullish - bearish
+
+    if vol_ratio <= 0.5:
+        signal = "RANGE BOUND"
+    elif net >= 3 and price > prev_high:
+        signal = "LONG ENTRY"
+    elif net >= 2 and macd_bullish and price > prev_close:
+        signal = "LONG ENTRY"
+    elif net >= 2 and price <= prev_close:
+        signal = "WAIT FOR BREAKOUT"
+    elif net <= -3 and price < prev_low:
+        signal = "SHORT ENTRY"
+    elif net <= -2 and not macd_bullish and price < prev_close:
+        signal = "SHORT ENTRY"
+    elif net <= -2 and price >= prev_close:
+        signal = "WAIT FOR PULLBACK"
+    elif abs(net) <= 1 and range_ratio < 0.8:
+        signal = "RANGE BOUND"
+    elif net >= 1:
+        signal = "WAIT FOR BREAKOUT"
+    elif net <= -1:
+        signal = "WAIT FOR PULLBACK"
+    else:
+        signal = "NO SETUP"
+
+    # --- Compute entry/stop/target using ATR ---
+    if signal == "LONG ENTRY":
+        entry_price = round(max(prev_high, price), 2)  # Breakout above prev high
+        stop_loss = round(entry_price - (1.5 * atr), 2)
+        target_price = round(entry_price + (2.5 * atr), 2)  # ~1.7:1 R/R
+        risk = entry_price - stop_loss
+        reward = target_price - entry_price
+        rr = round(reward / risk, 1) if risk > 0 else 0
+        risk_reward = f"1:{rr}"
+    elif signal == "SHORT ENTRY":
+        entry_price = round(min(prev_low, price), 2)  # Breakdown below prev low
+        stop_loss = round(entry_price + (1.5 * atr), 2)
+        target_price = round(entry_price - (2.5 * atr), 2)
+        risk = stop_loss - entry_price
+        reward = entry_price - target_price
+        rr = round(reward / risk, 1) if risk > 0 else 0
+        risk_reward = f"1:{rr}"
+    elif signal == "WAIT FOR BREAKOUT":
+        entry_price = round(prev_high, 2)  # Trigger = prev high break
+        stop_loss = round(prev_high - (1.5 * atr), 2)
+        target_price = round(prev_high + (2 * atr), 2)
+        risk = entry_price - stop_loss
+        reward = target_price - entry_price
+        rr = round(reward / risk, 1) if risk > 0 else 0
+        risk_reward = f"1:{rr}"
+    elif signal == "WAIT FOR PULLBACK":
+        entry_price = round(prev_low, 2)  # Trigger = prev low break
+        stop_loss = round(prev_low + (1.5 * atr), 2)
+        target_price = round(prev_low - (2 * atr), 2)
+        risk = stop_loss - entry_price
+        reward = entry_price - target_price
+        rr = round(reward / risk, 1) if risk > 0 else 0
+        risk_reward = f"1:{rr}"
+    else:
+        entry_price = None
+        stop_loss = None
+        target_price = None
+        risk_reward = None
+
+    reasoning = "; ".join(reasons[:4])
+
+    return {
+        "signal": signal,
+        "reasoning": reasoning,
+        "entry_price": entry_price,
+        "stop_loss": stop_loss,
+        "target_price": target_price,
+        "risk_reward": risk_reward,
+    }
+
+
+# ------------------------------------------------------------------
+# STAGE ANALYSIS (Weinstein Method)
+# ------------------------------------------------------------------
+def compute_stage_analysis(details, df):
+    """
+    Determine the current Weinstein Stage for a stock.
+    Uses 150-day MA (≈30-week MA) as primary, with slope analysis,
+    price position, and volume confirmation.
+
+    Stages:
+        Stage 1 — Basing/Accumulation: Price consolidating near flat MA150
+        Stage 2 — Advancing/Markup:    Price above rising MA150 (ideal buy zone)
+        Stage 3 — Topping/Distribution: Price struggling, MA150 flattening after rise
+        Stage 4 — Declining/Markdown:   Price below falling MA150 (avoid/short)
+
+    Returns dict: {stage, stage_name, description, confidence, factors}
+    """
+    price = details.get("price", 0)
+    ma50 = details.get("ma50", price)
+    rsi = details.get("rsi", 50)
+    vol_ratio = details.get("volume_ratio", 1.0)
+    trend_strength = details.get("trend_strength", 10)
+
+    if price == 0 or df is None or len(df) < 50:
+        return {
+            "stage": 0, "stage_name": "Unknown",
+            "description": "Insufficient data for stage analysis",
+            "confidence": "low", "factors": []
+        }
+
+    close = df["Close"]
+
+    # --- Compute 150-day MA (≈30-week MA) ---
+    if len(close) >= 150:
+        ma150 = close.rolling(150).mean()
+        ma150_current = float(ma150.iloc[-1])
+        # Slope: compare current MA150 to 20 days ago
+        ma150_20ago = float(ma150.iloc[-21]) if len(ma150) > 20 and not pd.isna(ma150.iloc[-21]) else ma150_current
+        ma150_slope = (ma150_current - ma150_20ago) / ma150_20ago * 100 if ma150_20ago != 0 else 0
+    else:
+        # Fallback to MA50 if not enough data for MA150
+        ma150_series = close.rolling(min(len(close), 100)).mean()
+        ma150_current = float(ma150_series.iloc[-1]) if not pd.isna(ma150_series.iloc[-1]) else price
+        ma150_20ago = float(ma150_series.iloc[-21]) if len(ma150_series) > 20 and not pd.isna(ma150_series.iloc[-21]) else ma150_current
+        ma150_slope = (ma150_current - ma150_20ago) / ma150_20ago * 100 if ma150_20ago != 0 else 0
+
+    # --- Price position relative to MA150 ---
+    price_vs_ma150_pct = (price - ma150_current) / ma150_current * 100 if ma150_current != 0 else 0
+
+    # --- MA50 slope (shorter-term confirmation) ---
+    ma50_series = close.rolling(50).mean()
+    if len(ma50_series) > 20 and not pd.isna(ma50_series.iloc[-21]):
+        ma50_20ago = float(ma50_series.iloc[-21])
+        ma50_slope = (ma50 - ma50_20ago) / ma50_20ago * 100 if ma50_20ago != 0 else 0
+    else:
+        ma50_slope = 0
+
+    # --- Volatility / Range compression for basing detection ---
+    if len(close) >= 30:
+        recent_30 = close.iloc[-30:]
+        range_pct = (float(recent_30.max()) - float(recent_30.min())) / float(recent_30.mean()) * 100
+    else:
+        range_pct = 10  # default moderate
+
+    # --- Stage determination ---
+    factors = []
+    stage_scores = {1: 0, 2: 0, 3: 0, 4: 0}
+
+    # Price vs MA150
+    if price_vs_ma150_pct > 5:
+        stage_scores[2] += 3
+        factors.append(f"Price {price_vs_ma150_pct:+.1f}% above MA150 — bullish positioning")
+    elif price_vs_ma150_pct > 0:
+        stage_scores[2] += 1
+        stage_scores[1] += 1
+        factors.append(f"Price {price_vs_ma150_pct:+.1f}% above MA150 — near support")
+    elif price_vs_ma150_pct > -3:
+        stage_scores[3] += 2
+        stage_scores[1] += 1
+        factors.append(f"Price {price_vs_ma150_pct:+.1f}% near MA150 — testing support")
+    else:
+        stage_scores[4] += 3
+        factors.append(f"Price {price_vs_ma150_pct:+.1f}% below MA150 — bearish positioning")
+
+    # MA150 slope (primary trend)
+    if ma150_slope > 0.5:
+        stage_scores[2] += 3
+        factors.append(f"MA150 rising ({ma150_slope:+.2f}%) — uptrend confirmed")
+    elif ma150_slope > -0.2:
+        stage_scores[1] += 2
+        stage_scores[3] += 2
+        factors.append(f"MA150 flat ({ma150_slope:+.2f}%) — consolidation/transition")
+    else:
+        stage_scores[4] += 3
+        factors.append(f"MA150 falling ({ma150_slope:+.2f}%) — downtrend confirmed")
+
+    # MA50 slope (shorter-term momentum)
+    if ma50_slope > 1.0:
+        stage_scores[2] += 2
+        factors.append(f"MA50 strongly rising ({ma50_slope:+.1f}%)")
+    elif ma50_slope > 0:
+        stage_scores[2] += 1
+        factors.append(f"MA50 rising ({ma50_slope:+.1f}%)")
+    elif ma50_slope > -1.0:
+        stage_scores[3] += 1
+        factors.append(f"MA50 flattening ({ma50_slope:+.1f}%)")
+    else:
+        stage_scores[4] += 2
+        factors.append(f"MA50 falling ({ma50_slope:+.1f}%)")
+
+    # Range compression (basing detection)
+    if range_pct < 8 and abs(ma150_slope) < 0.5:
+        stage_scores[1] += 2
+        factors.append(f"Tight 30-day range ({range_pct:.1f}%) — basing pattern")
+
+    # Volume pattern
+    if vol_ratio >= 1.5 and price > ma150_current:
+        stage_scores[2] += 1
+        factors.append(f"High volume ({vol_ratio:.1f}x) above MA150 — accumulation")
+    elif vol_ratio >= 1.5 and price < ma150_current:
+        stage_scores[4] += 1
+        factors.append(f"High volume ({vol_ratio:.1f}x) below MA150 — distribution")
+
+    # Trend strength confirmation
+    if trend_strength >= 16:
+        stage_scores[2] += 1
+    elif trend_strength <= 5:
+        stage_scores[4] += 1
+
+    # --- Determine winning stage ---
+    stage = max(stage_scores, key=stage_scores.get)
+    max_score = stage_scores[stage]
+    total = sum(stage_scores.values()) or 1
+
+    # Confidence based on dominance
+    dominance = max_score / total
+    if dominance > 0.5:
+        confidence = "high"
+    elif dominance > 0.35:
+        confidence = "medium"
+    else:
+        confidence = "low"
+
+    # Stage names and descriptions
+    stage_info = {
+        1: ("Basing", "Accumulation phase — price consolidating near flat MA150. Watch for breakout above MA150 with volume."),
+        2: ("Advancing", "Markup phase — price above rising MA150. Ideal zone for long positions. Ride the trend."),
+        3: ("Topping", "Distribution phase — MA150 flattening after advance. Consider tightening stops or taking profits."),
+        4: ("Declining", "Markdown phase — price below falling MA150. Avoid new longs. Consider short positions."),
+    }
+
+    name, desc = stage_info[stage]
+
+    return {
+        "stage": stage,
+        "stage_name": name,
+        "description": desc,
+        "confidence": confidence,
+        "ma150": round(ma150_current, 2),
+        "ma150_slope": round(ma150_slope, 3),
+        "price_vs_ma150_pct": round(price_vs_ma150_pct, 2),
+        "factors": factors[:4],
+    }
+
+
 # ============================================================
 # MAIN PIPELINE
 # ============================================================
@@ -1048,13 +1597,18 @@ def run_engine():
             "industry": fund.get("industry")
         }
 
+        # Stage analysis
+        stage = compute_stage_analysis(details, df)
+        details["stage_analysis"] = stage
+
         ticker_signals[ticker] = {
             "score": score,
             "signal": signal,
             "details": details,
             "groups": groups_for_ticker
         }
-        print(f"  {ticker}: Score={score}, Signal={signal}, YTD={details.get('ytd_return', 'N/A')}%")
+        stage_lbl = f"S{stage['stage']} {stage['stage_name']}" if stage.get('stage') else "?"
+        print(f"  {ticker}: Score={score}, Signal={signal}, Stage={stage_lbl}, YTD={details.get('ytd_return', 'N/A')}%")
 
     # Build group-level data
     groups_output = []
@@ -1090,7 +1644,9 @@ def run_engine():
                     "rs_vs_ma50": d.get("rs_vs_ma50", 0),
                     "trend_strength": d.get("trend_strength", 10),
                     # Fundamentals
-                    "fundamentals": d.get("fundamentals", {})
+                    "fundamentals": d.get("fundamentals", {}),
+                    # Stage Analysis
+                    "stage_analysis": d.get("stage_analysis")
                 })
                 ytd_returns.append(d.get("ytd_return", 0))
 

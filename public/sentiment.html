@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentiment Analysis — Market Pulse</title>
+<style>
+  :root {
+    --bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;
+    --text:#e6edf3;--dim:#8b949e;--green:#3fb950;--red:#f85149;
+    --yellow:#d29922;--blue:#58a6ff;--purple:#bc8cff;--orange:#f0883e;--cyan:#39d2c0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.5;}
+  a{color:var(--blue);text-decoration:none;}a:hover{text-decoration:underline;}
+
+  .header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  .header h1{font-size:20px;font-weight:600;} .header h1 span{color:var(--blue);}
+
+  .nav{padding:12px 28px;display:flex;gap:8px;border-bottom:1px solid var(--border);}
+  .nav a{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500;color:var(--dim);transition:all .15s;}
+  .nav a:hover{background:var(--surface2);color:var(--text);text-decoration:none;}
+  .nav a.active{background:var(--blue);color:#fff;}
+
+  .main{padding:20px 28px;}
+
+  /* Info banner */
+  .info-banner{background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);border-radius:8px;padding:10px 16px;font-size:12px;color:var(--dim);margin-bottom:16px;}
+  .info-banner strong{color:var(--blue);}
+
+  /* Search bar */
+  .search-section{display:flex;gap:10px;margin-bottom:20px;align-items:center;}
+  .search-input{flex:1;max-width:360px;background:var(--surface);border:2px solid var(--border);color:var(--text);padding:10px 16px;border-radius:8px;font-size:14px;font-family:'SF Mono','Fira Code',monospace;letter-spacing:1px;transition:border-color .2s;}
+  .search-input:focus{outline:none;border-color:var(--blue);}
+  .search-input::placeholder{color:var(--dim);font-family:-apple-system,sans-serif;letter-spacing:0;font-size:13px;}
+  .btn{border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;}
+  .btn-primary{background:var(--blue);color:#fff;}.btn-primary:hover{filter:brightness(1.15);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .spinner{display:none;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;}
+  .spinner.show{display:inline-block;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* Single ticker result */
+  .single-result{display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:20px;}
+  .single-result.show{display:block;}
+  .sr-header{display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap;}
+  .sr-symbol{font-size:24px;font-weight:800;font-family:'SF Mono',monospace;color:var(--blue);}
+  .sr-class{padding:4px 14px;border-radius:5px;font-size:13px;font-weight:700;letter-spacing:.3px;}
+  .sr-score{font-size:20px;font-weight:700;font-family:'SF Mono',monospace;}
+
+  /* 3-column grid */
+  .columns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+  .column{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;min-height:300px;}
+  .col-header{display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  .col-dot{width:10px;height:10px;border-radius:50%;}
+  .col-title{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+  .col-count{margin-left:auto;font-size:11px;color:var(--dim);font-family:'SF Mono',monospace;}
+
+  /* Ticker card */
+  .ticker-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:all .15s;}
+  .ticker-card:hover{border-color:var(--blue);}
+  .ticker-card.expanded{border-color:var(--blue);background:rgba(88,166,255,.04);}
+  .tc-top{display:flex;align-items:center;gap:10px;}
+  .tc-symbol{font-weight:800;font-family:'SF Mono',monospace;font-size:14px;}.tc-symbol:hover{text-decoration:underline !important;}
+  .tc-score{font-size:13px;font-weight:700;font-family:'SF Mono',monospace;}
+  .tc-msgs{margin-left:auto;font-size:10px;color:var(--dim);}
+  .tc-title{font-size:10px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+  /* Sentiment bar */
+  .sent-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:8px;background:var(--border);}
+  .sent-bar .bull{background:var(--green);}
+  .sent-bar .bear{background:var(--red);}
+  .sent-bar .neut{background:var(--dim);}
+  .sent-pcts{display:flex;gap:10px;margin-top:4px;font-size:9px;color:var(--dim);}
+  .sent-pcts .g{color:var(--green);}.sent-pcts .r{color:var(--red);}
+
+  /* Expanded messages */
+  .tc-messages{display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:8px;}
+  .tc-messages.show{display:block;}
+  .msg-item{padding:6px 0;border-bottom:1px solid rgba(48,54,61,.5);font-size:11px;line-height:1.5;}
+  .msg-item:last-child{border-bottom:none;}
+  .msg-body{color:var(--text);}
+  .msg-meta{display:flex;gap:8px;font-size:9px;color:var(--dim);margin-top:2px;}
+  .msg-score{font-weight:700;font-family:'SF Mono',monospace;}
+
+  /* Loading state */
+  .loading-state{text-align:center;padding:40px;color:var(--dim);}
+  .loading-state .spinner{display:inline-block;width:28px;height:28px;margin-bottom:8px;}
+  .error-state{text-align:center;padding:30px;color:var(--red);font-size:13px;}
+
+  /* Refresh info */
+  .refresh-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+  .refresh-info{font-size:11px;color:var(--dim);}
+  .btn-refresh{background:var(--surface2);color:var(--dim);border:1px solid var(--border);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;transition:.15s;}
+  .btn-refresh:hover{color:var(--text);border-color:var(--blue);}
+
+  @media(max-width:900px){.columns{grid-template-columns:1fr;}}
+  @media(max-width:600px){.main{padding:14px;}.search-section{flex-wrap:wrap;}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>&#128200;</span> Sentiment <span>Analysis</span></h1>
+</div>
+
+<div class="nav">
+  <a href="index.html">Dashboard</a>
+  <a href="search.html">Ticker Search</a>
+  <a href="sentiment.html" class="active">Sentiment</a>
+  <a href="feargreed.html">Fear & Greed</a>
+  <a href="history.html">History &amp; Changes</a>
+  <a href="architecture.html">Architecture</a>
+</div>
+
+<div class="main">
+
+  <div class="info-banner">
+    <strong>Data sourced from StockTwits public feeds</strong> using VADER sentiment analysis.
+    Tickers are classified based on message sentiment distribution. X.com data requires API access — coming soon.
+  </div>
+
+  <!-- Search specific ticker -->
+  <div class="search-section">
+    <input type="text" id="tickerInput" class="search-input" placeholder="Search any ticker for sentiment (e.g. AAPL)">
+    <button class="btn btn-primary" id="searchBtn" onclick="searchTicker()">Analyze Sentiment</button>
+    <div class="spinner" id="searchSpinner"></div>
+  </div>
+
+  <!-- Single ticker result -->
+  <div class="single-result" id="singleResult">
+    <div class="sr-header">
+      <a class="sr-symbol" id="srSymbol" href="#" target="_blank" rel="noopener" style="text-decoration:none;">—</a>
+      <span class="sr-class" id="srClass">—</span>
+      <span class="sr-score" id="srScore">—</span>
+      <span style="font-size:11px;color:var(--dim);" id="srMsgs">—</span>
+    </div>
+    <div class="sent-bar" id="srBar"><div class="bull"></div><div class="neut"></div><div class="bear"></div></div>
+    <div class="sent-pcts" id="srPcts"></div>
+    <div id="srMessages" style="margin-top:12px;"></div>
+  </div>
+
+  <!-- Refresh bar -->
+  <div class="refresh-bar">
+    <div class="refresh-info" id="refreshInfo">Loading trending sentiment data...</div>
+    <button class="btn-refresh" onclick="loadTrending(true)">Refresh</button>
+  </div>
+
+  <!-- 3 columns -->
+  <div class="columns">
+    <div class="column" id="colBullish">
+      <div class="col-header">
+        <div class="col-dot" style="background:var(--green)"></div>
+        <div class="col-title" style="color:var(--green)">Bullish</div>
+        <div class="col-count" id="bullishCount">0</div>
+      </div>
+      <div id="bullishList"><div class="loading-state"><div class="spinner show"></div><br>Loading...</div></div>
+    </div>
+
+    <div class="column" id="colBearish">
+      <div class="col-header">
+        <div class="col-dot" style="background:var(--red)"></div>
+        <div class="col-title" style="color:var(--red)">Bearish</div>
+        <div class="col-count" id="bearishCount">0</div>
+      </div>
+      <div id="bearishList"><div class="loading-state"><div class="spinner show"></div><br>Loading...</div></div>
+    </div>
+
+    <div class="column" id="colTrending">
+      <div class="col-header">
+        <div class="col-dot" style="background:var(--orange)"></div>
+        <div class="col-title" style="color:var(--orange)">Trending</div>
+        <div class="col-count" id="trendingCount">0</div>
+      </div>
+      <div id="trendingList"><div class="loading-state"><div class="spinner show"></div><br>Loading...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Enter key support
+document.getElementById('tickerInput').addEventListener('keydown', e=>{
+  if(e.key==='Enter') searchTicker();
+});
+
+function classColor(c){
+  if(c==='Bullish') return 'var(--green)';
+  if(c==='Bearish') return 'var(--red)';
+  return 'var(--orange)';
+}
+function classBg(c){
+  if(c==='Bullish') return 'rgba(63,185,80,.15)';
+  if(c==='Bearish') return 'rgba(248,81,73,.15)';
+  return 'rgba(240,136,62,.12)';
+}
+function scoreColor(s){return s>0.1?'var(--green)':s<-0.1?'var(--red)':'var(--dim)';}
+
+function renderCard(t, idx){
+  const bullish = t.sample_bullish || [];
+  const bearish = t.sample_bearish || [];
+  const allMsgs = [...bullish, ...bearish].sort((a,b)=>Math.abs(b.score)-Math.abs(a.score));
+
+  let msgsHtml = '';
+  if(allMsgs.length){
+    msgsHtml = `<div class="tc-messages" id="msgs-${idx}">` +
+      allMsgs.map(m=>`<div class="msg-item">
+        <div class="msg-body">${escHtml(m.body)}</div>
+        <div class="msg-meta">
+          <span class="msg-score" style="color:${scoreColor(m.score)}">${m.score>0?'+':''}${m.score}</span>
+          <span>@${escHtml(m.user||'—')}</span>
+          ${m.likes?'<span>'+m.likes+' likes</span>':''}
+        </div>
+      </div>`).join('') + '</div>';
+  }
+
+  return `<div class="ticker-card" onclick="toggleMsgs('msgs-${idx}', this)">
+    <div class="tc-top">
+      <a class="tc-symbol" href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(t.symbol)}" target="_blank" rel="noopener" style="color:${classColor(t.classification)};text-decoration:none;" onclick="event.stopPropagation()" title="Open in TradingView">${escHtml(t.symbol)}</a>
+      <span class="tc-score" style="color:${scoreColor(t.avg_score)}">${t.avg_score>0?'+':''}${t.avg_score.toFixed(2)}</span>
+      <span class="tc-msgs">${t.message_count} msgs</span>
+    </div>
+    ${t.title?'<div class="tc-title">'+escHtml(t.title)+'</div>':''}
+    <div class="sent-bar">
+      <div class="bull" style="width:${t.bullish_pct}%"></div>
+      <div class="neut" style="width:${t.neutral_pct}%"></div>
+      <div class="bear" style="width:${t.bearish_pct}%"></div>
+    </div>
+    <div class="sent-pcts">
+      <span class="g">${t.bullish_pct}% bull</span>
+      <span>${t.neutral_pct}% neutral</span>
+      <span class="r">${t.bearish_pct}% bear</span>
+    </div>
+    ${msgsHtml}
+  </div>`;
+}
+
+function toggleMsgs(id, card){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const showing = el.classList.contains('show');
+  el.classList.toggle('show');
+  card.classList.toggle('expanded');
+}
+
+function escHtml(s){
+  if(!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function loadTrending(force){
+  const refreshInfo = document.getElementById('refreshInfo');
+  refreshInfo.textContent = 'Loading trending sentiment data...';
+
+  try {
+    const url = '/api/sentiment/trending' + (force ? '?force=1' : '');
+    const r = await fetch(url);
+    const data = await r.json();
+
+    if(data.status !== 'success'){
+      showError('Failed to load trending data: ' + (data.error || 'Unknown error'));
+      return;
+    }
+
+    const tickers = data.tickers || [];
+    const bullish = tickers.filter(t=>t.classification==='Bullish');
+    const bearish = tickers.filter(t=>t.classification==='Bearish');
+    const trending = tickers.filter(t=>t.classification==='Trending');
+
+    // Render columns
+    renderColumn('bullishList', bullish, 'bullishCount');
+    renderColumn('bearishList', bearish, 'bearishCount');
+    renderColumn('trendingList', trending, 'trendingCount');
+
+    refreshInfo.textContent = `Last updated: ${new Date(data.timestamp).toLocaleString()} — ${tickers.length} tickers analyzed — auto-refreshes every 15 min`;
+
+  } catch(e) {
+    showError('Connection error — is the API server running?');
+  }
+}
+
+function renderColumn(listId, items, countId){
+  const list = document.getElementById(listId);
+  const count = document.getElementById(countId);
+  count.textContent = items.length;
+
+  if(!items.length){
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--dim);font-size:12px;">No tickers in this category</div>';
+    return;
+  }
+
+  list.innerHTML = items.map((t,i) => renderCard(t, listId+'-'+i)).join('');
+}
+
+function showError(msg){
+  ['bullishList','bearishList','trendingList'].forEach(id=>{
+    document.getElementById(id).innerHTML = `<div class="error-state">${msg}</div>`;
+  });
+}
+
+async function searchTicker(){
+  const input = document.getElementById('tickerInput');
+  const ticker = input.value.toUpperCase().trim();
+  if(!ticker) return;
+
+  const btn = document.getElementById('searchBtn');
+  const spinner = document.getElementById('searchSpinner');
+  btn.disabled = true;
+  spinner.classList.add('show');
+
+  try {
+    const r = await fetch(`/api/sentiment/${encodeURIComponent(ticker)}`);
+    const d = await r.json();
+
+    if(d.status !== 'success'){
+      alert(d.error || 'Search failed');
+      return;
+    }
+
+    const sr = document.getElementById('singleResult');
+    sr.classList.add('show');
+
+    const srSym = document.getElementById('srSymbol');
+    srSym.textContent = d.symbol;
+    srSym.href = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(d.symbol)}`;
+
+    const cls = document.getElementById('srClass');
+    cls.textContent = d.classification;
+    cls.style.color = classColor(d.classification);
+    cls.style.background = classBg(d.classification);
+
+    const score = document.getElementById('srScore');
+    score.textContent = (d.avg_score>0?'+':'') + d.avg_score.toFixed(3);
+    score.style.color = scoreColor(d.avg_score);
+
+    document.getElementById('srMsgs').textContent = d.message_count + ' messages analyzed';
+
+    // Sentiment bar
+    document.getElementById('srBar').innerHTML =
+      `<div class="bull" style="width:${d.bullish_pct}%"></div>` +
+      `<div class="neut" style="width:${d.neutral_pct}%"></div>` +
+      `<div class="bear" style="width:${d.bearish_pct}%"></div>`;
+
+    document.getElementById('srPcts').innerHTML =
+      `<span class="g">${d.bullish_pct}% bullish</span>` +
+      `<span>${d.neutral_pct}% neutral</span>` +
+      `<span class="r">${d.bearish_pct}% bearish</span>`;
+
+    // Sample messages
+    const allMsgs = [...(d.sample_bullish||[]), ...(d.sample_bearish||[])].sort((a,b)=>Math.abs(b.score)-Math.abs(a.score));
+    document.getElementById('srMessages').innerHTML = allMsgs.length ?
+      '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Sample Messages</div>' +
+      allMsgs.map(m=>`<div class="msg-item">
+        <div class="msg-body">${escHtml(m.body)}</div>
+        <div class="msg-meta">
+          <span class="msg-score" style="color:${scoreColor(m.score)}">${m.score>0?'+':''}${m.score}</span>
+          <span>@${escHtml(m.user||'—')}</span>
+        </div>
+      </div>`).join('') : '<div style="color:var(--dim);font-size:12px;">No messages found for this ticker.</div>';
+
+  } catch(e) {
+    alert('Connection error — is the API server running?');
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('show');
+  }
+}
+
+// Load on page load
+loadTrending(false);
+
+// Auto-refresh every 15 minutes
+setInterval(()=>loadTrending(false), 900000);
+</script>
+</body>
+</html>

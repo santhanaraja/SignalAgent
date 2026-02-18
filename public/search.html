@@ -49,7 +49,9 @@
   .results{display:none;}
   .results.show{display:block;}
   .results-header{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:12px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
-  .res-ticker{font-size:28px;font-weight:800;font-family:'SF Mono','Fira Code',monospace;color:var(--blue);}
+  .res-ticker{font-size:28px;font-weight:800;font-family:'SF Mono','Fira Code',monospace;color:var(--blue);text-decoration:none;cursor:pointer;}.res-ticker:hover{text-decoration:underline;filter:brightness(1.2);}
+  .tv-chart-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px;height:400px;}
+  .tv-link-btn{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--dim);text-decoration:none;padding:3px 10px;border:1px solid var(--border);border-radius:4px;margin-left:8px;transition:.15s;}.tv-link-btn:hover{color:var(--blue);border-color:var(--blue);text-decoration:none;}
   .res-price{font-size:22px;font-weight:700;font-family:'SF Mono',monospace;}
   .res-score{font-size:14px;font-weight:700;padding:4px 12px;border-radius:6px;}
   .sig-badge{padding:4px 12px;border-radius:5px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
@@ -64,13 +66,54 @@
   .trade-box h3{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);margin-bottom:8px;}
   .trade-row{display:flex;align-items:center;gap:12px;}
   .ts-badge{padding:5px 14px;border-radius:5px;font-size:13px;font-weight:700;letter-spacing:.3px;white-space:nowrap;}
-  .ts-buy-now{background:rgba(63,185,80,.2);color:#3fb950;border:1px solid rgba(63,185,80,.3);}
-  .ts-wait{background:rgba(210,153,34,.15);color:#d29922;border:1px solid rgba(210,153,34,.25);}
-  .ts-accumulate{background:rgba(88,166,255,.12);color:#58a6ff;border:1px solid rgba(88,166,255,.25);}
-  .ts-hold{background:rgba(139,148,158,.1);color:#8b949e;border:1px solid rgba(139,148,158,.2);}
-  .ts-reduce{background:rgba(240,136,62,.15);color:#f0883e;border:1px solid rgba(240,136,62,.25);}
-  .ts-avoid{background:rgba(248,81,73,.18);color:#f85149;border:1px solid rgba(248,81,73,.3);}
+  .ts-buy-now,.ts-buy-swing,.ts-long-entry{background:rgba(63,185,80,.2);color:#3fb950;border:1px solid rgba(63,185,80,.3);}
+  .ts-wait,.ts-wait-dip,.ts-wait-breakout,.ts-wait-pullback{background:rgba(210,153,34,.15);color:#d29922;border:1px solid rgba(210,153,34,.25);}
+  .ts-accumulate,.ts-hold-swing{background:rgba(88,166,255,.12);color:#58a6ff;border:1px solid rgba(88,166,255,.25);}
+  .ts-hold,.ts-range-bound{background:rgba(139,148,158,.1);color:#8b949e;border:1px solid rgba(139,148,158,.2);}
+  .ts-reduce,.ts-exit-swing,.ts-fade-rally{background:rgba(240,136,62,.15);color:#f0883e;border:1px solid rgba(240,136,62,.25);}
+  .ts-avoid,.ts-no-setup,.ts-short-entry{background:rgba(248,81,73,.18);color:#f85149;border:1px solid rgba(248,81,73,.3);}
   .trade-reasoning{font-size:12px;color:var(--dim);line-height:1.6;margin-top:8px;}
+
+  /* Trade signal sub-tabs */
+  .trade-tabs{display:flex;gap:0;margin-bottom:10px;}
+  .trade-tab-btn{padding:6px 14px;font-size:11px;font-weight:600;color:var(--dim);cursor:pointer;border:1px solid var(--border);background:none;transition:.15s;border-radius:0;}
+  .trade-tab-btn:first-child{border-radius:6px 0 0 6px;}
+  .trade-tab-btn:last-child{border-radius:0 6px 6px 0;}
+  .trade-tab-btn:not(:first-child){border-left:none;}
+  .trade-tab-btn:hover{color:var(--text);background:var(--surface2);}
+  .trade-tab-btn.active{color:var(--blue);border-color:var(--blue);background:rgba(88,166,255,.08);}
+  .trade-panel{display:none;}
+  .trade-panel.active{display:block;}
+
+  /* Entry/Stop/Target grid */
+  .levels-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;}
+  .level-card{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;text-align:center;}
+  .level-card .l{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+  .level-card .v{font-size:17px;font-weight:700;font-family:'SF Mono','Fira Code',monospace;}
+  .level-card.entry .v{color:var(--blue);}
+  .level-card.stop .v{color:var(--red);}
+  .level-card.target .v{color:var(--green);}
+  .rr-badge{display:inline-block;margin-top:8px;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:700;font-family:'SF Mono',monospace;background:rgba(88,166,255,.1);color:var(--blue);border:1px solid rgba(88,166,255,.2);}
+
+  /* Stage Analysis */
+  .stage-badge{padding:4px 12px;border-radius:5px;font-size:12px;font-weight:700;letter-spacing:.3px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;}
+  .stage-1{background:rgba(88,166,255,.12);color:#58a6ff;border:1px solid rgba(88,166,255,.25);}
+  .stage-2{background:rgba(63,185,80,.18);color:#3fb950;border:1px solid rgba(63,185,80,.3);}
+  .stage-3{background:rgba(240,136,62,.15);color:#f0883e;border:1px solid rgba(240,136,62,.25);}
+  .stage-4{background:rgba(248,81,73,.18);color:#f85149;border:1px solid rgba(248,81,73,.3);}
+  .stage-0{background:rgba(139,148,158,.1);color:#8b949e;border:1px solid rgba(139,148,158,.2);}
+  .stage-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:12px;}
+  .stage-box h3{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);margin-bottom:10px;}
+  .stage-header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .stage-desc{font-size:12px;color:var(--dim);margin-top:8px;line-height:1.6;}
+  .stage-factors{margin-top:10px;display:flex;flex-direction:column;gap:4px;}
+  .stage-factor{font-size:11px;color:var(--dim);padding-left:14px;position:relative;}
+  .stage-factor::before{content:'›';position:absolute;left:2px;color:var(--blue);font-weight:700;}
+  .stage-ma150{display:inline-flex;align-items:center;gap:8px;margin-top:8px;padding:6px 12px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);font-size:12px;}
+  .stage-confidence{font-size:10px;font-weight:600;padding:2px 8px;border-radius:3px;text-transform:uppercase;letter-spacing:.3px;}
+  .conf-high{background:rgba(63,185,80,.12);color:var(--green);}
+  .conf-medium{background:rgba(210,153,34,.12);color:var(--yellow);}
+  .conf-low{background:rgba(139,148,158,.1);color:var(--dim);}
 
   /* Tabs */
   .tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--surface);border-radius:10px 10px 0 0;overflow:hidden;}
@@ -122,6 +165,8 @@
 <div class="nav">
   <a href="index.html">Dashboard</a>
   <a href="search.html" class="active">Ticker Search</a>
+  <a href="sentiment.html">Sentiment</a>
+  <a href="feargreed.html">Fear & Greed</a>
   <a href="history.html">History &amp; Changes</a>
   <a href="architecture.html">Architecture</a>
 </div>
@@ -143,20 +188,71 @@
   <div class="results" id="results">
 
     <div class="results-header">
-      <span class="res-ticker" id="resTicker">—</span>
+      <a class="res-ticker" id="resTicker" href="#" target="_blank" rel="noopener">—</a>
+      <a class="tv-link-btn" id="tvLinkBtn" href="#" target="_blank" rel="noopener" title="Open in TradingView">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        TradingView
+      </a>
       <span class="res-price" id="resPrice">—</span>
       <span class="sig-badge" id="resSigBadge">—</span>
+      <span class="stage-badge stage-0" id="resStageBadge">—</span>
       <span class="res-score" id="resScore">—</span>
       <span style="margin-left:auto;font-size:11px;color:var(--dim);" id="resTime">—</span>
     </div>
 
-    <!-- Trade Signal -->
-    <div class="trade-box">
-      <h3>Trade Signal & Reasoning</h3>
-      <div class="trade-row">
-        <span class="ts-badge" id="tradeBadge">—</span>
+    <!-- TradingView Chart -->
+    <div class="tv-chart-wrap" id="tvChartWrap" style="display:none;"></div>
+
+    <!-- Stage Analysis -->
+    <div class="stage-box" id="stageBox">
+      <h3>Weinstein Stage Analysis</h3>
+      <div class="stage-header">
+        <span class="stage-badge stage-0" id="stageBadgeLg">—</span>
+        <span class="stage-confidence" id="stageConf">—</span>
       </div>
-      <div class="trade-reasoning" id="tradeReasoning">—</div>
+      <div class="stage-desc" id="stageDesc">—</div>
+      <div class="stage-ma150" id="stageMa150"></div>
+      <div class="stage-factors" id="stageFactors"></div>
+    </div>
+
+    <!-- Trade Signals: Position / Swing / Intraday -->
+    <div class="trade-box">
+      <h3>Trade Signals</h3>
+      <div class="trade-tabs">
+        <button class="trade-tab-btn active" onclick="switchTradeTab('position')">Position</button>
+        <button class="trade-tab-btn" onclick="switchTradeTab('swing')">Swing</button>
+        <button class="trade-tab-btn" onclick="switchTradeTab('intraday')">Intraday</button>
+      </div>
+
+      <!-- Position Trading Panel -->
+      <div class="trade-panel active" id="tp-position">
+        <div class="trade-row"><span class="ts-badge" id="tradeBadge">—</span></div>
+        <div class="trade-reasoning" id="tradeReasoning">—</div>
+      </div>
+
+      <!-- Swing Trading Panel -->
+      <div class="trade-panel" id="tp-swing">
+        <div class="trade-row"><span class="ts-badge" id="swingBadge">—</span></div>
+        <div class="trade-reasoning" id="swingReasoning">—</div>
+        <div class="levels-grid" id="swingLevels">
+          <div class="level-card entry"><div class="l">Entry Price</div><div class="v" id="swingEntry">—</div></div>
+          <div class="level-card stop"><div class="l">Stop Loss</div><div class="v" id="swingStop">—</div></div>
+          <div class="level-card target"><div class="l">Target Price</div><div class="v" id="swingTarget">—</div></div>
+        </div>
+        <div style="text-align:center;"><span class="rr-badge" id="swingRR">R/R: —</span></div>
+      </div>
+
+      <!-- Intraday Trading Panel -->
+      <div class="trade-panel" id="tp-intraday">
+        <div class="trade-row"><span class="ts-badge" id="intradayBadge">—</span></div>
+        <div class="trade-reasoning" id="intradayReasoning">—</div>
+        <div class="levels-grid" id="intradayLevels">
+          <div class="level-card entry"><div class="l">Entry Price</div><div class="v" id="intradayEntry">—</div></div>
+          <div class="level-card stop"><div class="l">Stop Loss</div><div class="v" id="intradayStop">—</div></div>
+          <div class="level-card target"><div class="l">Target Price</div><div class="v" id="intradayTarget">—</div></div>
+        </div>
+        <div style="text-align:center;"><span class="rr-badge" id="intradayRR">R/R: —</span></div>
+      </div>
     </div>
 
     <!-- Tabs -->
@@ -201,12 +297,27 @@ function sigClass(s){return 'sig-'+(s||'hold');}
 function tsClass(ts){
   if(!ts) return 'ts-hold';
   const t=ts.toUpperCase();
+  // Position signals
   if(t==='BUY NOW') return 'ts-buy-now';
-  if(t.includes('WAIT')) return 'ts-wait';
   if(t.includes('ACCUMULATE')) return 'ts-accumulate';
-  if(t.includes('HOLD')) return 'ts-hold';
   if(t.includes('REDUCE')) return 'ts-reduce';
   if(t==='AVOID') return 'ts-avoid';
+  // Swing signals
+  if(t==='BUY SWING') return 'ts-buy-swing';
+  if(t==='WAIT FOR DIP') return 'ts-wait-dip';
+  if(t==='FADE THE RALLY') return 'ts-fade-rally';
+  if(t==='HOLD SWING') return 'ts-hold-swing';
+  if(t==='EXIT SWING') return 'ts-exit-swing';
+  // Intraday signals
+  if(t==='LONG ENTRY') return 'ts-long-entry';
+  if(t==='SHORT ENTRY') return 'ts-short-entry';
+  if(t==='WAIT FOR BREAKOUT') return 'ts-wait-breakout';
+  if(t==='WAIT FOR PULLBACK') return 'ts-wait-pullback';
+  if(t==='RANGE BOUND') return 'ts-range-bound';
+  if(t==='NO SETUP') return 'ts-no-setup';
+  // Fallback
+  if(t.includes('WAIT')) return 'ts-wait';
+  if(t.includes('HOLD')) return 'ts-hold';
   return 'ts-hold';
 }
 function fmtMcap(v){if(!v)return '—';if(v>=1e12)return '$'+(v/1e12).toFixed(2)+'T';if(v>=1e9)return '$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return '$'+(v/1e6).toFixed(0)+'M';return '$'+v;}
@@ -257,8 +368,42 @@ async function doSearch(){
 function renderResults(d){
   document.getElementById('results').classList.add('show');
 
-  // Header
-  document.getElementById('resTicker').textContent = d.ticker;
+  // Header with TradingView link
+  const tvUrl = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(d.ticker)}`;
+  const resTicker = document.getElementById('resTicker');
+  resTicker.textContent = d.ticker;
+  resTicker.href = tvUrl;
+  document.getElementById('tvLinkBtn').href = tvUrl;
+
+  // Embed TradingView chart widget
+  const chartWrap = document.getElementById('tvChartWrap');
+  chartWrap.style.display = 'block';
+  chartWrap.innerHTML = '';
+  const tvWidget = document.createElement('div');
+  tvWidget.className = 'tradingview-widget-container';
+  tvWidget.innerHTML = `<div id="tv_chart_container"></div>`;
+  chartWrap.appendChild(tvWidget);
+  const tvScript = document.createElement('script');
+  tvScript.type = 'text/javascript';
+  tvScript.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+  tvScript.async = true;
+  tvScript.textContent = JSON.stringify({
+    "autosize": true,
+    "symbol": d.ticker,
+    "interval": "D",
+    "timezone": "America/New_York",
+    "theme": "dark",
+    "style": "1",
+    "locale": "en",
+    "backgroundColor": "rgba(22, 27, 34, 1)",
+    "gridColor": "rgba(48, 54, 61, 0.5)",
+    "hide_side_toolbar": false,
+    "allow_symbol_change": true,
+    "studies": ["RSI@tv-basicstudies","MACD@tv-basicstudies"],
+    "support_host": "https://www.tradingview.com"
+  });
+  tvWidget.appendChild(tvScript);
+
   const priceEl = document.getElementById('resPrice');
   priceEl.textContent = '$' + fmtNum(d.price,2);
   priceEl.style.color = d.ytd_return >= 0 ? 'var(--green)' : 'var(--red)';
@@ -274,11 +419,70 @@ function renderResults(d){
 
   document.getElementById('resTime').textContent = 'Analyzed: ' + new Date(d.timestamp).toLocaleString();
 
-  // Trade signal
+  // Stage Analysis
+  const sa = d.stage_analysis || {};
+  const stageNum = sa.stage || 0;
+  const stageName = sa.stage_name || 'Unknown';
+  const stageLabel = stageNum > 0 ? `Stage ${stageNum} — ${stageName}` : 'Unknown';
+
+  const resStageBadge = document.getElementById('resStageBadge');
+  resStageBadge.textContent = stageLabel;
+  resStageBadge.className = 'stage-badge stage-' + stageNum;
+
+  const stageBadgeLg = document.getElementById('stageBadgeLg');
+  stageBadgeLg.textContent = stageLabel;
+  stageBadgeLg.className = 'stage-badge stage-' + stageNum;
+
+  const confEl = document.getElementById('stageConf');
+  confEl.textContent = (sa.confidence || 'low') + ' confidence';
+  confEl.className = 'stage-confidence conf-' + (sa.confidence || 'low');
+
+  document.getElementById('stageDesc').textContent = sa.description || '—';
+
+  const ma150El = document.getElementById('stageMa150');
+  if (sa.ma150) {
+    const aboveMa150 = d.price > sa.ma150;
+    ma150El.innerHTML = `<span style="color:var(--dim)">MA150:</span> <span class="mono" style="font-weight:600">$${fmtNum(sa.ma150,2)}</span>
+      <span style="color:${aboveMa150?'var(--green)':'var(--red)'}; font-weight:600; font-size:11px;">${aboveMa150?'▲ Above':'▼ Below'} (${sa.price_vs_ma150_pct>=0?'+':''}${fmtNum(sa.price_vs_ma150_pct,1)}%)</span>
+      <span style="color:var(--dim); margin-left:8px;">Slope: ${sa.ma150_slope>=0?'+':''}${fmtNum(sa.ma150_slope,2)}%</span>`;
+  } else {
+    ma150El.innerHTML = '';
+  }
+
+  const factorsEl = document.getElementById('stageFactors');
+  if (sa.factors && sa.factors.length) {
+    factorsEl.innerHTML = sa.factors.map(f => `<div class="stage-factor">${f}</div>`).join('');
+  } else {
+    factorsEl.innerHTML = '';
+  }
+
+  // Position trade signal
   const tradeBadge = document.getElementById('tradeBadge');
   tradeBadge.textContent = d.trade_signal;
   tradeBadge.className = 'ts-badge ' + tsClass(d.trade_signal);
   document.getElementById('tradeReasoning').textContent = d.trade_reasoning;
+
+  // Swing trade signal
+  const sw = d.swing_signal || {};
+  const swBadge = document.getElementById('swingBadge');
+  swBadge.textContent = sw.signal || 'NO SETUP';
+  swBadge.className = 'ts-badge ' + tsClass(sw.signal);
+  document.getElementById('swingReasoning').textContent = sw.reasoning || '—';
+  document.getElementById('swingEntry').textContent = sw.entry_price != null ? '$'+fmtNum(sw.entry_price,2) : '—';
+  document.getElementById('swingStop').textContent = sw.stop_loss != null ? '$'+fmtNum(sw.stop_loss,2) : '—';
+  document.getElementById('swingTarget').textContent = sw.target_price != null ? '$'+fmtNum(sw.target_price,2) : '—';
+  document.getElementById('swingRR').textContent = sw.risk_reward ? 'R/R: '+sw.risk_reward : 'R/R: —';
+
+  // Intraday trade signal
+  const id = d.intraday_signal || {};
+  const idBadge = document.getElementById('intradayBadge');
+  idBadge.textContent = id.signal || 'NO SETUP';
+  idBadge.className = 'ts-badge ' + tsClass(id.signal);
+  document.getElementById('intradayReasoning').textContent = id.reasoning || '—';
+  document.getElementById('intradayEntry').textContent = id.entry_price != null ? '$'+fmtNum(id.entry_price,2) : '—';
+  document.getElementById('intradayStop').textContent = id.stop_loss != null ? '$'+fmtNum(id.stop_loss,2) : '—';
+  document.getElementById('intradayTarget').textContent = id.target_price != null ? '$'+fmtNum(id.target_price,2) : '—';
+  document.getElementById('intradayRR').textContent = id.risk_reward ? 'R/R: '+id.risk_reward : 'R/R: —';
 
   // Signals & Technicals tab
   const aboveMa20 = d.price > d.ma20;
@@ -342,6 +546,15 @@ function renderResults(d){
     stat('Analyst Target', f.target_price?'$'+fmtNum(f.target_price,0):'—', ''),
     stat('Recommendation', f.recommendation?f.recommendation.toUpperCase().replace('_',' '):'—', f.recommendation==='buy'||f.recommendation==='strong_buy'?'var(--green)':f.recommendation==='sell'?'var(--red)':'var(--yellow)'),
   ].join('');
+}
+
+function switchTradeTab(style){
+  document.querySelectorAll('.trade-tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.trade-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tp-'+style).classList.add('active');
+  document.querySelectorAll('.trade-tab-btn').forEach(b=>{
+    if(b.textContent.toLowerCase()===style) b.classList.add('active');
+  });
 }
 
 function switchTab(tab){
