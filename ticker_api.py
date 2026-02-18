@@ -9,6 +9,8 @@ import json
 import os
 import time
 import datetime
+import threading
+import traceback
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
@@ -20,6 +22,7 @@ from signal_engine import (
     compute_swing_trade_signal,
     compute_intraday_trade_signal,
     compute_stage_analysis,
+    run_engine,
     NumpyEncoder,
 )
 from sentiment_engine import get_trending_with_sentiment, get_symbol_sentiment
@@ -29,11 +32,23 @@ app = Flask(__name__, static_folder="public", static_url_path="")
 CORS(app)  # Enable CORS for flexibility
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+PUBLIC_DIR = os.path.join(os.path.dirname(__file__), "public")
 HISTORY_FILE = os.path.join(DATA_DIR, "search_history.json")
 
 # In-memory cache: { "AAPL": { "data": {...}, "ts": timestamp } }
 _cache = {}
 CACHE_TTL = 300  # 5 minutes
+
+# Refresh state
+REFRESH_INTERVAL_MINUTES = 15
+_refresh_lock = threading.Lock()
+_refresh_status = {
+    "running": False,
+    "last_run": None,
+    "last_duration_sec": None,
+    "last_error": None,
+    "next_scheduled": None,
+}
 
 
 # ------------------------------------------------------------------
@@ -235,6 +250,102 @@ def fear_greed():
 
 
 # ------------------------------------------------------------------
+# Dashboard Refresh API
+# ------------------------------------------------------------------
+def _run_signal_refresh():
+    """Run the signal engine to regenerate signals.json with fresh data."""
+    global _refresh_status
+    if _refresh_status["running"]:
+        return False, "Refresh already in progress"
+
+    with _refresh_lock:
+        _refresh_status["running"] = True
+        _refresh_status["last_error"] = None
+        start = time.time()
+        try:
+            print(f"\n{'='*60}")
+            print(f"  SIGNAL REFRESH STARTED at {datetime.datetime.now().isoformat()}")
+            print(f"{'='*60}")
+            run_engine()
+            duration = time.time() - start
+            _refresh_status["last_run"] = datetime.datetime.now().isoformat()
+            _refresh_status["last_duration_sec"] = round(duration, 1)
+            _refresh_status["running"] = False
+            # Clear ticker cache so individual lookups also get fresh data
+            _cache.clear()
+            print(f"  REFRESH COMPLETED in {duration:.1f}s")
+            return True, f"Refresh completed in {duration:.1f}s"
+        except Exception as e:
+            duration = time.time() - start
+            _refresh_status["last_error"] = str(e)
+            _refresh_status["running"] = False
+            print(f"  REFRESH FAILED after {duration:.1f}s: {e}")
+            traceback.print_exc()
+            return False, str(e)
+
+
+def _background_refresh_loop():
+    """Background thread that runs signal engine every REFRESH_INTERVAL_MINUTES."""
+    while True:
+        next_run = datetime.datetime.now() + datetime.timedelta(minutes=REFRESH_INTERVAL_MINUTES)
+        _refresh_status["next_scheduled"] = next_run.isoformat()
+        print(f"  Next scheduled refresh: {next_run.strftime('%H:%M:%S')}")
+        time.sleep(REFRESH_INTERVAL_MINUTES * 60)
+        print(f"\n  [SCHEDULER] Auto-refresh triggered at {datetime.datetime.now().isoformat()}")
+        _run_signal_refresh()
+
+
+@app.route("/api/refresh", methods=["POST"])
+def trigger_refresh():
+    """Manually trigger a signal engine refresh. Runs in background."""
+    if _refresh_status["running"]:
+        return app.response_class(
+            response=json.dumps({
+                "status": "in_progress",
+                "message": "Refresh already running",
+                "started": _refresh_status.get("last_run"),
+            }, cls=NumpyEncoder),
+            mimetype="application/json",
+        ), 202
+
+    # Run in a thread so the API returns immediately
+    thread = threading.Thread(target=_run_signal_refresh, daemon=True)
+    thread.start()
+
+    return app.response_class(
+        response=json.dumps({
+            "status": "started",
+            "message": "Signal refresh started — dashboard will update when complete",
+        }, cls=NumpyEncoder),
+        mimetype="application/json",
+    )
+
+
+@app.route("/api/refresh/status")
+def refresh_status():
+    """Check the current refresh status."""
+    # Also read the timestamp from signals.json to show data freshness
+    signals_path = os.path.join(PUBLIC_DIR, "signals.json")
+    data_timestamp = None
+    try:
+        with open(signals_path, "r") as f:
+            signals = json.load(f)
+            data_timestamp = signals.get("timestamp")
+    except Exception:
+        pass
+
+    return app.response_class(
+        response=json.dumps({
+            "status": "success",
+            **_refresh_status,
+            "data_timestamp": data_timestamp,
+            "refresh_interval_minutes": REFRESH_INTERVAL_MINUTES,
+        }, cls=NumpyEncoder),
+        mimetype="application/json",
+    )
+
+
+# ------------------------------------------------------------------
 # Static file serving
 # ------------------------------------------------------------------
 @app.route("/")
@@ -252,12 +363,25 @@ def static_files(path):
 # ------------------------------------------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5002))
+
+    # Run initial signal refresh on startup
     print("\n" + "=" * 60)
-    print("  SignalAgent Ticker Search API")
+    print("  SignalAgent — Running initial data refresh...")
+    print("=" * 60)
+    init_thread = threading.Thread(target=_run_signal_refresh, daemon=True)
+    init_thread.start()
+
+    # Start background scheduler for auto-refresh every 15 minutes
+    scheduler_thread = threading.Thread(target=_background_refresh_loop, daemon=True)
+    scheduler_thread.start()
+
+    print(f"\n{'='*60}")
+    print("  SignalAgent Market Pulse Dashboard")
     print("=" * 60)
     print(f"  Dashboard:     http://localhost:{port}/")
     print(f"  Ticker Search: http://localhost:{port}/search.html")
     print(f"  API Endpoint:  http://localhost:{port}/api/ticker/<SYMBOL>")
-    print(f"  History:       http://localhost:{port}/api/history")
+    print(f"  Refresh:       POST http://localhost:{port}/api/refresh")
+    print(f"  Auto-refresh:  Every {REFRESH_INTERVAL_MINUTES} minutes")
     print("=" * 60 + "\n")
     app.run(host="0.0.0.0", port=port, debug=False)

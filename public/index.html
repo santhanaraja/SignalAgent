@@ -249,7 +249,7 @@
     <button class="view-btn" onclick="setView('groups',this)">Groups</button>
   </div>
   <div class="auto-label">
-    Auto-refresh <span class="countdown" id="countdown">60s</span>
+    Auto-refresh <span class="countdown" id="countdown">15m</span>
     <div class="toggle on" id="autoToggle" onclick="toggleAuto()"></div>
   </div>
 </div>
@@ -299,10 +299,11 @@ let filter = 'all';
 let query = '';
 let breakerOnly = false;
 let autoRefresh = true;
-let countdownSec = 60;
+let countdownSec = 900;
 let countdownTimer = null;
 let currentView = 'overview';
-const REFRESH_INTERVAL = 60;
+const REFRESH_INTERVAL = 900; // 15 minutes in seconds
+let refreshInProgress = false;
 
 function tvUrl(ticker){return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(ticker)}`;}
 function tvLink(ticker,cls){return `<a href="${tvUrl(ticker)}" target="_blank" rel="noopener" class="${cls||'tk'}" title="Open ${ticker} in TradingView" onclick="event.stopPropagation()">${ticker}</a>`;}
@@ -725,17 +726,59 @@ function sortG(gi,field){
   },10);
 }
 
+async function triggerServerRefresh(){
+  /** Call the server API to re-run the signal engine with fresh market data. */
+  if(refreshInProgress) return;
+  refreshInProgress = true;
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning'); btn.disabled = true;
+  btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refreshing...';
+
+  try {
+    // Trigger refresh on server
+    await fetch('/api/refresh', {method:'POST'});
+
+    // Poll for completion (check every 5 seconds, max 10 min)
+    let done = false;
+    for(let i=0; i<120 && !done; i++){
+      await new Promise(r=>setTimeout(r,5000));
+      try{
+        const st = await fetch('/api/refresh/status');
+        const status = await st.json();
+        if(!status.running){
+          done = true;
+          // Reload dashboard data
+          await loadData();
+        }
+      }catch(e){}
+    }
+    if(!done){
+      // Timeout — just reload whatever we have
+      await loadData();
+    }
+  } catch(e) {
+    console.error('Refresh failed:', e);
+    // Still try to reload in case the server has new data
+    await loadData();
+  } finally {
+    refreshInProgress = false;
+    btn.classList.remove('spinning'); btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh';
+    countdownSec = REFRESH_INTERVAL;
+  }
+}
+
 function manualRefresh(){
-  const btn=document.getElementById('refreshBtn');btn.classList.add('spinning');btn.disabled=true;
-  loadData().then(()=>{
-    setTimeout(()=>{btn.classList.remove('spinning');btn.disabled=false;},500);
-    countdownSec=REFRESH_INTERVAL;
-  });
+  triggerServerRefresh();
 }
 function toggleAuto(){
   const t=document.getElementById('autoToggle');autoRefresh=!autoRefresh;
   t.classList.toggle('on',autoRefresh);
   if(autoRefresh){startAuto();}else{stopAuto();}
+}
+function fmtCountdown(sec){
+  if(sec>=60){const m=Math.floor(sec/60);const s=sec%60;return m+'m'+(s>0?' '+s+'s':'');}
+  return sec+'s';
 }
 function startAuto(){
   stopAuto();
@@ -743,10 +786,10 @@ function startAuto(){
   countdownTimer=setInterval(()=>{
     countdownSec--;
     const el=document.getElementById('countdown');
-    if(el) el.textContent=countdownSec+'s';
+    if(el) el.textContent=fmtCountdown(countdownSec);
     if(countdownSec<=0){
       countdownSec=REFRESH_INTERVAL;
-      loadData();
+      triggerServerRefresh();
     }
   },1000);
 }
