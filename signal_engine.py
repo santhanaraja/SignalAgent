@@ -51,15 +51,10 @@ INDUSTRY_GROUPS = {
         "sector": "Information Technology",
         "industry_group": "Technology Hardware & Equipment",
         "tickers": ["SNDK", "STX", "WDC", "PSTG", "NTAP"],
-        "thesis": "AI infrastructure buildout driving record demand for high-capacity storage. NAND pricing stabilizing; HDD nearline demand surging from hyperscaler data centers.",
-        "thesis_breaker": "AI capex slowdown, hyperscaler order deferrals, or NAND oversupply from Chinese fabs (YMTC).",
         "cycle_stage": "mid",
-        "breaker_checks": {
-            "sp500_drawdown_10pct": "S&P 500 drops >10% from YTD high (proxy for macro risk-off / capex freeze)",
-            "group_avg_rsi_below_40": "Group avg RSI falls below 40 — momentum breakdown",
-            "majority_below_ma50": ">50% of stocks fall below 50-day MA — trend reversal",
-            "avg_ytd_negative": "Group avg YTD return turns negative — leadership lost"
-        }
+        "sector_type": "tech_hardware",
+        "commodity_proxy": None,
+        "macro_sensitivities": ["sp500_drawdown", "group_momentum", "group_trend", "group_ytd"],
     },
     "Semiconductors — Memory & HBM": {
         "gics_code": "45301020",
@@ -67,15 +62,10 @@ INDUSTRY_GROUPS = {
         "sector": "Information Technology",
         "industry_group": "Semiconductors & Semiconductor Equipment",
         "tickers": ["MU"],
-        "thesis": "HBM is the critical bottleneck for AI training/inference. Supply fully booked through 2026; prices rising ~20%. TAM from $35B to $100B by 2028.",
-        "thesis_breaker": "AI training efficiency gains reducing memory per GPU, Chinese HBM alternatives, or customer inventory digestion.",
         "cycle_stage": "early-mid",
-        "breaker_checks": {
-            "sp500_drawdown_10pct": "S&P 500 drops >10% from YTD high",
-            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
-            "majority_below_ma50": ">50% of stocks fall below 50-day MA",
-            "avg_ytd_negative": "Group avg YTD return turns negative"
-        }
+        "sector_type": "semiconductor",
+        "commodity_proxy": None,
+        "macro_sensitivities": ["sp500_drawdown", "group_momentum", "group_trend", "group_ytd"],
     },
     "Semiconductor Materials & Equipment": {
         "gics_code": "45301010",
@@ -83,15 +73,10 @@ INDUSTRY_GROUPS = {
         "sector": "Information Technology",
         "industry_group": "Semiconductors & Semiconductor Equipment",
         "tickers": ["ASML", "AMAT", "LRCX", "KLAC", "ENTG", "MKSI", "TER", "ALAB"],
-        "thesis": "AI capex supercycle driving record WFE spend — advanced packaging (CoWoS/HBM), EUV lithography, high-NA EUV, and AI connectivity (PCIe retimers, CXL). TSMC/Samsung/Intel all expanding capacity.",
-        "thesis_breaker": "WFE spending downturn, fab project delays/cancellations, China export restrictions tightening, or customer inventory correction.",
         "cycle_stage": "mid",
-        "breaker_checks": {
-            "sp500_drawdown_10pct": "S&P 500 drops >10% from YTD high — macro risk-off / capex freeze",
-            "group_avg_rsi_below_40": "Group avg RSI falls below 40 — momentum breakdown",
-            "majority_below_ma50": ">50% of stocks fall below 50-day MA — trend reversal",
-            "avg_ytd_negative": "Group avg YTD return turns negative — leadership lost"
-        }
+        "sector_type": "semiconductor",
+        "commodity_proxy": None,
+        "macro_sensitivities": ["sp500_drawdown", "group_momentum", "group_trend", "group_ytd"],
     },
     "Gold": {
         "gics_code": "15104030",
@@ -99,16 +84,10 @@ INDUSTRY_GROUPS = {
         "sector": "Materials",
         "industry_group": "Metals & Mining",
         "tickers": ["NEM", "GOLD", "AEM", "KGC", "AU", "HL", "CDE", "PAAS", "FNV", "RGLD", "EGO", "OR", "SSRM", "WPM"],
-        "thesis": "Record gold prices with massive operating leverage. Central bank buying, geopolitical risk, de-dollarization. Broadest group — 13+ stocks beating S&P.",
-        "thesis_breaker": "Sharp rise in real interest rates, USD strength, gold reversal below $2,400, or mining cost inflation.",
         "cycle_stage": "mid",
-        "breaker_checks": {
-            "gold_below_threshold": "Gold (GLD) drops >8% from recent high — commodity thesis weakening",
-            "usd_strength": "DXY (UUP) rises >5% YTD — USD strength crushing gold",
-            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
-            "majority_below_ma50": ">50% of stocks fall below 50-day MA",
-            "breadth_collapse": "<50% of stocks beating S&P 500 (was 90%+) — breadth deteriorating"
-        }
+        "sector_type": "precious_metals",
+        "commodity_proxy": "GLD",
+        "macro_sensitivities": ["commodity_drop", "usd_strength", "group_momentum", "group_trend", "breadth_collapse"],
     },
     "Copper": {
         "gics_code": "15104025",
@@ -116,15 +95,10 @@ INDUSTRY_GROUPS = {
         "sector": "Materials",
         "industry_group": "Metals & Mining",
         "tickers": ["FCX", "SCCO", "TECK", "HBM"],
-        "thesis": "Structural supply deficit from electrification, renewable energy buildout, and AI data center infrastructure. ICSG forecasts deficit in 2026. Mine supply growth lagging demand.",
-        "thesis_breaker": "Global recession crushing industrial demand, unexpected mine supply surge, or copper substitution in key applications.",
         "cycle_stage": "mid",
-        "breaker_checks": {
-            "group_avg_rsi_below_40": "Group avg RSI falls below 40 — momentum breakdown",
-            "majority_below_ma50": ">50% of stocks fall below 50-day MA — trend reversal",
-            "avg_ytd_negative": "Group avg YTD return turns negative — leadership lost",
-            "sp500_drawdown_10pct": "S&P 500 drops >10% from YTD high — macro risk-off"
-        }
+        "sector_type": "industrial_metals",
+        "commodity_proxy": None,
+        "macro_sensitivities": ["group_momentum", "group_trend", "group_ytd", "sp500_drawdown"],
     },
     "Specialty Chemicals": {
         "gics_code": "15101050",
@@ -132,15 +106,10 @@ INDUSTRY_GROUPS = {
         "sector": "Materials",
         "industry_group": "Chemicals",
         "tickers": ["TROX", "CC", "KRO", "DOW", "LYB", "PPG", "ECL"],
-        "thesis": "Cyclical mean-reversion. TiO2 volumes recovering, supply being cut (plant closures). Destocking cycle ending across specialty chemicals.",
-        "thesis_breaker": "China TiO2 dumping, construction/auto demand double-dip, or energy cost spikes.",
         "cycle_stage": "early",
-        "breaker_checks": {
-            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
-            "majority_below_ma50": ">50% of stocks fall below 50-day MA",
-            "avg_ytd_negative": "Group avg YTD return turns negative",
-            "energy_spike": "Energy (XLE) surges >15% YTD — energy cost pressure on margins"
-        }
+        "sector_type": "chemicals",
+        "commodity_proxy": None,
+        "macro_sensitivities": ["group_momentum", "group_trend", "group_ytd", "energy_spike"],
     },
     "Oil & Gas Equipment & Services": {
         "gics_code": "10101020",
@@ -148,14 +117,10 @@ INDUSTRY_GROUPS = {
         "sector": "Energy",
         "industry_group": "Energy Equipment & Services",
         "tickers": ["VAL", "RIG", "HAL", "NOV", "FTI", "LBRT"],
-        "thesis": "Structural upcycle: no new deepwater rigs since 2014, aging fleet, accelerating project sanctioning. Day rates $400K/day.",
-        "thesis_breaker": "Oil below $60, OPEC+ supply surge, or rapid transition to onshore/unconventional.",
         "cycle_stage": "mid",
-        "breaker_checks": {
-            "oil_below_60": "Crude oil (USO) drops >25% from recent high — approaching $60 breakeven",
-            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
-            "majority_below_ma50": ">50% of stocks fall below 50-day MA"
-        }
+        "sector_type": "oil_services",
+        "commodity_proxy": "USO",
+        "macro_sensitivities": ["oil_collapse", "group_momentum", "group_trend"],
     },
     "Oil & Gas Exploration & Production": {
         "gics_code": "10102020",
@@ -163,15 +128,10 @@ INDUSTRY_GROUPS = {
         "sector": "Energy",
         "industry_group": "Oil, Gas & Consumable Fuels",
         "tickers": ["KOS", "EQT", "COP", "FANG", "APA", "SM"],
-        "thesis": "Nat gas E&P benefiting from LNG export additions 2026-27. Oil E&P supported by OPEC+ discipline. Selective, not broad.",
-        "thesis_breaker": "OPEC+ production increases, warm winters killing nat gas, or global recession.",
         "cycle_stage": "mid",
-        "breaker_checks": {
-            "oil_below_60": "Crude oil drops >25% from recent high",
-            "natgas_collapse": "Natural gas (UNG) drops >30% from recent high",
-            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
-            "majority_below_ma50": ">50% of stocks fall below 50-day MA"
-        }
+        "sector_type": "oil_gas_ep",
+        "commodity_proxy": "USO",
+        "macro_sensitivities": ["oil_collapse", "natgas_collapse", "group_momentum", "group_trend"],
     },
     "Aerospace & Defense": {
         "gics_code": "20101010",
@@ -179,14 +139,10 @@ INDUSTRY_GROUPS = {
         "sector": "Industrials",
         "industry_group": "Capital Goods",
         "tickers": ["RKLB", "LHX", "LMT", "KTOS", "PLTR", "RTX", "NOC", "GD", "HII"],
-        "thesis": "European rearmament (NATO 3%+ GDP), Ukraine, Pacific tensions creating multi-year defense supercycle. Navy shipbuilding at $26-27B authorized for 2026.",
-        "thesis_breaker": "Peace deals, budget sequestration, CR-driven spending delays, or program cancellations.",
         "cycle_stage": "early-mid",
-        "breaker_checks": {
-            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
-            "majority_below_ma50": ">50% of stocks fall below 50-day MA",
-            "avg_ytd_negative": "Group avg YTD return turns negative"
-        }
+        "sector_type": "defense",
+        "commodity_proxy": None,
+        "macro_sensitivities": ["group_momentum", "group_trend", "group_ytd"],
     },
     "Independent Power Producers & Energy Traders": {
         "gics_code": "55105020",
@@ -194,15 +150,10 @@ INDUSTRY_GROUPS = {
         "sector": "Utilities",
         "industry_group": "Independent Power and Renewable Electricity Producers",
         "tickers": ["CEG", "VST", "NRG", "OKLO", "SMR"],
-        "thesis": "AI data center power demand creating structural electricity shortage. Nuclear restarts and new builds accelerating. Capacity contracts at premium pricing. Electrification and reshoring compounding demand growth.",
-        "thesis_breaker": "Data center power demand forecasts miss, natural gas price spikes crushing margins, regulatory blocks on nuclear restarts, or grid interconnection delays.",
         "cycle_stage": "early-mid",
-        "breaker_checks": {
-            "group_avg_rsi_below_40": "Group avg RSI falls below 40 — momentum breakdown",
-            "majority_below_ma50": ">50% of stocks fall below 50-day MA — trend reversal",
-            "avg_ytd_negative": "Group avg YTD return turns negative — leadership lost",
-            "sp500_drawdown_10pct": "S&P 500 drops >10% from YTD high — macro risk-off"
-        }
+        "sector_type": "power_nuclear",
+        "commodity_proxy": None,
+        "macro_sensitivities": ["group_momentum", "group_trend", "group_ytd", "sp500_drawdown"],
     },
     "Coal & Consumable Fuels (Uranium)": {
         "gics_code": "10102050",
@@ -210,14 +161,10 @@ INDUSTRY_GROUPS = {
         "sector": "Energy",
         "industry_group": "Oil, Gas & Consumable Fuels",
         "tickers": ["UEC", "LEU", "CCJ"],
-        "thesis": "Nuclear renaissance driven by AI data center power demand. Uranium supply structurally deficient. BofA targets $135/lb vs $81-88 current.",
-        "thesis_breaker": "Uranium price pullback, SMR delays, or return of Russian/Kazakh supply.",
         "cycle_stage": "early",
-        "breaker_checks": {
-            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
-            "majority_below_ma50": ">50% of stocks fall below 50-day MA",
-            "avg_ytd_negative": "Group avg YTD return turns negative"
-        }
+        "sector_type": "uranium",
+        "commodity_proxy": None,
+        "macro_sensitivities": ["group_momentum", "group_trend", "group_ytd"],
     },
     "Oil & Gas Refining & Marketing": {
         "gics_code": "10102030",
@@ -225,19 +172,309 @@ INDUSTRY_GROUPS = {
         "sector": "Energy",
         "industry_group": "Oil, Gas & Consumable Fuels",
         "tickers": ["MPC", "VLO", "PBF", "DK", "PSX"],
-        "thesis": "Crack spreads elevated as refining capacity additions lag closures. Export demand from Latin America supporting Gulf Coast economics.",
-        "thesis_breaker": "Crack spread compression from new ME/Asia capacity, demand destruction.",
         "cycle_stage": "mid-late",
-        "breaker_checks": {
-            "group_avg_rsi_below_40": "Group avg RSI falls below 40",
-            "majority_below_ma50": ">50% of stocks fall below 50-day MA",
-            "avg_ytd_negative": "Group avg YTD return turns negative"
-        }
+        "sector_type": "refining",
+        "commodity_proxy": "USO",
+        "macro_sensitivities": ["group_momentum", "group_trend", "group_ytd"],
     }
 }
 
 # Macro proxy tickers for thesis-breaker checks
 MACRO_TICKERS = ["^GSPC", "GLD", "UUP", "USO", "UNG", "XLE"]
+
+
+# ============================================================
+# DYNAMIC THESIS & THESIS-BREAKER GENERATION
+# ============================================================
+# All text is generated from live market data — nothing hardcoded.
+# ============================================================
+
+def generate_dynamic_thesis(group_name, group_info, group_stocks, macro_data):
+    """
+    Generate a dynamic investment thesis based on live market data.
+    Returns a string describing why this group is investable right now.
+    """
+    total = len(group_stocks)
+    if total == 0:
+        return f"{group_name}: Insufficient data for thesis generation."
+
+    # Gather live metrics
+    ytd_values = [s["ytd_return"] for s in group_stocks if s.get("ytd_return") is not None]
+    avg_ytd = np.mean(ytd_values) if ytd_values else 0
+    rsi_values = [s["rsi"] for s in group_stocks if s.get("rsi")]
+    avg_rsi = np.mean(rsi_values) if rsi_values else 50
+    beating_count = sum(1 for s in group_stocks if s.get("beating_sp500"))
+    pct_beating = (beating_count / total * 100) if total > 0 else 0
+    above_ma50 = sum(1 for s in group_stocks if s.get("price", 0) > s.get("ma50", 0))
+    pct_above_ma50 = (above_ma50 / total * 100) if total > 0 else 0
+
+    # Best performer
+    best = max(group_stocks, key=lambda s: s.get("ytd_return", -999)) if group_stocks else None
+    best_name = best.get("ticker", "N/A") if best else "N/A"
+    best_ytd = best.get("ytd_return", 0) if best else 0
+
+    # Build thesis parts
+    parts = []
+
+    # Performance context
+    if avg_ytd > 15:
+        parts.append(f"Strong sector momentum with avg YTD return of {avg_ytd:+.1f}%")
+    elif avg_ytd > 5:
+        parts.append(f"Positive sector trend with avg YTD return of {avg_ytd:+.1f}%")
+    elif avg_ytd > -5:
+        parts.append(f"Sector consolidating with avg YTD return of {avg_ytd:+.1f}%")
+    else:
+        parts.append(f"Sector under pressure with avg YTD return of {avg_ytd:+.1f}%")
+
+    # Breadth
+    if pct_beating > 70:
+        parts.append(f"Broad strength — {beating_count}/{total} stocks ({pct_beating:.0f}%) beating S&P 500")
+    elif pct_beating > 50:
+        parts.append(f"Moderate breadth with {beating_count}/{total} stocks outperforming S&P 500")
+    elif pct_beating > 30:
+        parts.append(f"Narrow leadership — only {beating_count}/{total} stocks beating S&P 500")
+    else:
+        parts.append(f"Weak breadth — just {beating_count}/{total} stocks outperforming S&P 500")
+
+    # Trend health
+    if pct_above_ma50 > 70:
+        parts.append(f"{pct_above_ma50:.0f}% of stocks above 50-day MA, confirming uptrend")
+    elif pct_above_ma50 > 50:
+        parts.append(f"{pct_above_ma50:.0f}% above 50-day MA, trend intact but mixed")
+    else:
+        parts.append(f"Only {pct_above_ma50:.0f}% above 50-day MA, trend weakening")
+
+    # Momentum context
+    if avg_rsi > 65:
+        parts.append(f"Group momentum strong (avg RSI {avg_rsi:.0f}) — watch for overbought conditions")
+    elif avg_rsi > 50:
+        parts.append(f"Healthy momentum (avg RSI {avg_rsi:.0f})")
+    elif avg_rsi > 40:
+        parts.append(f"Neutral momentum (avg RSI {avg_rsi:.0f}) — potential accumulation zone")
+    else:
+        parts.append(f"Oversold conditions (avg RSI {avg_rsi:.0f}) — potential mean-reversion setup")
+
+    # Leader highlight
+    if best and best_ytd > 10:
+        parts.append(f"Led by {best_name} at {best_ytd:+.1f}% YTD")
+
+    # Commodity proxy context
+    commodity_proxy = group_info.get("commodity_proxy")
+    if commodity_proxy and commodity_proxy in macro_data:
+        proxy_data = macro_data[commodity_proxy]
+        if proxy_data is not None and len(proxy_data) > 20:
+            proxy_price = float(proxy_data["Close"].iloc[-1])
+            proxy_high_60d = float(proxy_data["High"].iloc[-60:].max()) if len(proxy_data) >= 60 else float(proxy_data["High"].max())
+            pct_from_high = ((proxy_price - proxy_high_60d) / proxy_high_60d) * 100
+            proxy_names = {"GLD": "Gold", "USO": "Crude Oil", "UNG": "Natural Gas"}
+            proxy_label = proxy_names.get(commodity_proxy, commodity_proxy)
+            if pct_from_high > -3:
+                parts.append(f"{proxy_label} near 60-day highs (${proxy_price:.2f}), supporting commodity thesis")
+            elif pct_from_high > -10:
+                parts.append(f"{proxy_label} at ${proxy_price:.2f}, {pct_from_high:.1f}% off 60-day high")
+            else:
+                parts.append(f"{proxy_label} under pressure at ${proxy_price:.2f} ({pct_from_high:.1f}% off 60-day high)")
+
+    return ". ".join(parts) + "."
+
+
+def generate_dynamic_thesis_breaker(group_name, group_info, group_stocks, macro_data, sp500_ytd):
+    """
+    Generate a dynamic thesis-breaker description based on live market data.
+    Identifies the specific risks/levels that would invalidate the investment thesis.
+    Returns a string with current price-based risk levels.
+    """
+    total = len(group_stocks)
+    risks = []
+
+    # --- Macro risk: S&P 500 drawdown ---
+    sp_data = macro_data.get("^GSPC")
+    if sp_data is not None and len(sp_data) > 20:
+        current_year = datetime.datetime.now().year
+        ytd_data = sp_data[sp_data.index.year == current_year]
+        if len(ytd_data) > 0:
+            sp_current = float(ytd_data["Close"].iloc[-1])
+            sp_high = float(ytd_data["High"].max())
+            sp_10pct_level = sp_high * 0.9
+            current_dd = ((sp_current - sp_high) / sp_high) * 100
+            if current_dd < -5:
+                risks.append(f"S&P 500 already {current_dd:.1f}% from YTD high ({sp_high:.0f}) — critical if breaks {sp_10pct_level:.0f}")
+            else:
+                risks.append(f"S&P 500 correction below {sp_10pct_level:.0f} (10% off {sp_high:.0f} high)")
+
+    # --- Commodity-specific risks ---
+    sector_type = group_info.get("sector_type", "")
+    commodity_proxy = group_info.get("commodity_proxy")
+
+    if commodity_proxy == "GLD":
+        gld_data = macro_data.get("GLD")
+        if gld_data is not None and len(gld_data) > 20:
+            gld_price = float(gld_data["Close"].iloc[-1])
+            gld_high = float(gld_data["High"].iloc[-60:].max()) if len(gld_data) >= 60 else float(gld_data["High"].max())
+            gld_8pct = gld_high * 0.92
+            risks.append(f"Gold reversal below ${gld_8pct:.0f} (8% off ${gld_high:.0f} recent high, currently ${gld_price:.0f})")
+
+        # USD strength check
+        uup_data = macro_data.get("UUP")
+        if uup_data is not None and len(uup_data) > 20:
+            uup_ytd = compute_ytd_return(uup_data)
+            uup_price = float(uup_data["Close"].iloc[-1])
+            if uup_ytd > 2:
+                risks.append(f"USD already strengthening ({uup_ytd:+.1f}% YTD at ${uup_price:.2f}) — critical above +5% YTD")
+            else:
+                risks.append(f"Sharp USD rally (DXY proxy at ${uup_price:.2f}, {uup_ytd:+.1f}% YTD) — watch for >5% YTD surge")
+
+    elif commodity_proxy == "USO":
+        uso_data = macro_data.get("USO")
+        if uso_data is not None and len(uso_data) > 20:
+            uso_price = float(uso_data["Close"].iloc[-1])
+            uso_high = float(uso_data["High"].iloc[-60:].max()) if len(uso_data) >= 60 else float(uso_data["High"].max())
+            uso_25pct = uso_high * 0.75
+            risks.append(f"Crude oil collapse below ${uso_25pct:.2f} (25% off ${uso_high:.2f} high, currently ${uso_price:.2f})")
+
+        if sector_type == "oil_gas_ep":
+            ung_data = macro_data.get("UNG")
+            if ung_data is not None and len(ung_data) > 20:
+                ung_price = float(ung_data["Close"].iloc[-1])
+                ung_high = float(ung_data["High"].iloc[-60:].max()) if len(ung_data) >= 60 else float(ung_data["High"].max())
+                ung_30pct = ung_high * 0.70
+                risks.append(f"Natural gas breakdown below ${ung_30pct:.2f} (30% off ${ung_high:.2f} high, currently ${ung_price:.2f})")
+
+    # --- Energy cost risk for chemicals ---
+    if sector_type == "chemicals":
+        xle_data = macro_data.get("XLE")
+        if xle_data is not None and len(xle_data) > 20:
+            xle_ytd = compute_ytd_return(xle_data)
+            xle_price = float(xle_data["Close"].iloc[-1])
+            risks.append(f"Energy cost spike — XLE at ${xle_price:.2f} ({xle_ytd:+.1f}% YTD), margins squeezed if >+15% YTD")
+
+    # --- Group-level technical risks (always computed) ---
+    rsi_values = [s["rsi"] for s in group_stocks if s.get("rsi")]
+    avg_rsi = np.mean(rsi_values) if rsi_values else 50
+    below_ma50 = sum(1 for s in group_stocks if s.get("price", 0) < s.get("ma50", 0))
+    pct_below_ma50 = (below_ma50 / total * 100) if total > 0 else 0
+    ytd_values = [s["ytd_return"] for s in group_stocks if s.get("ytd_return") is not None]
+    avg_ytd = np.mean(ytd_values) if ytd_values else 0
+
+    # RSI risk
+    if avg_rsi < 45:
+        risks.append(f"Group momentum deteriorating (avg RSI {avg_rsi:.0f}, breaker at <40)")
+    else:
+        risks.append(f"Momentum breakdown if avg RSI drops below 40 (currently {avg_rsi:.0f})")
+
+    # MA50 risk
+    if pct_below_ma50 > 30:
+        risks.append(f"Trend weakening — {below_ma50}/{total} ({pct_below_ma50:.0f}%) already below 50-day MA, critical if >50%")
+    else:
+        risks.append(f"Trend reversal if >50% of stocks break below 50-day MA (currently {pct_below_ma50:.0f}% below)")
+
+    # YTD risk
+    if avg_ytd < 3:
+        risks.append(f"Group leadership fragile (avg YTD {avg_ytd:+.1f}%), at risk of turning negative")
+    else:
+        risks.append(f"Leadership lost if group avg YTD turns negative (currently {avg_ytd:+.1f}%)")
+
+    # Breadth risk for broad groups
+    if total >= 8:
+        beating_count = sum(1 for s in group_stocks if s.get("beating_sp500"))
+        pct_beating = (beating_count / total * 100) if total > 0 else 0
+        if pct_beating < 60:
+            risks.append(f"Breadth narrowing — only {beating_count}/{total} ({pct_beating:.0f}%) beating S&P, critical below 50%")
+
+    return ". ".join(risks) + "."
+
+
+def generate_dynamic_breaker_checks(group_name, group_info, group_stocks, macro_data):
+    """
+    Generate dynamic breaker check definitions based on the group's
+    macro_sensitivities and current market data.
+    Returns dict of {check_id: description_with_current_levels}.
+    """
+    checks = {}
+    sensitivities = group_info.get("macro_sensitivities", [])
+    total = len(group_stocks)
+    commodity_proxy = group_info.get("commodity_proxy")
+    sector_type = group_info.get("sector_type", "")
+
+    # S&P 500 drawdown check
+    if "sp500_drawdown" in sensitivities:
+        sp_data = macro_data.get("^GSPC")
+        if sp_data is not None and len(sp_data) > 20:
+            current_year = datetime.datetime.now().year
+            ytd_data = sp_data[sp_data.index.year == current_year]
+            if len(ytd_data) > 0:
+                sp_high = float(ytd_data["High"].max())
+                sp_current = float(ytd_data["Close"].iloc[-1])
+                sp_level = sp_high * 0.9
+                dd_now = ((sp_current - sp_high) / sp_high) * 100
+                checks["sp500_drawdown_10pct"] = f"S&P 500 drops >10% from {sp_high:.0f} YTD high (below {sp_level:.0f}) — currently {dd_now:+.1f}%"
+
+    # Group momentum check
+    if "group_momentum" in sensitivities:
+        rsi_values = [s["rsi"] for s in group_stocks if s.get("rsi")]
+        avg_rsi = np.mean(rsi_values) if rsi_values else 50
+        checks["group_avg_rsi_below_40"] = f"Group avg RSI falls below 40 — currently {avg_rsi:.0f}"
+
+    # Group trend check
+    if "group_trend" in sensitivities:
+        below_ma50 = sum(1 for s in group_stocks if s.get("price", 0) < s.get("ma50", 0))
+        pct = (below_ma50 / total * 100) if total > 0 else 0
+        checks["majority_below_ma50"] = f">50% of stocks fall below 50-day MA — currently {pct:.0f}% ({below_ma50}/{total}) below"
+
+    # Group YTD check
+    if "group_ytd" in sensitivities:
+        ytd_vals = [s["ytd_return"] for s in group_stocks if s.get("ytd_return") is not None]
+        avg_ytd = np.mean(ytd_vals) if ytd_vals else 0
+        checks["avg_ytd_negative"] = f"Group avg YTD return turns negative — currently {avg_ytd:+.1f}%"
+
+    # Breadth collapse check
+    if "breadth_collapse" in sensitivities:
+        beating = sum(1 for s in group_stocks if s.get("beating_sp500"))
+        pct_beating = (beating / total * 100) if total > 0 else 0
+        checks["breadth_collapse"] = f"<50% of stocks beating S&P 500 — currently {pct_beating:.0f}% ({beating}/{total})"
+
+    # Commodity-specific checks
+    if "commodity_drop" in sensitivities and commodity_proxy == "GLD":
+        gld_data = macro_data.get("GLD")
+        if gld_data is not None and len(gld_data) > 20:
+            gld_high = float(gld_data["High"].iloc[-60:].max()) if len(gld_data) >= 60 else float(gld_data["High"].max())
+            gld_current = float(gld_data["Close"].iloc[-1])
+            gld_drop_pct = ((gld_current - gld_high) / gld_high) * 100
+            gld_trigger = gld_high * 0.92
+            checks["gold_below_threshold"] = f"Gold (GLD) drops >8% from ${gld_high:.0f} high (below ${gld_trigger:.0f}) — currently ${gld_current:.0f} ({gld_drop_pct:+.1f}%)"
+
+    if "usd_strength" in sensitivities:
+        uup_data = macro_data.get("UUP")
+        if uup_data is not None and len(uup_data) > 20:
+            uup_ytd = compute_ytd_return(uup_data)
+            checks["usd_strength"] = f"DXY proxy (UUP) rises >5% YTD — currently {uup_ytd:+.1f}% YTD"
+
+    if "oil_collapse" in sensitivities:
+        uso_data = macro_data.get("USO")
+        if uso_data is not None and len(uso_data) > 20:
+            uso_high = float(uso_data["High"].iloc[-60:].max()) if len(uso_data) >= 60 else float(uso_data["High"].max())
+            uso_current = float(uso_data["Close"].iloc[-1])
+            uso_drop_pct = ((uso_current - uso_high) / uso_high) * 100
+            uso_trigger = uso_high * 0.75
+            checks["oil_below_60"] = f"Crude (USO) drops >25% from ${uso_high:.2f} high (below ${uso_trigger:.2f}) — currently ${uso_current:.2f} ({uso_drop_pct:+.1f}%)"
+
+    if "natgas_collapse" in sensitivities:
+        ung_data = macro_data.get("UNG")
+        if ung_data is not None and len(ung_data) > 20:
+            ung_high = float(ung_data["High"].iloc[-60:].max()) if len(ung_data) >= 60 else float(ung_data["High"].max())
+            ung_current = float(ung_data["Close"].iloc[-1])
+            ung_drop_pct = ((ung_current - ung_high) / ung_high) * 100
+            ung_trigger = ung_high * 0.70
+            checks["natgas_collapse"] = f"Nat gas (UNG) drops >30% from ${ung_high:.2f} high (below ${ung_trigger:.2f}) — currently ${ung_current:.2f} ({ung_drop_pct:+.1f}%)"
+
+    if "energy_spike" in sensitivities:
+        xle_data = macro_data.get("XLE")
+        if xle_data is not None and len(xle_data) > 20:
+            xle_ytd = compute_ytd_return(xle_data)
+            xle_price = float(xle_data["Close"].iloc[-1])
+            checks["energy_spike"] = f"Energy (XLE) surges >15% YTD — currently ${xle_price:.2f} ({xle_ytd:+.1f}% YTD)"
+
+    return checks
 
 
 # ============================================================
@@ -457,10 +694,12 @@ def compute_momentum_metrics(df):
 def check_thesis_breakers(group_name, group_info, group_stocks, macro_data, sp500_ytd):
     """
     Check thesis-breaker conditions for a group.
+    All checks are dynamically generated from live market data.
     Returns list of triggered alerts with severity.
     """
     alerts = []
-    checks = group_info.get("breaker_checks", {})
+    # Generate dynamic checks from live data instead of reading static config
+    checks = generate_dynamic_breaker_checks(group_name, group_info, group_stocks, macro_data)
 
     # Compute group-level metrics
     rsi_values = [s["rsi"] for s in group_stocks if s.get("rsi")]
@@ -1667,7 +1906,15 @@ def run_engine():
         else:
             group_signal = "sell"
 
-        # Check thesis breakers
+        # Generate dynamic thesis and thesis breaker from live data
+        dynamic_thesis = generate_dynamic_thesis(
+            group_name, group_info, stocks_in_group, macro_data
+        )
+        dynamic_thesis_breaker = generate_dynamic_thesis_breaker(
+            group_name, group_info, stocks_in_group, macro_data, sp500_ytd
+        )
+
+        # Check thesis breakers (uses dynamic checks internally)
         breaker_alerts = check_thesis_breakers(
             group_name, group_info, stocks_in_group, macro_data, sp500_ytd
         )
@@ -1712,8 +1959,8 @@ def run_engine():
             "gics_level": group_info.get("gics_level", ""),
             "sector": group_info["sector"],
             "industry_group": group_info.get("industry_group", ""),
-            "thesis": group_info["thesis"],
-            "thesis_breaker": group_info["thesis_breaker"],
+            "thesis": dynamic_thesis,
+            "thesis_breaker": dynamic_thesis_breaker,
             "cycle_stage": group_info["cycle_stage"],
             "avg_ytd": avg_ytd,
             "avg_score": avg_score,
