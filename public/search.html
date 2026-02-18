@@ -292,6 +292,10 @@
 let DATA = null;
 
 function scoreColor(s){return s>=70?'var(--green)':s>=55?'var(--yellow)':'var(--red)';}
+function fmtEST(dateStr){
+  const d = new Date(dateStr);
+  return d.toLocaleString('en-US', {timeZone:'America/New_York', month:'numeric', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', second:'2-digit', hour12:true}) + ' EST';
+}
 function scoreHex(s){return s>=70?'#3fb950':s>=55?'#d29922':'#f85149';}
 function sigClass(s){return 'sig-'+(s||'hold');}
 function tsClass(ts){
@@ -417,7 +421,7 @@ function renderResults(d){
   scoreEl.style.color = scoreHex(d.score);
   scoreEl.style.background = d.score>=70?'rgba(63,185,80,.12)':d.score>=55?'rgba(210,153,34,.12)':'rgba(248,81,73,.12)';
 
-  document.getElementById('resTime').textContent = 'Analyzed: ' + new Date(d.timestamp).toLocaleString();
+  document.getElementById('resTime').textContent = 'Analyzed: ' + fmtEST(d.timestamp);
 
   // Stage Analysis
   const sa = d.stage_analysis || {};

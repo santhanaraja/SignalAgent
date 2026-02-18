@@ -94,7 +94,7 @@ def _analyze_ticker(symbol):
 
     result = {
         "ticker": symbol,
-        "timestamp": datetime.datetime.now().isoformat(),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "price": details.get("price", 0),
         "score": score,
         "signal": signal,
@@ -154,7 +154,7 @@ def search_ticker(symbol):
         history = _load_history()
         history["searches"].insert(0, {
             "ticker": symbol,
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "score": result["score"],
             "signal": result["signal"],
             "trade_signal": result["trade_signal"],
@@ -199,7 +199,7 @@ def sentiment_trending():
         return app.response_class(
             response=json.dumps({
                 "status": "success",
-                "timestamp": datetime.datetime.now().isoformat(),
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "tickers": tickers,
             }, cls=NumpyEncoder),
             mimetype="application/json",
@@ -220,7 +220,7 @@ def sentiment_symbol(symbol):
         return app.response_class(
             response=json.dumps({
                 "status": "success",
-                "timestamp": datetime.datetime.now().isoformat(),
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 **result,
             }, cls=NumpyEncoder),
             mimetype="application/json",
@@ -240,7 +240,7 @@ def fear_greed():
         return app.response_class(
             response=json.dumps({
                 "status": "success",
-                "timestamp": datetime.datetime.now().isoformat(),
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 **result,
             }, cls=NumpyEncoder),
             mimetype="application/json",
@@ -264,11 +264,11 @@ def _run_signal_refresh():
         start = time.time()
         try:
             print(f"\n{'='*60}")
-            print(f"  SIGNAL REFRESH STARTED at {datetime.datetime.now().isoformat()}")
+            print(f"  SIGNAL REFRESH STARTED at {datetime.datetime.now(datetime.timezone.utc).isoformat()}")
             print(f"{'='*60}")
             run_engine()
             duration = time.time() - start
-            _refresh_status["last_run"] = datetime.datetime.now().isoformat()
+            _refresh_status["last_run"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
             _refresh_status["last_duration_sec"] = round(duration, 1)
             _refresh_status["running"] = False
             # Clear ticker cache so individual lookups also get fresh data
@@ -291,7 +291,7 @@ def _background_refresh_loop():
         _refresh_status["next_scheduled"] = next_run.isoformat()
         print(f"  Next scheduled refresh: {next_run.strftime('%H:%M:%S')}")
         time.sleep(REFRESH_INTERVAL_MINUTES * 60)
-        print(f"\n  [SCHEDULER] Auto-refresh triggered at {datetime.datetime.now().isoformat()}")
+        print(f"\n  [SCHEDULER] Auto-refresh triggered at {datetime.datetime.now(datetime.timezone.utc).isoformat()}")
         _run_signal_refresh()
 
 

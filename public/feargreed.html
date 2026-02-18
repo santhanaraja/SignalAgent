@@ -145,6 +145,11 @@
 </div>
 
 <script>
+function fmtEST(dateStr){
+  const d = new Date(dateStr);
+  return d.toLocaleString('en-US', {timeZone:'America/New_York', month:'numeric', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', second:'2-digit', hour12:true}) + ' EST';
+}
+
 function scoreColor(s){
   if(s<=25) return 'var(--red)';
   if(s<=45) return 'var(--orange)';
@@ -196,7 +201,7 @@ async function loadFearGreed(){
 
     // Update info line
     document.getElementById('infoLine').textContent =
-      `Last updated: ${new Date(d.timestamp).toLocaleString()} — Auto-refreshes every 15 minutes`;
+      `Last updated: ${fmtEST(d.timestamp)} — Auto-refreshes every 15 minutes`;
 
     // Render indicators
     const indicators = d.indicators || [];

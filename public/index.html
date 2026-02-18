@@ -362,6 +362,10 @@ async function loadData(){
   }
 }
 
+function fmtEST(dateStr){
+  const d = new Date(dateStr);
+  return d.toLocaleString('en-US', {timeZone:'America/New_York', month:'numeric', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', second:'2-digit', hour12:true}) + ' EST';
+}
 function updateTimestampDisplay(){
   if(!DATA) return;
   const genTime = new Date(DATA.timestamp);
@@ -370,7 +374,7 @@ function updateTimestampDisplay(){
   const ageMin = Math.floor(ageMs / 60000);
   const ageStr = ageMin < 60 ? `${ageMin}m ago` : ageMin < 1440 ? `${Math.floor(ageMin/60)}h ${ageMin%60}m ago` : `${Math.floor(ageMin/1440)}d ago`;
   const stale = ageMin > 30;
-  document.getElementById('tsLine').innerHTML = `Data generated: ${genTime.toLocaleString()} <span style="color:${stale?'var(--red)':'var(--green)'}; margin-left:8px;">(${ageStr})</span>`;
+  document.getElementById('tsLine').innerHTML = `Data generated: ${fmtEST(DATA.timestamp)} <span style="color:${stale?'var(--red)':'var(--green)'}; margin-left:8px;">(${ageStr})</span>`;
   const banner = document.getElementById('staleBanner');
   if(stale){banner.classList.add('show');}else{banner.classList.remove('show');}
 }

@@ -180,6 +180,11 @@
 </div>
 
 <script>
+function fmtEST(dateStr){
+  const d = new Date(dateStr);
+  return d.toLocaleString('en-US', {timeZone:'America/New_York', month:'numeric', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', second:'2-digit', hour12:true}) + ' EST';
+}
+
 // Enter key support
 document.getElementById('tickerInput').addEventListener('keydown', e=>{
   if(e.key==='Enter') searchTicker();
@@ -273,7 +278,7 @@ async function loadTrending(force){
     renderColumn('bearishList', bearish, 'bearishCount');
     renderColumn('trendingList', trending, 'trendingCount');
 
-    refreshInfo.textContent = `Last updated: ${new Date(data.timestamp).toLocaleString()} — ${tickers.length} tickers analyzed — auto-refreshes every 15 min`;
+    refreshInfo.textContent = `Last updated: ${fmtEST(data.timestamp)} — ${tickers.length} tickers analyzed — auto-refreshes every 15 min`;
 
   } catch(e) {
     showError('Connection error — is the API server running?');

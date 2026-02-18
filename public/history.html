@@ -137,6 +137,14 @@
 </div>
 
 <script>
+function fmtEST(dateStr){
+  const d = new Date(dateStr);
+  return d.toLocaleString('en-US', {timeZone:'America/New_York', month:'numeric', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', second:'2-digit', hour12:true}) + ' EST';
+}
+function fmtESTShort(dateStr){
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US',{timeZone:'America/New_York', weekday:'short',month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US',{timeZone:'America/New_York', hour:'2-digit',minute:'2-digit'});
+}
 let HISTORY = null;
 let typeFilter = 'all';
 let searchQ = '';
@@ -204,7 +212,7 @@ function renderChanges(){
           <span class="event-type type-${c.type}">${c.type.replace(/_/g,' ')}</span>
           ${c.ticker?`<span style="font-family:monospace;font-weight:700;color:var(--blue);font-size:12px;">${c.ticker}</span>`:''}
         </div>
-        <span class="event-time">${new Date(c.timestamp).toLocaleString()}</span>
+        <span class="event-time">${fmtEST(c.timestamp)}</span>
       </div>
       <div class="event-desc">${c.description}</div>
       <div class="event-group">${c.group||''}</div>
@@ -228,9 +236,8 @@ function renderSnapshots(){
   const sorted = [...snaps].reverse();
   let html = '<div class="snap-grid">';
   sorted.forEach((s,i)=>{
-    const ts = new Date(s.timestamp);
     html += `<div class="snap" onclick="viewSnapshot('${s.filename}')">
-      <div class="snap-time">${ts.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})} ${ts.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</div>
+      <div class="snap-time">${fmtESTShort(s.timestamp)}</div>
       <div class="snap-meta">
         <span>${s.total_groups} groups</span>
         <span>${s.total_tickers} tickers</span>
@@ -247,8 +254,7 @@ async function viewSnapshot(filename){
     const r = await fetch(`snapshots/${filename}?t=`+Date.now());
     if(!r.ok) throw new Error();
     const data = await r.json();
-    const ts = new Date(data.timestamp);
-    document.getElementById('modalTitle').textContent = `Snapshot — ${ts.toLocaleString()}`;
+    document.getElementById('modalTitle').textContent = `Snapshot — ${fmtEST(data.timestamp)}`;
 
     // Tab buttons
     document.getElementById('modalTabs').innerHTML = `

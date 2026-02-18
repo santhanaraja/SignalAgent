@@ -1758,7 +1758,7 @@ def get_sp500_ytd():
 
 def run_engine():
     """Main entry point — runs the full signal pipeline."""
-    timestamp = datetime.datetime.now().isoformat()
+    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
     print(f"\n{'='*60}")
     print(f"Signal Engine Run — {timestamp}")
     print(f"{'='*60}\n")
