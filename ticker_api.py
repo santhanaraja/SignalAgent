@@ -250,6 +250,204 @@ def fear_greed():
 
 
 # ------------------------------------------------------------------
+# AI Chat API (Claude-powered, grounded in dashboard data)
+# ------------------------------------------------------------------
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+_chat_sessions = {}  # session_id -> [messages]
+CHAT_MAX_HISTORY = 20  # keep last 20 messages per session
+
+
+def _build_market_context():
+    """
+    Build a concise market data summary from signals.json for the LLM.
+    This is injected as system context so Claude can answer questions
+    purely based on the live dashboard data.
+    """
+    signals_path = os.path.join(PUBLIC_DIR, "signals.json")
+    try:
+        with open(signals_path, "r") as f:
+            data = json.load(f)
+    except Exception:
+        return "No market data available. The signal engine has not run yet."
+
+    ts = data.get("timestamp", "unknown")
+    sp500 = data.get("sp500_ytd", "N/A")
+    indexes = data.get("indexes", {})
+    groups = data.get("groups", [])
+
+    lines = []
+    lines.append(f"DATA TIMESTAMP: {ts}")
+    lines.append(f"S&P 500 YTD: {sp500}%")
+
+    # Index summary
+    idx_parts = []
+    for sym, info in indexes.items():
+        if isinstance(info, dict):
+            idx_parts.append(f"{info.get('name', sym)}: ${info.get('price', 'N/A')} ({info.get('ytd_return', 'N/A')}% YTD)")
+    if idx_parts:
+        lines.append("INDEXES: " + " | ".join(idx_parts))
+
+    lines.append(f"\nTOTAL GROUPS: {len(groups)}")
+    lines.append("")
+
+    for g in groups:
+        name = g.get("name", "")
+        rank = g.get("rank", "")
+        avg_ytd = g.get("avg_ytd", 0)
+        avg_score = g.get("avg_score", 0)
+        signal = g.get("group_signal", "")
+        breaker = g.get("breaker_status", "clear")
+        thesis = g.get("thesis", "")
+        thesis_breaker = g.get("thesis_breaker", "")
+        cycle = g.get("cycle_stage", "")
+        sector = g.get("sector", "")
+        beating = g.get("beating_sp500_count", 0)
+        total = g.get("stock_count", 0)
+
+        lines.append(f"--- {name} (Rank #{rank}) ---")
+        lines.append(f"  Sector: {sector} | Cycle: {cycle} | Signal: {signal} | Breaker: {breaker}")
+        lines.append(f"  Avg YTD: {avg_ytd}% | Avg Score: {avg_score}/100 | Beating S&P: {beating}/{total}")
+        lines.append(f"  Thesis: {thesis}")
+        lines.append(f"  Thesis Breaker: {thesis_breaker}")
+
+        # Individual stocks
+        stocks = g.get("stocks", [])
+        for s in stocks:
+            ticker = s.get("ticker", "")
+            price = s.get("price", 0)
+            ytd = s.get("ytd_return", 0)
+            score = s.get("score", 0)
+            rsi = s.get("rsi", 0)
+            ts_signal = s.get("trade_signal", "")
+            trade_reason = s.get("trade_reasoning", "")
+            stage = s.get("stage_analysis", {})
+            stage_name = stage.get("stage_name", "N/A") if stage else "N/A"
+            stage_num = stage.get("stage", 0) if stage else 0
+            fund = s.get("fundamentals", {})
+            mcap = fund.get("market_cap")
+            fpe = fund.get("forward_pe")
+            pct_52h = s.get("pct_from_52w_high", 0)
+
+            mcap_str = ""
+            if mcap:
+                if mcap >= 1e12:
+                    mcap_str = f"${mcap/1e12:.1f}T"
+                elif mcap >= 1e9:
+                    mcap_str = f"${mcap/1e9:.1f}B"
+                else:
+                    mcap_str = f"${mcap/1e6:.0f}M"
+
+            lines.append(
+                f"    {ticker}: ${price:.2f} | YTD:{ytd:+.1f}% | Score:{score} | RSI:{rsi:.0f} | "
+                f"Stage:S{stage_num} {stage_name} | Trade:{ts_signal} | "
+                f"MCap:{mcap_str} | FwdPE:{fpe or 'N/A'} | %from52wH:{pct_52h:.1f}%"
+            )
+            if trade_reason:
+                lines.append(f"      Reasoning: {trade_reason}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+SYSTEM_PROMPT = """You are the Market Pulse AI Assistant — an expert market analyst embedded in the Market Pulse Dashboard.
+
+You answer questions ONLY based on the live market data provided below. You have access to:
+- All 12 GICS industry groups with their tickers, scores, signals, and thesis
+- Individual stock data: price, YTD return, RSI, MACD, trade signals, stage analysis, fundamentals
+- Thesis breaker status and alerts for each group
+- S&P 500 and major index performance
+
+RULES:
+1. Answer ONLY from the data provided. If the data doesn't contain what's asked, say so.
+2. Be concise and specific — cite actual numbers, prices, and percentages from the data.
+3. When asked about a ticker, provide its score, signal, stage, YTD, and trade reasoning.
+4. When asked for recommendations, base them strictly on the signals, scores, and trade signals in the data.
+5. Format responses clearly. Use bold for tickers and key metrics.
+6. You are NOT a financial advisor. Always note that these are algorithmic signals, not financial advice.
+7. If asked about topics outside the dashboard data (politics, weather, etc.), politely redirect to market-related questions.
+
+CURRENT MARKET DATA:
+{market_data}
+"""
+
+
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    """AI chat endpoint powered by Claude, grounded in live dashboard data."""
+    if not ANTHROPIC_API_KEY:
+        return jsonify({
+            "status": "error",
+            "error": "Chat is not configured. Set ANTHROPIC_API_KEY environment variable."
+        }), 503
+
+    try:
+        body = request.get_json()
+        if not body or not body.get("message"):
+            return jsonify({"status": "error", "error": "Message is required"}), 400
+
+        user_message = body["message"].strip()
+        session_id = body.get("session_id", "default")
+
+        if not user_message or len(user_message) > 2000:
+            return jsonify({"status": "error", "error": "Message must be 1-2000 characters"}), 400
+
+        # Get or create session history
+        if session_id not in _chat_sessions:
+            _chat_sessions[session_id] = []
+        history = _chat_sessions[session_id]
+
+        # Build context from live market data
+        market_data = _build_market_context()
+        system = SYSTEM_PROMPT.format(market_data=market_data)
+
+        # Add user message to history
+        history.append({"role": "user", "content": user_message})
+
+        # Trim history to last N messages
+        if len(history) > CHAT_MAX_HISTORY:
+            history = history[-CHAT_MAX_HISTORY:]
+            _chat_sessions[session_id] = history
+
+        # Call Claude API
+        import anthropic
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            system=system,
+            messages=history,
+        )
+
+        assistant_message = response.content[0].text
+
+        # Add assistant response to history
+        history.append({"role": "assistant", "content": assistant_message})
+
+        return app.response_class(
+            response=json.dumps({
+                "status": "success",
+                "message": assistant_message,
+                "session_id": session_id,
+            }, cls=NumpyEncoder),
+            mimetype="application/json",
+        )
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/chat/clear", methods=["POST"])
+def clear_chat():
+    """Clear chat session history."""
+    body = request.get_json() or {}
+    session_id = body.get("session_id", "default")
+    _chat_sessions.pop(session_id, None)
+    return jsonify({"status": "success", "message": "Chat history cleared"})
+
+
+# ------------------------------------------------------------------
 # Dashboard Refresh API
 # ------------------------------------------------------------------
 def _run_signal_refresh():
@@ -346,6 +544,140 @@ def refresh_status():
 
 
 # ------------------------------------------------------------------
+# Framework API Routes
+# ------------------------------------------------------------------
+_framework_lock = threading.Lock()
+_framework_status = {
+    "running": False,
+    "last_run": None,
+    "last_error": None,
+}
+
+
+def _run_framework_refresh():
+    """Run the framework engine to generate framework.json."""
+    global _framework_status
+    if _framework_status["running"]:
+        return False, "Framework run already in progress"
+
+    with _framework_lock:
+        _framework_status["running"] = True
+        _framework_status["last_error"] = None
+        start = time.time()
+        try:
+            from framework.framework_runner import run_framework
+            result = run_framework(force_fetch=True)
+            duration = time.time() - start
+            _framework_status["last_run"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            _framework_status["running"] = False
+            print(f"  FRAMEWORK RUN COMPLETED in {duration:.1f}s")
+            return True, result
+        except Exception as e:
+            _framework_status["running"] = False
+            _framework_status["last_error"] = str(e)
+            traceback.print_exc()
+            return False, str(e)
+
+
+@app.route("/api/framework/latest")
+def framework_latest():
+    """Return the latest framework output (regime + themes + rules)."""
+    framework_path = os.path.join(PUBLIC_DIR, "framework.json")
+    if not os.path.exists(framework_path):
+        return jsonify({
+            "status": "error",
+            "error": "Framework has not been run yet. Trigger a run via POST /api/framework/run.",
+        }), 404
+
+    try:
+        with open(framework_path, "r") as f:
+            data = json.load(f)
+        return app.response_class(
+            response=json.dumps({"status": "success", **data}, cls=NumpyEncoder),
+            mimetype="application/json",
+        )
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/framework/run", methods=["POST"])
+def framework_run():
+    """Trigger a fresh framework run. Fetches live data and re-computes everything."""
+    if _framework_status["running"]:
+        return app.response_class(
+            response=json.dumps({
+                "status": "in_progress",
+                "message": "Framework run already in progress",
+            }, cls=NumpyEncoder),
+            mimetype="application/json",
+        ), 202
+
+    # Run in background thread
+    thread = threading.Thread(target=_run_framework_refresh, daemon=True)
+    thread.start()
+
+    return app.response_class(
+        response=json.dumps({
+            "status": "started",
+            "message": "Framework run started — will fetch fresh data and compute regime, themes, and rules.",
+        }, cls=NumpyEncoder),
+        mimetype="application/json",
+    )
+
+
+@app.route("/api/framework/status")
+def framework_status():
+    """Check framework run status."""
+    framework_path = os.path.join(PUBLIC_DIR, "framework.json")
+    data_timestamp = None
+    try:
+        with open(framework_path, "r") as f:
+            data = json.load(f)
+            data_timestamp = data.get("generated_at")
+    except Exception:
+        pass
+
+    return app.response_class(
+        response=json.dumps({
+            "status": "success",
+            **_framework_status,
+            "data_timestamp": data_timestamp,
+        }, cls=NumpyEncoder),
+        mimetype="application/json",
+    )
+
+
+@app.route("/api/framework/history")
+def framework_history():
+    """Return regime and theme history for charting."""
+    import os as _os
+    state_dir = _os.path.join(_os.path.dirname(__file__), "framework", "state")
+    regime_path = _os.path.join(state_dir, "regime_history.json")
+    theme_path = _os.path.join(state_dir, "theme_history.json")
+
+    regime_hist = []
+    theme_hist = []
+    try:
+        if _os.path.exists(regime_path):
+            with open(regime_path, "r") as f:
+                regime_hist = json.load(f)
+        if _os.path.exists(theme_path):
+            with open(theme_path, "r") as f:
+                theme_hist = json.load(f)
+    except Exception:
+        pass
+
+    return app.response_class(
+        response=json.dumps({
+            "status": "success",
+            "regime_history": regime_hist,
+            "theme_history": theme_hist,
+        }, cls=NumpyEncoder),
+        mimetype="application/json",
+    )
+
+
+# ------------------------------------------------------------------
 # Static file serving
 # ------------------------------------------------------------------
 @app.route("/")
@@ -375,13 +707,20 @@ if __name__ == "__main__":
     scheduler_thread = threading.Thread(target=_background_refresh_loop, daemon=True)
     scheduler_thread.start()
 
+    # Also run initial framework computation
+    print("  Running initial framework computation...")
+    fw_thread = threading.Thread(target=_run_framework_refresh, daemon=True)
+    fw_thread.start()
+
     print(f"\n{'='*60}")
     print("  SignalAgent Market Pulse Dashboard")
     print("=" * 60)
     print(f"  Dashboard:     http://localhost:{port}/")
     print(f"  Ticker Search: http://localhost:{port}/search.html")
+    print(f"  Framework:     http://localhost:{port}/framework.html")
     print(f"  API Endpoint:  http://localhost:{port}/api/ticker/<SYMBOL>")
     print(f"  Refresh:       POST http://localhost:{port}/api/refresh")
+    print(f"  Framework:     POST http://localhost:{port}/api/framework/run")
     print(f"  Auto-refresh:  Every {REFRESH_INTERVAL_MINUTES} minutes")
     print("=" * 60 + "\n")
     app.run(host="0.0.0.0", port=port, debug=False)

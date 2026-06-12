@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Framework — Market Pulse Dashboard</title>
+<style>
+  :root {
+    --bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;
+    --text:#e6edf3;--dim:#8b949e;--green:#3fb950;--red:#f85149;
+    --yellow:#d29922;--blue:#58a6ff;--purple:#bc8cff;--orange:#f0883e;--cyan:#39d2c0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.5;}
+  a{color:var(--blue);text-decoration:none;}a:hover{text-decoration:underline;}
+
+  .header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  .header h1{font-size:20px;font-weight:600;} .header h1 span{color:var(--blue);}
+  .header-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .btn{border:none;padding:7px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px;transition:all .15s;}
+  .btn-primary{background:var(--blue);color:#fff;}.btn-primary:hover{filter:brightness(1.15);}
+  .btn-orange{background:var(--orange);color:#fff;}.btn-orange:hover{filter:brightness(1.15);}
+  .btn.spinning svg{animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+  .ts{font-size:11px;color:var(--dim);padding:3px 28px;}
+
+  .nav{padding:12px 28px;display:flex;gap:8px;border-bottom:1px solid var(--border);}
+  .nav a{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500;color:var(--dim);transition:all .15s;}
+  .nav a:hover{background:var(--surface2);color:var(--text);text-decoration:none;}
+  .nav a.active{background:var(--blue);color:#fff;}
+
+  .content{padding:16px 28px;max-width:1400px;}
+
+  /* Regime Section */
+  .section{margin-bottom:24px;}
+  .section-title{font-size:16px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  .section-title .badge{font-size:11px;padding:2px 10px;border-radius:12px;font-weight:600;}
+
+  .regime-banner{background:var(--surface);border:2px solid var(--border);border-radius:12px;padding:20px 24px;display:flex;align-items:center;gap:20px;margin-bottom:16px;}
+  .regime-state{font-size:28px;font-weight:800;letter-spacing:-0.5px;}
+  .regime-action{font-size:13px;color:var(--dim);max-width:500px;}
+  .regime-meta{margin-left:auto;text-align:right;font-size:12px;color:var(--dim);}
+  .regime-meta .label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);}
+
+  .gauges-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-bottom:16px;}
+  .gauge-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+  .gauge-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .gauge-name{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;}
+  .gauge-signal{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;}
+  .gauge-signal.risk_on{background:rgba(63,185,80,.15);color:var(--green);}
+  .gauge-signal.caution{background:rgba(210,153,34,.15);color:var(--yellow);}
+  .gauge-signal.risk_off{background:rgba(248,81,73,.15);color:var(--red);}
+  .gauge-signal.unavailable{background:rgba(139,148,158,.15);color:var(--dim);}
+  .gauge-value{font-size:20px;font-weight:700;font-family:'SF Mono','Fira Code',monospace;}
+  .gauge-detail{font-size:11px;color:var(--dim);margin-top:4px;}
+
+  /* Override banner */
+  .override-banner{background:rgba(248,81,73,.1);border:1px solid var(--red);border-radius:8px;padding:10px 16px;font-size:13px;color:var(--red);margin-bottom:16px;display:none;align-items:center;gap:8px;}
+  .override-banner.show{display:flex;}
+
+  /* Theme Table */
+  .theme-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .theme-table th{text-align:left;padding:8px 12px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);border-bottom:1px solid var(--border);font-weight:700;}
+  .theme-table td{padding:10px 12px;border-bottom:1px solid var(--border);}
+  .theme-table tr:hover{background:var(--surface2);}
+  .theme-table .rank-cell{font-size:18px;font-weight:800;font-family:'SF Mono',monospace;width:40px;text-align:center;}
+  .theme-table .name-cell{font-weight:600;}
+  .theme-table .proxy-cell{font-family:'SF Mono',monospace;color:var(--cyan);font-size:12px;}
+  .theme-table .return-cell{font-family:'SF Mono',monospace;font-size:12px;}
+  .pos{color:var(--green);}.neg{color:var(--red);}
+
+  /* Actions panel */
+  .actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+  .action-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;}
+  .action-card h3{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+  .action-item{padding:8px 12px;border-radius:6px;margin-bottom:6px;font-size:12px;border-left:3px solid;}
+  .action-item.entry{background:rgba(63,185,80,.08);border-color:var(--green);color:var(--green);}
+  .action-item.exit{background:rgba(248,81,73,.08);border-color:var(--red);color:var(--red);}
+  .action-item.warning{background:rgba(210,153,34,.08);border-color:var(--yellow);color:var(--yellow);}
+  .action-item.info{background:rgba(88,166,255,.08);border-color:var(--blue);color:var(--blue);}
+  .action-none{font-size:12px;color:var(--dim);padding:8px 0;}
+
+  /* Rule Log */
+  .rules-summary{display:flex;gap:16px;margin-bottom:12px;}
+  .rule-stat{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 16px;text-align:center;min-width:100px;}
+  .rule-stat .n{font-size:24px;font-weight:800;font-family:'SF Mono',monospace;}
+  .rule-stat .l{font-size:10px;text-transform:uppercase;color:var(--dim);letter-spacing:.5px;}
+
+  .rules-list{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+  .rule-row{display:flex;align-items:flex-start;padding:8px 14px;border-bottom:1px solid var(--border);font-size:12px;gap:10px;}
+  .rule-row:last-child{border-bottom:none;}
+  .rule-id{font-weight:700;font-family:'SF Mono',monospace;min-width:32px;color:var(--cyan);}
+  .rule-status{min-width:16px;text-align:center;font-size:14px;}
+  .rule-msg{flex:1;color:var(--dim);}
+  .rule-row.violation{background:rgba(248,81,73,.05);}
+  .rule-row.violation .rule-msg{color:var(--red);}
+  .rule-row.elevated{background:rgba(210,153,34,.05);}
+  .rule-row.elevated .rule-msg{color:var(--yellow);}
+  .rule-row.action_needed{background:rgba(240,136,62,.05);}
+  .rule-row.action_needed .rule-msg{color:var(--orange);}
+
+  /* Concentration limits */
+  .conc-bar{margin-top:8px;}
+  .conc-label{font-size:11px;color:var(--dim);margin-bottom:4px;}
+  .conc-track{height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;}
+  .conc-fill{height:100%;border-radius:4px;transition:width .3s;}
+
+  /* Empty state */
+  .empty-state{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:40px;text-align:center;margin:20px 0;}
+  .empty-state h2{font-size:18px;margin-bottom:8px;}
+  .empty-state p{color:var(--dim);font-size:14px;margin-bottom:16px;}
+
+  /* Responsive */
+  @media(max-width:768px){
+    .content{padding:12px 16px;}
+    .gauges-grid{grid-template-columns:1fr;}
+    .actions-grid{grid-template-columns:1fr;}
+    .regime-banner{flex-direction:column;text-align:center;}
+    .regime-meta{margin-left:0;text-align:center;}
+  }
+
+  .loading-spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>Market Pulse</span> Framework</h1>
+  <div class="header-right">
+    <div class="live-dot"></div>
+    <button class="btn btn-orange" id="runBtn" onclick="runFramework()">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 110 16A8 8 0 018 0zm0 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm-1.5 3L11 8l-4.5 3.5V4.5z"/></svg>
+      Run Framework
+    </button>
+    <button class="btn btn-primary" id="refreshBtn" onclick="loadData()">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3a5 5 0 00-4.546 2.914.5.5 0 01-.908-.418A6 6 0 0114 8a.5.5 0 01-1 0 5 5 0 00-5-5zm4.546 7.086a.5.5 0 01.908.418A6 6 0 012 8a.5.5 0 011 0 5 5 0 009.546 2.086z"/></svg>
+      Refresh
+    </button>
+  </div>
+</div>
+
+<div class="ts" id="tsBar">Loading framework data...</div>
+
+<div class="nav">
+  <a href="index.html">Dashboard</a>
+  <a href="search.html">Ticker Search</a>
+  <a href="sentiment.html">Sentiment</a>
+  <a href="feargreed.html">Fear & Greed</a>
+  <a href="history.html">History &amp; Changes</a>
+  <a href="framework.html" class="active">Framework</a>
+  <a href="architecture.html">Architecture</a>
+</div>
+
+<div class="content" id="mainContent">
+  <div class="empty-state" id="emptyState">
+    <h2>Framework Not Yet Initialized</h2>
+    <p>Click "Run Framework" to compute the regime, theme rankings, and rule evaluations using live market data.</p>
+    <button class="btn btn-orange" onclick="runFramework()" style="margin:0 auto;">Run Framework Now</button>
+  </div>
+</div>
+
+<script>
+function fmtEST(iso){
+  if(!iso)return '—';
+  try{return new Date(iso).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true})+' EST';}catch{return iso;}
+}
+
+let DATA = null;
+let fwRunning = false;
+
+async function loadData(){
+  try{
+    const r=await fetch('/api/framework/latest');
+    const j=await r.json();
+    if(j.status==='success'){
+      DATA=j;
+      render();
+    } else {
+      document.getElementById('emptyState').style.display='block';
+    }
+  }catch(e){
+    console.error('Load error:',e);
+  }
+}
+
+async function runFramework(){
+  if(fwRunning)return;
+  fwRunning=true;
+  const btn=document.getElementById('runBtn');
+  btn.classList.add('spinning');
+  btn.innerHTML='<span class="loading-spinner"></span> Running...';
+
+  try{
+    await fetch('/api/framework/run',{method:'POST'});
+    // Poll for completion
+    pollStatus();
+  }catch(e){
+    console.error(e);
+    fwRunning=false;
+    btn.classList.remove('spinning');
+    btn.innerHTML='<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 110 16A8 8 0 018 0zm0 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm-1.5 3L11 8l-4.5 3.5V4.5z"/></svg> Run Framework';
+  }
+}
+
+async function pollStatus(){
+  try{
+    const r=await fetch('/api/framework/status');
+    const j=await r.json();
+    if(j.running){
+      setTimeout(pollStatus,3000);
+    }else{
+      fwRunning=false;
+      const btn=document.getElementById('runBtn');
+      btn.classList.remove('spinning');
+      btn.innerHTML='<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 110 16A8 8 0 018 0zm0 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm-1.5 3L11 8l-4.5 3.5V4.5z"/></svg> Run Framework';
+      loadData();
+    }
+  }catch(e){
+    setTimeout(pollStatus,5000);
+  }
+}
+
+function render(){
+  if(!DATA){return;}
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('tsBar').textContent='Generated: '+fmtEST(DATA.generated_at);
+
+  const c=document.getElementById('mainContent');
+  let html='';
+
+  // ===== REGIME SECTION =====
+  const regime=DATA.regime||{};
+  const regimeColor=regime.regime_color||'var(--dim)';
+  const gauges=regime.gauges||{};
+
+  html+=`
+  <div class="section">
+    <div class="section-title">Layer 1: Market Regime <span class="badge" style="background:${regimeColor}22;color:${regimeColor};">${regime.regime||'Unknown'}</span></div>
+    <div class="regime-banner" style="border-color:${regimeColor};">
+      <div>
+        <div class="regime-state" style="color:${regimeColor};">${regime.regime||'Unknown'}</div>
+        <div class="regime-action">${regime.action||''}</div>
+      </div>
+      <div class="regime-meta">
+        <div class="label">Gauge Score</div>
+        <div style="font-size:18px;font-weight:700;color:${regimeColor};">${regime.risk_on_count||0}/5 Risk-On</div>
+        <div style="font-size:11px;margin-top:4px;">${regime.caution_count||0} Caution &middot; ${regime.risk_off_count||0} Risk-Off</div>
+        ${regime.consecutive_weeks_at_state>1?`<div style="font-size:11px;margin-top:4px;">${regime.consecutive_weeks_at_state} consecutive weeks</div>`:''}
+      </div>
+    </div>`;
+
+  // Override banner
+  if(regime.intra_week_override){
+    html+=`<div class="override-banner show"><strong>INTRA-WEEK OVERRIDE:</strong> ${regime.intra_week_override}</div>`;
+  }
+
+  // Gauges grid
+  html+=`<div class="gauges-grid">`;
+  const gaugeNames={
+    spy_vs_200dma:'SPY vs 200DMA',
+    vix_5d_avg:'VIX 5-Day Avg',
+    hy_spread:'HY Credit Spread',
+    breadth:'S&P 500 Breadth',
+    yield_curve:'Yield Curve (30Y-2Y)',
+  };
+  for(const[key,label] of Object.entries(gaugeNames)){
+    const g=gauges[key]||{};
+    const sig=g.signal||'unavailable';
+    const val=g.value!=null?g.value:'—';
+    html+=`
+    <div class="gauge-card">
+      <div class="gauge-header">
+        <div class="gauge-name">${label}</div>
+        <div class="gauge-signal ${sig}">${sig.replace('_',' ')}</div>
+      </div>
+      <div class="gauge-value">${typeof val==='number'?val.toFixed(2):val}</div>
+      <div class="gauge-detail">${g.detail||''}</div>
+      ${g.source?`<div class="gauge-detail">Source: ${g.source}</div>`:''}
+    </div>`;
+  }
+  html+=`</div></div>`;
+
+  // ===== THEME SECTION =====
+  const themes=DATA.themes||{};
+  const ranked=themes.ranked_themes||[];
+
+  html+=`
+  <div class="section">
+    <div class="section-title">Layer 2: Theme Rotation
+      ${themes.regime_allows_entry?'<span class="badge" style="background:rgba(63,185,80,.15);color:var(--green);">Entries Allowed</span>':'<span class="badge" style="background:rgba(248,81,73,.15);color:var(--red);">Entries Blocked</span>'}
+    </div>
+    <div style="overflow-x:auto;">
+    <table class="theme-table">
+      <thead><tr>
+        <th>Rank</th><th>Theme</th><th>Proxy</th><th>4W Return</th><th>12W Return</th><th>Composite</th><th>Status</th>
+      </tr></thead>
+      <tbody>`;
+
+  for(const t of ranked){
+    const r4w=t.return_4w;
+    const r12w=t.return_12w;
+    const isActive=(themes.active_themes||[]).includes(t.name);
+    html+=`<tr${isActive?' style="background:rgba(63,185,80,.08);"':''}>
+      <td class="rank-cell">${t.rank!=null?'#'+t.rank:'—'}</td>
+      <td class="name-cell">${t.name}${isActive?' <span style="color:var(--green);font-size:10px;">ACTIVE</span>':''}</td>
+      <td class="proxy-cell">${t.proxy}</td>
+      <td class="return-cell ${r4w!=null?(r4w>=0?'pos':'neg'):''}">${r4w!=null?r4w.toFixed(2)+'%':'—'}</td>
+      <td class="return-cell ${r12w!=null?(r12w>=0?'pos':'neg'):''}">${r12w!=null?r12w.toFixed(2)+'%':'—'}</td>
+      <td class="return-cell">${t.composite!=null?t.composite.toFixed(1):'—'}</td>
+      <td style="font-size:11px;">${t.consecutive_top_n_weeks>0?`<span style="color:var(--cyan);">${t.consecutive_top_n_weeks}w in top 2</span>`:'—'}</td>
+    </tr>`;
+  }
+  html+=`</tbody></table></div>`;
+
+  // Concentration limits
+  const concNotes=themes.concentration_limits||[];
+  if(concNotes.length){
+    html+=`<div style="margin-top:10px;font-size:11px;color:var(--dim);">${concNotes.join(' &middot; ')}</div>`;
+  }
+  html+=`</div>`;
+
+  // ===== ACTIONS SECTION =====
+  const entrySignals=themes.entry_signals||[];
+  const exitSignals=themes.exit_signals||[];
+
+  html+=`
+  <div class="section">
+    <div class="section-title">Actions This Week</div>
+    <div class="actions-grid">
+      <div class="action-card">
+        <h3><span style="color:var(--green);">&#x25B2;</span> Entry Signals</h3>`;
+
+  if(entrySignals.length===0){
+    html+=`<div class="action-none">No entry signals this week.</div>`;
+  }else{
+    for(const s of entrySignals){
+      const cls=s.action.includes('ENTRY')?'entry':'info';
+      html+=`<div class="action-item ${cls}">
+        <strong>${s.theme}</strong> (${s.proxy}) — ${s.action}
+        ${s.requires_discretionary_review?'<br><em style="font-size:10px;">Discretionary catalyst review required</em>':''}
+      </div>`;
+    }
+  }
+  html+=`</div><div class="action-card">
+        <h3><span style="color:var(--red);">&#x25BC;</span> Exit Signals</h3>`;
+
+  if(exitSignals.length===0){
+    html+=`<div class="action-none">No exit signals this week.</div>`;
+  }else{
+    for(const s of exitSignals){
+      const cls=s.action.includes('EXIT')?'exit':'warning';
+      html+=`<div class="action-item ${cls}">
+        <strong>${s.theme}</strong>${s.proxy?' ('+s.proxy+')':''} — ${s.action}
+      </div>`;
+    }
+  }
+  html+=`</div></div></div>`;
+
+  // ===== RULES SECTION =====
+  const rules=DATA.rules||{};
+  const evals=rules.evaluations||[];
+  const summary=rules.summary||{};
+
+  html+=`
+  <div class="section">
+    <div class="section-title">Layer 3: Standing Rules (R1-R27)</div>
+    <div class="rules-summary">
+      <div class="rule-stat"><div class="n" style="color:var(--green);">${summary.compliant||0}</div><div class="l">Compliant</div></div>
+      <div class="rule-stat"><div class="n" style="color:var(--orange);">${summary.action_needed||0}</div><div class="l">Action Needed</div></div>
+      <div class="rule-stat"><div class="n" style="color:var(--red);">${summary.violations||0}</div><div class="l">Violations</div></div>
+    </div>
+    <div class="rules-list">`;
+
+  // Show violations and action_needed first, then elevated, then compliant
+  const sortOrder={violation:0,action_needed:1,elevated:2,compliant:3};
+  const sorted=[...evals].sort((a,b)=>(sortOrder[a.status]||3)-(sortOrder[b.status]||3));
+
+  for(const e of sorted){
+    const icon=e.status==='compliant'?'&#x2705;':e.status==='violation'?'&#x274C;':e.status==='elevated'?'&#x26A0;':'&#x1F536;';
+    html+=`<div class="rule-row ${e.status}">
+      <div class="rule-id">${e.rule}</div>
+      <div class="rule-status">${icon}</div>
+      <div class="rule-msg">${e.message}</div>
+    </div>`;
+  }
+
+  html+=`</div></div>`;
+
+  // ===== STANDING RULES REFERENCE =====
+  const rulesText=DATA.standing_rules_text||{};
+  html+=`
+  <div class="section">
+    <div class="section-title" style="cursor:pointer;" onclick="document.getElementById('rulesRef').style.display=document.getElementById('rulesRef').style.display==='none'?'block':'none';">
+      Standing Rules Reference <span style="font-size:12px;color:var(--dim);">(click to toggle)</span>
+    </div>
+    <div id="rulesRef" style="display:none;">
+      <div class="rules-list">`;
+  for(const[id,text] of Object.entries(rulesText)){
+    html+=`<div class="rule-row compliant"><div class="rule-id">${id}</div><div class="rule-msg" style="color:var(--text);">${text}</div></div>`;
+  }
+  html+=`</div></div></div>`;
+
+  c.innerHTML=html;
+}
+
+// Initial load
+loadData();
+</script>
+<script src="chat-widget.js"></script>
+</body>
+</html>

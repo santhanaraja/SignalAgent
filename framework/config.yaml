@@ -1,0 +1,155 @@
+framework:
+  version: "1.0"
+  last_updated: "2026-06-12"
+
+regime:
+  gauges:
+    spy_vs_200dma:
+      proxy: "SPY"
+      lookback_days: 200
+      risk_on_threshold: 0      # SPY > 200DMA = risk on
+      caution_threshold: -2     # SPY within 2% below 200DMA
+      risk_off_threshold: -5    # SPY >5% below 200DMA
+    vix_5d_avg:
+      proxy: "^VIX"
+      lookback_days: 5
+      risk_on_threshold: 18     # VIX < 18 = risk on
+      caution_threshold: 22     # VIX 18-22 = caution
+      risk_off_threshold: 27    # VIX > 27 = risk off
+    hy_spread:
+      # Primary: FRED series BAMLH0A0HYM2
+      # Fallback: HYG/IEF price ratio (inverted — lower ratio = wider spread)
+      fred_series: "BAMLH0A0HYM2"
+      fallback_long: "HYG"
+      fallback_short: "IEF"
+      risk_on_threshold: 3.0
+      caution_threshold: 4.0
+      risk_off_threshold: 5.0
+    breadth:
+      # % of S&P 500 stocks above 50DMA
+      # S5FI on yfinance, fallback: RSP/SPY ratio as breadth proxy
+      proxy: "S5FI"
+      fallback_proxy: "RSP"
+      fallback_benchmark: "SPY"
+      risk_on_threshold: 60
+      caution_threshold: 50
+      risk_off_threshold: 30
+    yield_curve:
+      # 30Y-2Y spread
+      # Primary: FRED DGS30 - DGS2
+      # Fallback: TLT/SHY price ratio trend
+      fred_long: "DGS30"
+      fred_short: "DGS2"
+      fallback_long: "TLT"
+      fallback_short: "SHY"
+      risk_on_signal: "widening"     # 30Y-2Y increasing (steepening)
+      caution_signal: "flattening"
+      risk_off_signal: "inverted"    # 30Y < 2Y
+
+  states:
+    - name: "Risk-on / Trending"
+      min_risk_on_gauges: 4          # 4 of 5 gauges at risk_on
+      max_caution_gauges: 1
+      max_risk_off_gauges: 0
+      action: "Full deployment. Aggressive sleeve active. New themes considered."
+      color: "#3fb950"
+    - name: "Risk-on / Choppy"
+      min_risk_on_gauges: 2
+      max_caution_gauges: 2
+      max_risk_off_gauges: 0
+      action: "Hold existing positions; new entries only on A+ setups; tighter stops."
+      color: "#d29922"
+    - name: "Caution"
+      min_risk_on_gauges: 0
+      max_caution_gauges: 5
+      min_caution_gauges: 3
+      max_risk_off_gauges: 1
+      action: "No new aggressive positions; raise stops; consider trimming."
+      color: "#f0883e"
+    - name: "Risk-off"
+      min_risk_off_gauges: 2
+      action: "Defensive: no new entries; close speculative; cash / hedge."
+      color: "#f85149"
+
+  change_protocol:
+    consecutive_confirmations_required: 2   # 2 consecutive Sundays to confirm regime change
+    intra_week_override_triggers:
+      - gauge: "vix_5d_avg"
+        condition: ">"
+        value: 27
+        message: "VIX > 27 — intra-week risk-off override"
+      - gauge: "spy_vs_200dma"
+        condition: "<"
+        value: 0
+        message: "SPY closed below 200DMA — intra-week caution override"
+
+themes:
+  watchlist:
+    - name: "AI Broad"
+      proxy: "AIQ"
+    - name: "Semis"
+      proxy: "SMH"
+    - name: "Quantum"
+      proxy: "QTUM"
+    - name: "Energy"
+      proxy: "XLE"
+    - name: "Gold"
+      proxy: "GLD"
+    - name: "Defense"
+      proxy: "ITA"
+    - name: "Crypto"
+      proxy: "IBIT"
+    - name: "Biotech"
+      proxy: "XBI"
+
+  ranking:
+    lookback_4w: 20              # trading days
+    lookback_12w: 60             # trading days
+    composite_method: "rank_average"
+    max_active_themes: 2
+
+  entry_rule:
+    requires_top_n_rank: 2       # must rank #1 or #2
+    consecutive_sundays_required: 2
+    regime_required:
+      - "Risk-on / Trending"
+      - "Risk-on / Choppy"
+    discretionary_review_required: true
+
+  exit_rule:
+    drops_below_rank: 3          # exits if rank drops to #4+
+    consecutive_sundays_required: 3
+    regime_degradation_triggers_exit: true
+
+  concentration_limits:
+    max_per_theme_pct_of_book: 15
+    max_total_themes_pct_of_book: 25
+
+standing_rules:
+  R1: "Weekly Sunday review (regime + themes). Do not skip."
+  R2: "Risk-off regime -> no new aggressive positions."
+  R3: "New theme entry requires #1/#2 rank for 2 consecutive Sundays AND risk-on regime AND discretionary catalyst review."
+  R4: "Theme exits when below #3 for 3 consecutive Sundays OR regime degrades to Caution/Risk-off."
+  R5: "Maximum 2 themes active. Cash is the default."
+  R6: "Define invalidation before entry. Written down. Close-based."
+  R7: "Size from risk-to-stop, not gut, not conviction, not max premium."
+  R8: "No naked momentum exposure through binary catalysts."
+  R9: "Verify compliance scope before entering any new instrument class."
+  R10: "Stop moves UP only. Never lower a stop in adversity."
+  R11: "Decisions on the exit-timeframe CLOSE, never on intraday wicks."
+  R12: "Exit timeframe must be slower than entry timeframe."
+  R13: "Never override a fired stop."
+  R14: "Bank big winners back to preservation core where tax-efficient."
+  R15: "Maximum single-position size: 5-8% of relevant account's capital."
+  R16: "Maximum single-theme exposure: 15% of total book."
+  R17: "Maximum total theme exposure (across all active themes): 25% of total book."
+  R18: "Minimum cash reserve at all times: 30-40% in money market vehicles."
+  R19: "Aggressive sleeve cost basis capped at active theme limits."
+  R20: "Never fund the aggressive sleeve from preservation core. Never cross-fund between accounts."
+  R21: "No new entries on same day as stop-out from related name."
+  R22: "Hot tape => deploy slowly."
+  R23: "Conviction expresses through stop placement, not oversizing."
+  R24: "Hitting target = sell signal. No goalpost-moving."
+  R25: "Don't add to position because it's working. Add only on pullbacks per pre-committed plan."
+  R26: "No margin leverage on aggressive options trades."
+  R27: "Flexibility means switching themes by rules, not by feel."
