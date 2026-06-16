@@ -402,7 +402,53 @@ function render(){
   }
   html+=`</div></div></div>`;
 
+  // ===== RUN HISTORY (gauge values across runs) =====
+  html+=`
+  <div class="section">
+    <div class="section-title">Run History <span style="font-size:12px;color:var(--dim);">(gauge values across runs)</span></div>
+    <div id="historyTable">Loading history...</div>
+  </div>`;
+
   c.innerHTML=html;
+
+  // Fetch and render history
+  loadHistory();
+}
+
+async function loadHistory(){
+  try{
+    const r=await fetch('/api/framework/history');
+    const j=await r.json();
+    if(j.status!=='success')return;
+    const rh=j.regime_history||[];
+    if(rh.length===0){document.getElementById('historyTable').innerHTML='<div class="action-none">No history yet.</div>';return;}
+
+    const recent=rh.slice(-10).reverse();
+    let html=`<div style="overflow-x:auto;"><table class="theme-table">
+      <thead><tr>
+        <th>Date/Time</th><th>Regime</th><th>SPY vs 200DMA</th><th>VIX 5d Avg</th><th>HY Spread</th><th>Breadth</th><th>Yield Curve</th>
+      </tr></thead><tbody>`;
+
+    for(const r of recent){
+      const g=r.gauges||{};
+      const gv=(key)=>{
+        const gauge=g[key];
+        if(!gauge)return '<td style="color:var(--dim);">—</td>';
+        const val=gauge.value!=null?Number(gauge.value).toFixed(2):'—';
+        const sig=gauge.signal||'';
+        const col=sig==='risk_on'?'var(--green)':sig==='caution'?'var(--yellow)':sig==='risk_off'?'var(--red)':'var(--dim)';
+        return `<td style="font-family:'SF Mono',monospace;font-size:12px;color:${col};" title="${gauge.detail||''}">${val}</td>`;
+      };
+      const ts=r.generated_at?fmtEST(r.generated_at):r.date;
+      html+=`<tr>
+        <td style="font-size:11px;white-space:nowrap;">${ts}</td>
+        <td><span style="font-size:11px;font-weight:700;">${r.regime}</span></td>
+        ${gv('spy_vs_200dma')}${gv('vix_5d_avg')}${gv('hy_spread')}${gv('breadth')}${gv('yield_curve')}
+      </tr>`;
+    }
+    html+=`</tbody></table></div>`;
+    document.getElementById('historyTable').innerHTML=html;
+  }catch(e){console.error('History load error:',e);}
 }
 
 // Initial load

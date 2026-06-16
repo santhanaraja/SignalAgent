@@ -33,6 +33,8 @@ def load_config() -> dict:
 def fetch_data(ticker: str, period: str = "1y") -> pd.DataFrame:
     """
     Fetch OHLCV data via yfinance.
+    Appends a real-time intraday row if market is open and history
+    only contains yesterday's close.
     Returns DataFrame or None on failure.
     """
     try:
@@ -43,6 +45,30 @@ def fetch_data(ticker: str, period: str = "1y") -> pd.DataFrame:
         # Flatten multi-index columns if present
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
+
+        # Check if the latest bar is stale (yesterday or older)
+        # If so, fetch a real-time quote and append it
+        try:
+            last_date = df.index[-1]
+            today = pd.Timestamp.now(tz=last_date.tzinfo if last_date.tzinfo else "America/New_York").normalize()
+            if last_date.normalize() < today:
+                # History doesn't include today — try fast_info for current price
+                info = tk.fast_info
+                current_price = getattr(info, "last_price", None)
+                if current_price and current_price > 0:
+                    now_ts = pd.Timestamp.now(tz=last_date.tzinfo if last_date.tzinfo else "America/New_York")
+                    new_row = pd.DataFrame({
+                        "Open": [current_price],
+                        "High": [current_price],
+                        "Low": [current_price],
+                        "Close": [current_price],
+                        "Volume": [0],
+                    }, index=[now_ts])
+                    df = pd.concat([df, new_row])
+                    print(f"[framework] {ticker}: appended live price ${current_price:.2f} (history was through {last_date.date()})")
+        except Exception as e:
+            pass  # Silently continue with historical data only
+
         return df
     except Exception as e:
         print(f"[framework] fetch_data({ticker}, {period}) failed: {e}")
@@ -66,12 +92,23 @@ def save_regime_history(history: list, new_entry: dict):
     os.makedirs(STATE_DIR, exist_ok=True)
     # Avoid duplicate dates
     history = [h for h in history if h.get("date") != new_entry.get("date")]
+    # Store gauge values for comparison between runs
+    gauge_snapshot = {}
+    for gname, gdata in new_entry.get("gauges", {}).items():
+        gauge_snapshot[gname] = {
+            "value": gdata.get("value"),
+            "signal": gdata.get("signal"),
+            "detail": gdata.get("detail"),
+        }
+
     history.append({
         "date": new_entry.get("date"),
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "regime": new_entry.get("regime"),
         "risk_on_count": new_entry.get("risk_on_count"),
         "caution_count": new_entry.get("caution_count"),
         "risk_off_count": new_entry.get("risk_off_count"),
+        "gauges": gauge_snapshot,
     })
     # Keep last 52 weeks
     history = history[-52:]
