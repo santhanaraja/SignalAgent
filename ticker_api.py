@@ -678,6 +678,134 @@ def framework_history():
 
 
 # ------------------------------------------------------------------
+# Framework Public JSON API (clean endpoints for external consumers)
+# ------------------------------------------------------------------
+FRAMEWORK_DIR = os.path.join(os.path.dirname(__file__), "framework")
+FRAMEWORK_STATE_DIR = os.path.join(FRAMEWORK_DIR, "state")
+
+
+@app.route("/api/framework/latest.json")
+def framework_latest_json():
+    """
+    Public JSON API — returns the full framework output as clean JSON.
+    Same data the dashboard reads from framework.json.
+    No wrapper, no status field — just the raw framework object.
+    """
+    framework_path = os.path.join(PUBLIC_DIR, "framework.json")
+    if not os.path.exists(framework_path):
+        return app.response_class(
+            response=json.dumps({
+                "error": "Framework has not been run yet.",
+                "hint": "POST /api/framework/run to trigger a run.",
+            }),
+            status=404,
+            mimetype="application/json",
+        )
+    try:
+        with open(framework_path, "r") as f:
+            data = json.load(f)
+        return app.response_class(
+            response=json.dumps(data, cls=NumpyEncoder),
+            mimetype="application/json",
+        )
+    except Exception as e:
+        return app.response_class(
+            response=json.dumps({"error": str(e)}),
+            status=500,
+            mimetype="application/json",
+        )
+
+
+@app.route("/api/framework/history.json")
+def framework_history_json():
+    """
+    Public JSON API — returns regime + theme run history as clean JSON.
+    """
+    regime_path = os.path.join(FRAMEWORK_STATE_DIR, "regime_history.json")
+    theme_path = os.path.join(FRAMEWORK_STATE_DIR, "theme_history.json")
+
+    regime_hist = []
+    theme_hist = []
+    try:
+        if os.path.exists(regime_path):
+            with open(regime_path, "r") as f:
+                regime_hist = json.load(f)
+        if os.path.exists(theme_path):
+            with open(theme_path, "r") as f:
+                theme_hist = json.load(f)
+    except Exception:
+        pass
+
+    return app.response_class(
+        response=json.dumps({
+            "regime_history": regime_hist,
+            "theme_history": theme_hist,
+        }, cls=NumpyEncoder),
+        mimetype="application/json",
+    )
+
+
+@app.route("/api/framework/gauges.json")
+def framework_gauges_json():
+    """
+    Public JSON API — returns just the 5 regime gauges as a compact object.
+    Useful for quick regime checks without downloading the full framework output.
+
+    Response shape:
+    {
+      "generated_at": "...",
+      "regime": "Risk-on / Trending",
+      "risk_on_count": 4,
+      "caution_count": 1,
+      "risk_off_count": 0,
+      "consecutive_weeks": 2,
+      "gauges": {
+        "spy_vs_200dma": { "value": 12.3, "signal": "risk_on", "detail": "..." },
+        "vix_5d_avg":    { "value": 15.8, "signal": "risk_on", "detail": "..." },
+        ...
+      }
+    }
+    """
+    framework_path = os.path.join(PUBLIC_DIR, "framework.json")
+    if not os.path.exists(framework_path):
+        return app.response_class(
+            response=json.dumps({
+                "error": "Framework has not been run yet.",
+                "hint": "POST /api/framework/run to trigger a run.",
+            }),
+            status=404,
+            mimetype="application/json",
+        )
+    try:
+        with open(framework_path, "r") as f:
+            data = json.load(f)
+
+        regime = data.get("regime", {})
+        compact = {
+            "generated_at": data.get("generated_at"),
+            "regime": regime.get("regime"),
+            "regime_action": regime.get("action"),
+            "risk_on_count": regime.get("risk_on_count"),
+            "caution_count": regime.get("caution_count"),
+            "risk_off_count": regime.get("risk_off_count"),
+            "consecutive_weeks": regime.get("consecutive_weeks"),
+            "regime_change_pending": regime.get("regime_change_pending", False),
+            "gauges": regime.get("gauges", {}),
+        }
+
+        return app.response_class(
+            response=json.dumps(compact, cls=NumpyEncoder),
+            mimetype="application/json",
+        )
+    except Exception as e:
+        return app.response_class(
+            response=json.dumps({"error": str(e)}),
+            status=500,
+            mimetype="application/json",
+        )
+
+
+# ------------------------------------------------------------------
 # Static file serving
 # ------------------------------------------------------------------
 @app.route("/")
@@ -722,5 +850,10 @@ if __name__ == "__main__":
     print(f"  Refresh:       POST http://localhost:{port}/api/refresh")
     print(f"  Framework:     POST http://localhost:{port}/api/framework/run")
     print(f"  Auto-refresh:  Every {REFRESH_INTERVAL_MINUTES} minutes")
+    print(f"")
+    print(f"  Public JSON API (CORS-enabled):")
+    print(f"    GET http://localhost:{port}/api/framework/latest.json")
+    print(f"    GET http://localhost:{port}/api/framework/history.json")
+    print(f"    GET http://localhost:{port}/api/framework/gauges.json")
     print("=" * 60 + "\n")
     app.run(host="0.0.0.0", port=port, debug=False)
