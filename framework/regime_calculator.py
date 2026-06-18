@@ -59,22 +59,35 @@ class RegimeCalculator:
         regime_state = self._determine_state(risk_on_count, caution_count, risk_off_count)
 
         # --- Check consecutive-Sunday history ---
+        # Deduplicate by ISO week so daily runs don't inflate the count.
+        # Each ISO week keeps only the latest entry.
         consecutive_weeks = 1
         regime_change_pending = False
         if regime_history:
-            last_state = regime_history[-1].get("regime") if regime_history else None
-            if last_state == regime_state:
-                # Count consecutive weeks at this state
-                consecutive_weeks = 1
-                for past in reversed(regime_history):
-                    if past.get("regime") == regime_state:
-                        consecutive_weeks += 1
-                    else:
-                        break
-            else:
-                # Different from last week — change pending
-                regime_change_pending = True
-                consecutive_weeks = 1
+            # Deduplicate history to one entry per ISO week (latest wins)
+            weekly = {}
+            for entry in regime_history:
+                try:
+                    d = datetime.date.fromisoformat(entry["date"])
+                    iso_week = d.isocalendar()[:2]  # (year, week)
+                    weekly[iso_week] = entry
+                except (ValueError, KeyError):
+                    continue
+            # Sort by week descending
+            sorted_weeks = sorted(weekly.items(), key=lambda x: x[0], reverse=True)
+
+            if sorted_weeks:
+                last_state = sorted_weeks[0][1].get("regime")
+                if last_state == regime_state:
+                    consecutive_weeks = 1  # this week
+                    for _, entry in sorted_weeks:
+                        if entry.get("regime") == regime_state:
+                            consecutive_weeks += 1
+                        else:
+                            break
+                else:
+                    regime_change_pending = True
+                    consecutive_weeks = 1
 
         confirmations_needed = self.regime_cfg["change_protocol"]["consecutive_confirmations_required"]
 
@@ -125,27 +138,29 @@ class RegimeCalculator:
         }
 
     def _determine_state(self, risk_on, caution, risk_off):
-        """Map gauge signal counts to a regime state."""
-        for state_def in self.regime_cfg["states"]:
-            name = state_def["name"]
-            # Check risk_off first (most severe)
-            if name == "Risk-off":
-                if risk_off >= state_def.get("min_risk_off_gauges", 2):
-                    return name
-        # Then caution
-        for state_def in self.regime_cfg["states"]:
-            name = state_def["name"]
-            if name == "Caution":
-                min_caution = state_def.get("min_caution_gauges", 3)
-                if caution >= min_caution and risk_off <= state_def.get("max_risk_off_gauges", 1):
-                    return name
-        # Then risk-on variants
+        """
+        Map gauge signal counts to a regime state.
+        Pure function of current gauge signals — no history anchoring.
+
+        Priority order (check best and worst first, fall through to middle):
+          1. Risk-off   — 2+ risk_off gauges (most severe, checked first)
+          2. Risk-on/Trending — 4+ risk_on, 0 risk_off
+          3. Risk-on/Choppy  — 2+ risk_on, 0 risk_off
+          4. Caution    — everything else (default)
+        """
+        # 1. Risk-off: severe downturn signals dominate
+        if risk_off >= 2:
+            return "Risk-off"
+
+        # 2. Risk-on / Trending: strong broad-based risk appetite
         if risk_on >= 4 and risk_off == 0:
             return "Risk-on / Trending"
+
+        # 3. Risk-on / Choppy: moderate risk appetite, some caution
         if risk_on >= 2 and risk_off == 0:
             return "Risk-on / Choppy"
 
-        # Default to Caution if nothing else matched
+        # 4. Caution: anything with 1 risk_off or insufficient risk_on
         return "Caution"
 
     # ==============================================================
@@ -365,58 +380,113 @@ class RegimeCalculator:
 
     def _compute_yield_curve(self, cfg):
         """
-        Yield curve: 30Y-2Y spread.
-        Primary: FRED DGS30 - DGS2.
-        Fallback: TLT/SHY ratio trend.
+        Yield curve: 30Y-2Y Treasury spread in percentage points.
+        Primary: FRED CSV download (no API key required).
+        Secondary: FRED API (if FRED_API_KEY is set).
+        Fallback: ^TYX (30Y yield) from yfinance (2Y approximated).
+
+        Thresholds (in percentage points):
+          > 0.50 (50bp)  = risk_on  (healthy steepening)
+          0 to 0.50      = caution  (flat)
+          < 0            = risk_off (inverted)
         """
-        # Try FRED first
-        yc = self._try_fred_yield_curve(cfg)
+        # Try FRED CSV (no API key needed)
+        yc = self._try_fred_csv_yield_curve(cfg)
         if yc is not None:
             return yc
 
-        # Fallback: TLT/SHY ratio trend
+        # Try FRED API (needs key)
+        yc = self._try_fred_api_yield_curve(cfg)
+        if yc is not None:
+            return yc
+
+        # Last resort: ^TYX from yfinance for 30Y yield
+        return self._try_yfinance_yield_curve(cfg)
+
+    def _classify_yield_spread(self, spread, dgs30, dgs2, source, date_str=""):
+        """Common spread classification for all yield curve sources."""
+        spread_bp = round(spread * 100)  # basis points for display
+
+        if spread > 0.50:
+            signal = "risk_on"
+            trend = "positive"
+        elif spread >= 0:
+            signal = "caution"
+            trend = "flat"
+        else:
+            signal = "risk_off"
+            trend = "inverted"
+
+        date_note = f", as of {date_str}" if date_str else ""
+        return {
+            "value": round(spread, 4),
+            "signal": signal,
+            "detail": f"30Y-2Y spread: {spread_bp}bp ({dgs30:.2f}% - {dgs2:.2f}%) — {trend}{date_note}",
+            "source": source,
+            "spread_bp": spread_bp,
+            "dgs30": round(dgs30, 2),
+            "dgs2": round(dgs2, 2),
+        }
+
+    def _try_fred_csv_yield_curve(self, cfg):
+        """Fetch 30Y and 2Y yields from FRED public CSV (no API key)."""
+        import io
         try:
-            tlt_df = self.fetcher(cfg.get("fallback_long", "TLT"), period="6mo")
-            shy_df = self.fetcher(cfg.get("fallback_short", "SHY"), period="6mo")
+            import requests
 
-            if tlt_df is None or shy_df is None or len(tlt_df) < 30 or len(shy_df) < 30:
-                return {"value": None, "signal": "unavailable", "detail": "Yield curve data unavailable"}
+            # FRED serves CSV at this endpoint without authentication
+            url = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+            params = {"id": "DGS30,DGS2"}
+            resp = requests.get(url, params=params, timeout=15, headers={
+                "User-Agent": "Mozilla/5.0 SignalAgent/1.0",
+            })
+            if resp.status_code != 200:
+                print(f"[framework] FRED CSV returned {resp.status_code}")
+                return None
 
-            tlt_price = float(tlt_df["Close"].iloc[-1])
-            shy_price = float(shy_df["Close"].iloc[-1])
-            ratio = tlt_price / shy_price
+            # Parse CSV: columns are DATE, DGS30, DGS2
+            import csv
+            reader = csv.reader(io.StringIO(resp.text))
+            header = next(reader, None)
+            if not header or len(header) < 3:
+                return None
 
-            # 20-day trend: is ratio rising (steepening) or falling (flattening)?
-            tlt_20d_ago = float(tlt_df["Close"].iloc[-20])
-            shy_20d_ago = float(shy_df["Close"].iloc[-20])
-            ratio_20d_ago = tlt_20d_ago / shy_20d_ago
-            ratio_change = ((ratio - ratio_20d_ago) / ratio_20d_ago) * 100
+            # Read rows in reverse to find the latest non-empty values
+            rows = list(reader)
+            dgs30_val = None
+            dgs2_val = None
+            date_str = ""
 
-            # TLT/SHY ratio falling = long rates rising relative to short = steepening (risk_on)
-            # TLT/SHY ratio rising = long rates falling relative to short = flattening
-            # (This is counterintuitive because TLT price falls when yields rise)
-            if ratio_change < -1:
-                signal = "risk_on"  # steepening
-                trend = "steepening"
-            elif ratio_change < 1:
-                signal = "caution"  # flat
-                trend = "flat"
-            else:
-                signal = "risk_off"  # flattening/inverting
-                trend = "flattening"
+            for row in reversed(rows):
+                if len(row) < 3:
+                    continue
+                date_str_candidate = row[0]
+                v30 = row[1].strip() if len(row) > 1 else "."
+                v2 = row[2].strip() if len(row) > 2 else "."
 
-            return {
-                "value": round(ratio_change, 2),
-                "signal": signal,
-                "detail": f"TLT/SHY ratio {ratio_change:+.2f}% (20d) — curve {trend}",
-                "source": "TLT/SHY fallback",
-                "ratio": round(ratio, 4),
-            }
+                if v30 != "." and v2 != "." and v30 and v2:
+                    try:
+                        dgs30_val = float(v30)
+                        dgs2_val = float(v2)
+                        date_str = date_str_candidate
+                        break
+                    except ValueError:
+                        continue
+
+            if dgs30_val is None or dgs2_val is None:
+                print("[framework] FRED CSV: no valid yield data found")
+                return None
+
+            spread = dgs30_val - dgs2_val
+            print(f"[framework] FRED CSV yields: 30Y={dgs30_val:.2f}%, 2Y={dgs2_val:.2f}%, spread={spread*100:.0f}bp ({date_str})")
+            return self._classify_yield_spread(spread, dgs30_val, dgs2_val, "FRED", date_str)
+
         except Exception as e:
-            return {"value": None, "signal": "unavailable", "detail": f"Yield curve error: {e}"}
+            print(f"[framework] FRED CSV yield curve failed: {e}")
+            return None
 
-    def _try_fred_yield_curve(self, cfg):
-        """Try fetching yield curve data from FRED."""
+    def _try_fred_api_yield_curve(self, cfg):
+        """Fetch yields from FRED API (requires FRED_API_KEY env var)."""
         import os
         fred_key = os.environ.get("FRED_API_KEY")
         if not fred_key:
@@ -453,24 +523,38 @@ class RegimeCalculator:
                 return None
 
             spread = dgs30_val - dgs2_val
+            return self._classify_yield_spread(spread, dgs30_val, dgs2_val, "FRED API")
 
-            if spread > 0.5:
-                signal = "risk_on"
-                trend = "steepening"
-            elif spread > -0.1:
-                signal = "caution"
-                trend = "flat"
-            else:
-                signal = "risk_off"
-                trend = "inverted"
-
-            return {
-                "value": round(spread, 2),
-                "signal": signal,
-                "detail": f"30Y-2Y spread: {spread:.2f}% ({dgs30_val:.2f}% - {dgs2_val:.2f}%) — {trend}",
-                "source": "FRED",
-                "dgs30": dgs30_val,
-                "dgs2": dgs2_val,
-            }
         except Exception:
             return None
+
+    def _try_yfinance_yield_curve(self, cfg):
+        """Last resort: ^TYX for 30Y yield from yfinance."""
+        try:
+            # ^TYX = CBOE 30-Year Treasury Yield (in %, e.g. 4.85 = 4.85%)
+            tyx_df = self.fetcher("^TYX", period="1mo")
+            if tyx_df is not None and len(tyx_df) >= 1:
+                yield_30y = float(tyx_df["Close"].iloc[-1])
+
+                # No direct 2Y ticker on yfinance. Estimate from short-term proxy.
+                # ^IRX = 13-week T-bill rate. Rough approximation for short end.
+                irx_df = self.fetcher("^IRX", period="1mo")
+                if irx_df is not None and len(irx_df) >= 1:
+                    yield_short = float(irx_df["Close"].iloc[-1])
+                    spread = yield_30y - yield_short
+                    return self._classify_yield_spread(
+                        spread, yield_30y, yield_short,
+                        "yfinance (^TYX-^IRX approx)"
+                    )
+                else:
+                    # Can only report 30Y level, no spread
+                    return {
+                        "value": round(yield_30y, 2),
+                        "signal": "caution",
+                        "detail": f"30Y yield: {yield_30y:.2f}% (no 2Y data for spread calc)",
+                        "source": "yfinance ^TYX only",
+                    }
+
+            return {"value": None, "signal": "unavailable", "detail": "Yield curve data unavailable"}
+        except Exception as e:
+            return {"value": None, "signal": "unavailable", "detail": f"Yield curve error: {e}"}

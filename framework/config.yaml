@@ -35,16 +35,15 @@ regime:
       caution_threshold: 50
       risk_off_threshold: 30
     yield_curve:
-      # 30Y-2Y spread
-      # Primary: FRED DGS30 - DGS2
-      # Fallback: TLT/SHY price ratio trend
+      # 30Y-2Y Treasury spread (percentage points)
+      # Primary: FRED CSV (DGS30 - DGS2, no API key needed)
+      # Secondary: FRED API (if FRED_API_KEY set)
+      # Fallback: yfinance ^TYX - ^IRX
       fred_long: "DGS30"
       fred_short: "DGS2"
-      fallback_long: "TLT"
-      fallback_short: "SHY"
-      risk_on_signal: "widening"     # 30Y-2Y increasing (steepening)
-      caution_signal: "flattening"
-      risk_off_signal: "inverted"    # 30Y < 2Y
+      risk_on_threshold: 0.50    # > 50bp positive spread = risk_on
+      caution_threshold: 0.00    # 0bp to 50bp = caution
+      risk_off_threshold: 0.00   # < 0bp (inverted) = risk_off
 
   states:
     - name: "Risk-on / Trending"
