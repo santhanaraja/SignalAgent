@@ -22,9 +22,13 @@ from signal_engine import (
     compute_swing_trade_signal,
     compute_intraday_trade_signal,
     compute_stage_analysis,
+    compute_rsi,
+    compute_macd,
     run_engine,
     NumpyEncoder,
 )
+import numpy as np
+import pandas as pd
 from sentiment_engine import get_trending_with_sentiment, get_symbol_sentiment
 from fear_greed_engine import get_fear_greed_index
 
@@ -806,6 +810,281 @@ def framework_gauges_json():
 
 
 # ------------------------------------------------------------------
+# Technicals API — Moving averages, indicators, ranges for any ticker
+# ------------------------------------------------------------------
+TECHNICALS_DEFAULT_WATCHLIST = [
+    "AIQ", "SMH", "QTUM", "XLE", "GLD", "ITA", "IBIT", "XBI",
+    "SPY", "QQQ", "VIX", "MU", "SNDK", "MRVL", "NVDA", "AVGO",
+    "GOOGL", "GGLL", "IONQ", "MSTY", "SGOV",
+]
+TECHNICALS_BATCH_LIMIT = 20
+
+# Separate cache for technicals: { "SMH": { "data": {...}, "ts": time.time() } }
+_technicals_cache = {}
+_technicals_cache_lock = threading.Lock()
+
+
+def _is_market_hours():
+    """Check if current time is within US market hours (9:30 AM - 4:00 PM ET, Mon-Fri)."""
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo
+    et = datetime.datetime.now(ZoneInfo("America/New_York"))
+    if et.weekday() >= 5:  # Saturday/Sunday
+        return False
+    market_open = et.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = et.replace(hour=16, minute=0, second=0, microsecond=0)
+    return market_open <= et <= market_close
+
+
+def _technicals_cache_ttl():
+    """15 min during market hours, 60 min outside."""
+    return 900 if _is_market_hours() else 3600
+
+
+def _compute_technicals(symbol):
+    """
+    Compute full technicals for a single ticker.
+    Reuses signal_engine.fetch_data for yfinance data, plus compute_rsi/compute_macd.
+    Returns (result_dict, warnings_list) or (None, error_string).
+    """
+    # Check cache
+    now = time.time()
+    ttl = _technicals_cache_ttl()
+    with _technicals_cache_lock:
+        cached = _technicals_cache.get(symbol)
+        if cached and (now - cached["ts"]) < ttl:
+            return cached["data"], cached.get("warnings", [])
+
+    # Fetch 1 year of daily data (need 200+ bars for SMA200)
+    df = fetch_data(symbol, period="1y")
+    if df is None or len(df) < 5:
+        return None, f"No data found for '{symbol}'"
+
+    close = df["Close"]
+    high = df["High"]
+    low = df["Low"]
+    price = round(float(close.iloc[-1]), 2)
+    warnings = []
+
+    # --- Moving Averages ---
+    def _sma(n):
+        if len(close) >= n:
+            return round(float(close.rolling(n).mean().iloc[-1]), 2)
+        warnings.append(f"sma_{n} requires {n} bars, only {len(close)} available")
+        return None
+
+    def _ema(n):
+        if len(close) >= n:
+            return round(float(close.ewm(span=n, adjust=False).mean().iloc[-1]), 2)
+        warnings.append(f"ema_{n} requires {n} bars, only {len(close)} available")
+        return None
+
+    moving_averages = {
+        "sma_5": _sma(5),
+        "sma_10": _sma(10),
+        "sma_20": _sma(20),
+        "sma_50": _sma(50),
+        "sma_200": _sma(200),
+        "ema_9": _ema(9),
+        "ema_21": _ema(21),
+    }
+
+    # --- Ranges ---
+    def _atr(period=14):
+        if len(df) < period + 1:
+            warnings.append(f"atr_{period} requires {period+1} bars")
+            return None
+        h = high.iloc[-(period + 1):]
+        l = low.iloc[-(period + 1):]
+        c = close.iloc[-(period + 1):]
+        prev_c = c.shift(1)
+        tr = pd.concat([
+            h - l,
+            (h - prev_c).abs(),
+            (l - prev_c).abs(),
+        ], axis=1).max(axis=1)
+        return round(float(tr.iloc[1:].mean()), 2)
+
+    high_52w = round(float(high.iloc[-min(252, len(high)):].max()), 2)
+    low_52w = round(float(low.iloc[-min(252, len(low)):].min()), 2)
+    high_20d = round(float(high.iloc[-min(20, len(high)):].max()), 2) if len(high) >= 2 else None
+    low_20d = round(float(low.iloc[-min(20, len(low)):].min()), 2) if len(low) >= 2 else None
+
+    ranges = {
+        "atr_14": _atr(14),
+        "high_52w": high_52w,
+        "low_52w": low_52w,
+        "high_20d": high_20d,
+        "low_20d": low_20d,
+    }
+
+    # --- Indicators (reuse signal_engine functions) ---
+    rsi_series = compute_rsi(close, period=14)
+    rsi_val = round(float(rsi_series.iloc[-1]), 2) if not pd.isna(rsi_series.iloc[-1]) else None
+    if rsi_val is None:
+        warnings.append("rsi_14 requires 14+ bars of data")
+
+    macd_line, signal_line, histogram = compute_macd(close)
+    macd_val = round(float(macd_line.iloc[-1]), 2) if not pd.isna(macd_line.iloc[-1]) else None
+    macd_sig_val = round(float(signal_line.iloc[-1]), 2) if not pd.isna(signal_line.iloc[-1]) else None
+    macd_hist_val = round(float(histogram.iloc[-1]), 2) if not pd.isna(histogram.iloc[-1]) else None
+
+    indicators = {
+        "rsi_14": rsi_val,
+        "macd": macd_val,
+        "macd_signal": macd_sig_val,
+        "macd_histogram": macd_hist_val,
+    }
+
+    # --- Trend ---
+    sma200 = moving_averages["sma_200"]
+    sma50 = moving_averages["sma_50"]
+    sma20 = moving_averages["sma_20"]
+
+    # 200DMA slope: compare current 200DMA to 20 bars ago
+    slope_200 = None
+    if len(close) >= 220:
+        ma200_series = close.rolling(200).mean()
+        cur = float(ma200_series.iloc[-1])
+        prev = float(ma200_series.iloc[-20])
+        if not (pd.isna(cur) or pd.isna(prev)):
+            slope_200 = "rising" if cur > prev else ("falling" if cur < prev else "flat")
+
+    # Golden cross: SMA50 > SMA200
+    golden_cross = None
+    if sma50 is not None and sma200 is not None:
+        golden_cross = sma50 > sma200
+
+    trend = {
+        "above_200dma": price > sma200 if sma200 is not None else None,
+        "above_50dma": price > sma50 if sma50 is not None else None,
+        "above_20dma": price > sma20 if sma20 is not None else None,
+        "200dma_slope": slope_200,
+        "golden_cross": golden_cross,
+    }
+
+    result = {
+        "ticker": symbol,
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "price": price,
+        "bars_available": len(df),
+        "moving_averages": moving_averages,
+        "ranges": ranges,
+        "indicators": indicators,
+        "trend": trend,
+    }
+    if warnings:
+        result["warnings"] = warnings
+
+    # Cache it
+    with _technicals_cache_lock:
+        _technicals_cache[symbol] = {"data": result, "warnings": warnings, "ts": now}
+
+    return result, warnings
+
+
+@app.route("/api/technicals/batch.json")
+def technicals_batch():
+    """
+    Public JSON API — technicals for multiple tickers.
+    Query param: ?tickers=SMH,QTUM,AIQ  (comma-separated, max 20).
+    Returns array of technicals objects. Failed tickers included with error field.
+    """
+    tickers_param = request.args.get("tickers", "")
+    if not tickers_param:
+        return app.response_class(
+            response=json.dumps({"error": "Missing ?tickers= query parameter", "hint": "e.g. /api/technicals/batch.json?tickers=SMH,QTUM,AIQ"}),
+            status=400,
+            mimetype="application/json",
+        )
+
+    symbols = [t.strip().upper() for t in tickers_param.split(",") if t.strip()]
+    symbols = list(dict.fromkeys(symbols))  # dedupe preserving order
+
+    if len(symbols) > TECHNICALS_BATCH_LIMIT:
+        return app.response_class(
+            response=json.dumps({"error": f"Too many tickers. Maximum {TECHNICALS_BATCH_LIMIT} per request.", "requested": len(symbols)}),
+            status=400,
+            mimetype="application/json",
+        )
+
+    results = []
+    for sym in symbols:
+        if not sym or len(sym) > 10:
+            results.append({"ticker": sym, "error": "Invalid ticker symbol"})
+            continue
+        result, _ = _compute_technicals(sym)
+        if result is None:
+            results.append({"ticker": sym, "error": "Ticker not found"})
+        else:
+            results.append(result)
+
+    resp = app.response_class(
+        response=json.dumps(results, cls=NumpyEncoder),
+        mimetype="application/json",
+    )
+    ttl = _technicals_cache_ttl()
+    resp.headers["Cache-Control"] = f"public, max-age={ttl}"
+    return resp
+
+
+@app.route("/api/technicals/<symbol>.json")
+def technicals_single(symbol):
+    """
+    Public JSON API — full technicals for a single ticker.
+    Returns moving averages, ranges, indicators, and trend analysis.
+    Cached 15 min (market hours) / 60 min (off hours).
+    """
+    symbol = symbol.upper().strip()
+    if not symbol or len(symbol) > 10:
+        return app.response_class(
+            response=json.dumps({"error": "Invalid ticker symbol", "ticker": symbol}),
+            status=400,
+            mimetype="application/json",
+        )
+
+    result, warnings_or_err = _compute_technicals(symbol)
+    if result is None:
+        return app.response_class(
+            response=json.dumps({"error": "Ticker not found", "ticker": symbol}),
+            status=404,
+            mimetype="application/json",
+        )
+
+    resp = app.response_class(
+        response=json.dumps(result, cls=NumpyEncoder),
+        mimetype="application/json",
+    )
+    ttl = _technicals_cache_ttl()
+    resp.headers["Cache-Control"] = f"public, max-age={ttl}"
+    return resp
+
+
+def _preload_technicals_watchlist():
+    """Preload default watchlist into technicals cache at startup."""
+    print(f"[technicals] Preloading {len(TECHNICALS_DEFAULT_WATCHLIST)} tickers...")
+    loaded = 0
+    for sym in TECHNICALS_DEFAULT_WATCHLIST:
+        try:
+            result, _ = _compute_technicals(sym)
+            if result is not None:
+                loaded += 1
+        except Exception as e:
+            print(f"[technicals] Preload failed for {sym}: {e}")
+    print(f"[technicals] Preloaded {loaded}/{len(TECHNICALS_DEFAULT_WATCHLIST)} tickers")
+
+
+def _technicals_refresh_loop():
+    """Background thread that refreshes the watchlist every hour."""
+    while True:
+        time.sleep(3600)  # 1 hour
+        print(f"[technicals] Hourly watchlist refresh starting...")
+        _preload_technicals_watchlist()
+
+
+# ------------------------------------------------------------------
 # Static file serving
 # ------------------------------------------------------------------
 @app.route("/")
@@ -840,6 +1119,18 @@ if __name__ == "__main__":
     fw_thread = threading.Thread(target=_run_framework_refresh, daemon=True)
     fw_thread.start()
 
+    # Preload technicals watchlist (after a short delay to not compete with signal refresh)
+    def _delayed_technicals_preload():
+        time.sleep(30)  # Wait 30s for signal engine to finish first fetches
+        _preload_technicals_watchlist()
+
+    tech_preload_thread = threading.Thread(target=_delayed_technicals_preload, daemon=True)
+    tech_preload_thread.start()
+
+    # Start hourly technicals refresh
+    tech_refresh_thread = threading.Thread(target=_technicals_refresh_loop, daemon=True)
+    tech_refresh_thread.start()
+
     print(f"\n{'='*60}")
     print("  SignalAgent Market Pulse Dashboard")
     print("=" * 60)
@@ -855,5 +1146,7 @@ if __name__ == "__main__":
     print(f"    GET http://localhost:{port}/api/framework/latest.json")
     print(f"    GET http://localhost:{port}/api/framework/history.json")
     print(f"    GET http://localhost:{port}/api/framework/gauges.json")
+    print(f"    GET http://localhost:{port}/api/technicals/<TICKER>.json")
+    print(f"    GET http://localhost:{port}/api/technicals/batch.json?tickers=SMH,QTUM")
     print("=" * 60 + "\n")
     app.run(host="0.0.0.0", port=port, debug=False)
