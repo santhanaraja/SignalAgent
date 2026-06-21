@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-06-19T22:38:40.436854+00:00",
+  "generated_at": "2026-06-21T04:11:29.689791+00:00",
   "framework_version": "1.0",
   "regime": {
-    "date": "2026-06-19",
+    "date": "2026-06-21",
     "regime": "Risk-on / Trending",
     "regime_color": "#3fb950",
     "gauges": {
@@ -33,13 +33,13 @@
         "source": "RSP/SPY fallback"
       },
       "yield_curve": {
-        "value": 1.243,
+        "value": 0.73,
         "signal": "risk_on",
-        "detail": "30Y-2Y spread: 124bp (4.90% - 3.66%) \u2014 positive",
-        "source": "yfinance (^TYX-^IRX approx)",
-        "spread_bp": 124,
-        "dgs30": 4.9,
-        "dgs2": 3.66
+        "detail": "30Y-2Y spread: 73bp (4.93% - 4.20%) \u2014 positive, as of 2026-06-17",
+        "source": "FRED",
+        "spread_bp": 73,
+        "dgs30": 4.93,
+        "dgs2": 4.2
       }
     },
     "risk_on_count": 4,
@@ -53,7 +53,7 @@
     "action": "Full deployment. Aggressive sleeve active. New themes considered."
   },
   "themes": {
-    "date": "2026-06-19",
+    "date": "2026-06-21",
     "ranked_themes": [
       {
         "return_4w": 14.5,
@@ -66,7 +66,7 @@
         "rank_4w": 1,
         "rank_12w": 1,
         "rank": 1,
-        "consecutive_top_n_weeks": 7
+        "consecutive_top_n_weeks": 6
       },
       {
         "return_4w": 9.47,
@@ -79,7 +79,7 @@
         "rank_4w": 2,
         "rank_12w": 2,
         "rank": 2,
-        "consecutive_top_n_weeks": 7
+        "consecutive_top_n_weeks": 6
       },
       {
         "return_4w": 6.35,
@@ -160,26 +160,12 @@
         "consecutive_top_n_weeks": 0
       }
     ],
-    "entry_signals": [
-      {
-        "theme": "Semis",
-        "proxy": "SMH",
-        "rank": 1,
-        "consecutive_weeks": 7,
-        "action": "ENTRY SIGNAL \u2014 qualified for activation",
-        "requires_discretionary_review": true
-      },
-      {
-        "theme": "Quantum",
-        "proxy": "QTUM",
-        "rank": 2,
-        "consecutive_weeks": 7,
-        "action": "ENTRY SIGNAL \u2014 qualified for activation",
-        "requires_discretionary_review": true
-      }
-    ],
+    "entry_signals": [],
     "exit_signals": [],
-    "active_themes": [],
+    "active_themes": [
+      "Semis",
+      "Quantum"
+    ],
     "regime_state_used": "Risk-on / Trending",
     "regime_allows_entry": true,
     "concentration_limits": [
@@ -187,14 +173,80 @@
       "Max total themes: 25% of book"
     ]
   },
+  "theme_leaders": {
+    "Semis": [
+      {
+        "ticker": "MRVL",
+        "current_price": 310.58,
+        "return_4w": 58.19,
+        "return_12w": 218.12,
+        "composite_rank": 1,
+        "rsi_14": 65,
+        "warnings": []
+      },
+      {
+        "ticker": "MU",
+        "current_price": 1133.99,
+        "return_4w": 51.0,
+        "return_12w": 219.15,
+        "composite_rank": 2,
+        "rsi_14": 66,
+        "warnings": [
+          "earnings_within_7d",
+          "at_52w_high"
+        ]
+      },
+      {
+        "ticker": "SNDK",
+        "current_price": 2184.75,
+        "return_4w": 47.75,
+        "return_12w": 262.21,
+        "composite_rank": 3,
+        "rsi_14": 71,
+        "warnings": [
+          "at_52w_high",
+          "rsi_overbought"
+        ]
+      }
+    ],
+    "Quantum": [
+      {
+        "ticker": "IONQ",
+        "current_price": 56.55,
+        "return_4w": -11.14,
+        "return_12w": 89.51,
+        "composite_rank": 1,
+        "rsi_14": 49,
+        "warnings": []
+      },
+      {
+        "ticker": "QBTS",
+        "current_price": 24.69,
+        "return_4w": -16.02,
+        "return_12w": 68.53,
+        "composite_rank": 2,
+        "rsi_14": 51,
+        "warnings": []
+      },
+      {
+        "ticker": "IBM",
+        "current_price": 249.1,
+        "return_4w": -1.87,
+        "return_12w": 3.83,
+        "composite_rank": 3,
+        "rsi_14": 42,
+        "warnings": []
+      }
+    ]
+  },
   "rules": {
-    "date": "2026-06-19",
+    "date": "2026-06-21",
     "evaluations": [
       {
         "rule": "R1",
         "text": "Weekly Sunday review (regime + themes). Do not skip.",
-        "status": "compliant",
-        "message": "Not Sunday. Next review on Sunday."
+        "status": "action_needed",
+        "message": "Today is Sunday \u2014 weekly review required. Complete regime + theme analysis."
       },
       {
         "rule": "R2",
@@ -205,40 +257,40 @@
       {
         "rule": "R3",
         "text": "New theme entry requires #1/#2 rank for 2 consecutive Sundays AND risk-on regime AND discretionary catalyst review.",
-        "status": "action_needed",
-        "message": "Entry signals qualified: Semis, Quantum. Requires discretionary catalyst review before activation."
+        "status": "compliant",
+        "message": "No new entry signals."
       },
       {
         "rule": "R4",
         "text": "Theme exits when below #3 for 3 consecutive Sundays OR regime degrades to Caution/Risk-off.",
         "status": "compliant",
-        "message": "No exit conditions triggered."
+        "message": "2 active theme(s) monitored \u2014 no exit conditions triggered."
       },
       {
         "rule": "R5",
         "text": "Maximum 2 themes active. Cash is the default.",
         "status": "compliant",
-        "message": "0/2 active themes. Cash is the default."
+        "message": "2/2 active themes. Cash is the default."
       },
       {
         "rule": "R6",
         "text": "Define invalidation before entry. Written down. Close-based.",
-        "status": "compliant",
-        "message": "Define invalidation before entry. Written down. Close-based.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Define invalidation before entry. Written down. Close-based.",
         "category": "invalidation"
       },
       {
         "rule": "R7",
         "text": "Size from risk-to-stop, not gut, not conviction, not max premium.",
-        "status": "compliant",
-        "message": "Size from risk-to-stop, not gut, not conviction, not max premium.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Size from risk-to-stop, not gut, not conviction, not max premium.",
         "category": "sizing"
       },
       {
         "rule": "R8",
         "text": "No naked momentum exposure through binary catalysts.",
-        "status": "compliant",
-        "message": "No naked momentum exposure through binary catalysts.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. No naked momentum exposure through binary catalysts.",
         "category": "binary_catalyst"
       },
       {
@@ -251,29 +303,29 @@
       {
         "rule": "R10",
         "text": "Stop moves UP only. Never lower a stop in adversity.",
-        "status": "compliant",
-        "message": "Stop moves UP only. Never lower a stop in adversity.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Stop moves UP only. Never lower a stop in adversity.",
         "category": "stop_management"
       },
       {
         "rule": "R11",
         "text": "Decisions on the exit-timeframe CLOSE, never on intraday wicks.",
-        "status": "compliant",
-        "message": "Decisions on the exit-timeframe CLOSE, never on intraday wicks.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Decisions on the exit-timeframe CLOSE, never on intraday wicks.",
         "category": "close_based"
       },
       {
         "rule": "R12",
         "text": "Exit timeframe must be slower than entry timeframe.",
-        "status": "compliant",
-        "message": "Exit timeframe must be slower than entry timeframe.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Exit timeframe must be slower than entry timeframe.",
         "category": "timeframe"
       },
       {
         "rule": "R13",
         "text": "Never override a fired stop.",
-        "status": "compliant",
-        "message": "Never override a fired stop.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Never override a fired stop.",
         "category": "stop_override"
       },
       {
@@ -286,8 +338,8 @@
       {
         "rule": "R15",
         "text": "Maximum single-position size: 5-8% of relevant account's capital.",
-        "status": "compliant",
-        "message": "Maximum single-position size: 5-8% of relevant account's capital.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Maximum single-position size: 5-8% of relevant account's capital.",
         "category": "position_size"
       },
       {
@@ -314,8 +366,8 @@
       {
         "rule": "R19",
         "text": "Aggressive sleeve cost basis capped at active theme limits.",
-        "status": "compliant",
-        "message": "Aggressive sleeve cost basis capped at active theme limits.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Aggressive sleeve cost basis capped at active theme limits.",
         "category": "cost_basis"
       },
       {
@@ -328,8 +380,8 @@
       {
         "rule": "R21",
         "text": "No new entries on same day as stop-out from related name.",
-        "status": "compliant",
-        "message": "No new entries on same day as stop-out from related name.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. No new entries on same day as stop-out from related name.",
         "category": "same_day_entry"
       },
       {
@@ -342,22 +394,22 @@
       {
         "rule": "R23",
         "text": "Conviction expresses through stop placement, not oversizing.",
-        "status": "compliant",
-        "message": "Conviction expresses through stop placement, not oversizing.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Conviction expresses through stop placement, not oversizing.",
         "category": "conviction_sizing"
       },
       {
         "rule": "R24",
         "text": "Hitting target = sell signal. No goalpost-moving.",
-        "status": "compliant",
-        "message": "Hitting target = sell signal. No goalpost-moving.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Hitting target = sell signal. No goalpost-moving.",
         "category": "target_hit"
       },
       {
         "rule": "R25",
         "text": "Don't add to position because it's working. Add only on pullbacks per pre-committed plan.",
-        "status": "compliant",
-        "message": "Don't add to position because it's working. Add only on pullbacks per pre-committed plan.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Don't add to position because it's working. Add only on pullbacks per pre-committed plan.",
         "category": "adding_to_position"
       },
       {
@@ -378,20 +430,114 @@
     "violations": [],
     "action_items": [
       {
-        "rule": "R3",
-        "text": "New theme entry requires #1/#2 rank for 2 consecutive Sundays AND risk-on regime AND discretionary catalyst review.",
+        "rule": "R1",
+        "text": "Weekly Sunday review (regime + themes). Do not skip.",
         "status": "action_needed",
-        "message": "Entry signals qualified: Semis, Quantum. Requires discretionary catalyst review before activation."
+        "message": "Today is Sunday \u2014 weekly review required. Complete regime + theme analysis."
+      },
+      {
+        "rule": "R6",
+        "text": "Define invalidation before entry. Written down. Close-based.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Define invalidation before entry. Written down. Close-based.",
+        "category": "invalidation"
+      },
+      {
+        "rule": "R7",
+        "text": "Size from risk-to-stop, not gut, not conviction, not max premium.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Size from risk-to-stop, not gut, not conviction, not max premium.",
+        "category": "sizing"
+      },
+      {
+        "rule": "R8",
+        "text": "No naked momentum exposure through binary catalysts.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. No naked momentum exposure through binary catalysts.",
+        "category": "binary_catalyst"
+      },
+      {
+        "rule": "R10",
+        "text": "Stop moves UP only. Never lower a stop in adversity.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Stop moves UP only. Never lower a stop in adversity.",
+        "category": "stop_management"
+      },
+      {
+        "rule": "R11",
+        "text": "Decisions on the exit-timeframe CLOSE, never on intraday wicks.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Decisions on the exit-timeframe CLOSE, never on intraday wicks.",
+        "category": "close_based"
+      },
+      {
+        "rule": "R12",
+        "text": "Exit timeframe must be slower than entry timeframe.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Exit timeframe must be slower than entry timeframe.",
+        "category": "timeframe"
+      },
+      {
+        "rule": "R13",
+        "text": "Never override a fired stop.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Never override a fired stop.",
+        "category": "stop_override"
+      },
+      {
+        "rule": "R15",
+        "text": "Maximum single-position size: 5-8% of relevant account's capital.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Maximum single-position size: 5-8% of relevant account's capital.",
+        "category": "position_size"
+      },
+      {
+        "rule": "R19",
+        "text": "Aggressive sleeve cost basis capped at active theme limits.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Aggressive sleeve cost basis capped at active theme limits.",
+        "category": "cost_basis"
+      },
+      {
+        "rule": "R21",
+        "text": "No new entries on same day as stop-out from related name.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. No new entries on same day as stop-out from related name.",
+        "category": "same_day_entry"
+      },
+      {
+        "rule": "R23",
+        "text": "Conviction expresses through stop placement, not oversizing.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Conviction expresses through stop placement, not oversizing.",
+        "category": "conviction_sizing"
+      },
+      {
+        "rule": "R24",
+        "text": "Hitting target = sell signal. No goalpost-moving.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Hitting target = sell signal. No goalpost-moving.",
+        "category": "target_hit"
+      },
+      {
+        "rule": "R25",
+        "text": "Don't add to position because it's working. Add only on pullbacks per pre-committed plan.",
+        "status": "elevated",
+        "message": "Active themes: Semis, Quantum. Don't add to position because it's working. Add only on pullbacks per pre-committed plan.",
+        "category": "adding_to_position"
       }
     ],
     "summary": {
       "total_rules": 27,
-      "compliant": 26,
-      "action_needed": 1,
+      "compliant": 13,
+      "action_needed": 14,
       "violations": 0
     },
     "regime_used": "Risk-on / Trending",
-    "active_themes_used": []
+    "active_themes_used": [
+      "Semis",
+      "Quantum"
+    ]
   },
   "standing_rules_text": {
     "R1": "Weekly Sunday review (regime + themes). Do not skip.",

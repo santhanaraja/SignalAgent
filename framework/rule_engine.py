@@ -55,7 +55,7 @@ class RuleEngine:
             action_items.append(r3)
 
         # --- R4: Theme exit conditions ---
-        r4 = self._eval_r4(exit_signals)
+        r4 = self._eval_r4(exit_signals, active_themes)
         evaluations.append(r4)
         if r4["status"] in ("violation", "action_needed"):
             action_items.append(r4)
@@ -188,10 +188,11 @@ class RuleEngine:
             "message": "No new entry signals.",
         }
 
-    def _eval_r4(self, exit_signals: list) -> dict:
-        """R4: Theme exit conditions."""
+    def _eval_r4(self, exit_signals: list, active_themes: list) -> dict:
+        """R4: Theme exit conditions — evaluated against active themes."""
         exits = [s for s in exit_signals if "EXIT SIGNAL" in s.get("action", "")]
         warnings = [s for s in exit_signals if "Warning" in s.get("action", "")]
+        active_count = len(active_themes)
 
         if exits:
             names = ", ".join(f"{s['theme']}: {s.get('reason', '')}" for s in exits)
@@ -209,11 +210,18 @@ class RuleEngine:
                 "status": "compliant",
                 "message": f"Exit warnings: {names}.",
             }
+        if active_count == 0:
+            return {
+                "rule": "R4",
+                "text": self.rules.get("R4", ""),
+                "status": "compliant",
+                "message": "No active themes to monitor for exit.",
+            }
         return {
             "rule": "R4",
             "text": self.rules.get("R4", ""),
             "status": "compliant",
-            "message": "No exit conditions triggered.",
+            "message": f"{active_count} active theme(s) monitored — no exit conditions triggered.",
         }
 
     def _eval_r5(self, active_themes: list) -> dict:

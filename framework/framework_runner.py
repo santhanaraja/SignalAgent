@@ -16,6 +16,7 @@ import pandas as pd
 from .regime_calculator import RegimeCalculator
 from .theme_ranker import ThemeRanker
 from .rule_engine import RuleEngine
+from .constituent_ranker import ConstituentRanker
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -73,6 +74,68 @@ def fetch_data(ticker: str, period: str = "1y") -> pd.DataFrame:
     except Exception as e:
         print(f"[framework] fetch_data({ticker}, {period}) failed: {e}")
         return None
+
+
+def _to_date(val):
+    """Best-effort coercion of a yfinance/pandas value to datetime.date."""
+    try:
+        if isinstance(val, datetime.datetime):
+            return val.date()
+        if isinstance(val, datetime.date):
+            return val
+        if hasattr(val, "to_pydatetime"):
+            return val.to_pydatetime().date()
+        if hasattr(val, "date"):
+            return val.date()
+    except Exception:
+        pass
+    return None
+
+
+def fetch_next_earnings(ticker: str):
+    """
+    Return the next upcoming earnings date (datetime.date) or None.
+    Best-effort across yfinance versions; failures degrade to None so the
+    "earnings_within_7d" warning is simply skipped.
+    """
+    today = datetime.date.today()
+    try:
+        tk = yf.Ticker(ticker)
+
+        # Preferred: .calendar (dict in recent yfinance, DataFrame in older).
+        try:
+            cal = tk.calendar
+            dates = None
+            if isinstance(cal, dict):
+                dates = cal.get("Earnings Date")
+            elif cal is not None and hasattr(cal, "loc"):
+                try:
+                    dates = list(cal.loc["Earnings Date"])
+                except Exception:
+                    dates = None
+            if dates is not None:
+                if not isinstance(dates, (list, tuple)):
+                    dates = [dates]
+                upcoming = sorted(d for d in (_to_date(x) for x in dates)
+                                  if d is not None and d >= today)
+                if upcoming:
+                    return upcoming[0]
+        except Exception:
+            pass
+
+        # Fallback: .get_earnings_dates() returns a DataFrame indexed by date.
+        try:
+            df = tk.get_earnings_dates(limit=12)
+            if df is not None and len(df) > 0:
+                upcoming = sorted(d for d in (_to_date(x) for x in df.index)
+                                  if d is not None and d >= today)
+                if upcoming:
+                    return upcoming[0]
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return None
 
 
 def load_regime_history() -> list:
@@ -155,6 +218,20 @@ def run_framework(force_fetch: bool = False) -> dict:
         print(f"[framework]   #{t['rank']} {t['name']} ({t['proxy']}): "
               f"4w {t.get('return_4w', 'N/A')}%, 12w {t.get('return_12w', 'N/A')}%")
 
+    # --- Layer 2.5: Constituent leaders for qualified themes ---
+    print("[framework] Ranking constituents for qualified themes...")
+    max_active = config.get("themes", {}).get("ranking", {}).get("max_active_themes", 2)
+    qualified_names = [t["name"] for t in theme_result["ranked_themes"]
+                       if t.get("rank") is not None and t["rank"] <= max_active]
+    # Always include currently-held (active) themes so their leaders show too.
+    for name in theme_result.get("active_themes", []):
+        if name not in qualified_names:
+            qualified_names.append(name)
+
+    constituent_ranker = ConstituentRanker(config, fetch_data, fetch_next_earnings)
+    theme_leaders = constituent_ranker.compute(qualified_names)
+    print(f"[framework] Constituent leaders ranked for: {', '.join(qualified_names) or 'none'}")
+
     # --- Layer 3: Rules ---
     print("[framework] Evaluating rules...")
     rule_engine = RuleEngine(config)
@@ -169,6 +246,7 @@ def run_framework(force_fetch: bool = False) -> dict:
         "framework_version": config.get("framework", {}).get("version", "1.0"),
         "regime": regime_result,
         "themes": theme_result,
+        "theme_leaders": theme_leaders,
         "rules": rules_result,
         "standing_rules_text": config.get("standing_rules", {}),
     }

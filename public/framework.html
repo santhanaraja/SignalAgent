@@ -285,6 +285,7 @@ function render(){
   // ===== THEME SECTION =====
   const themes=DATA.themes||{};
   const ranked=themes.ranked_themes||[];
+  const leaders=DATA.theme_leaders||{};
 
   html+=`
   <div class="section">
@@ -298,19 +299,33 @@ function render(){
       </tr></thead>
       <tbody>`;
 
+  let themeIdx=0;
   for(const t of ranked){
     const r4w=t.return_4w;
     const r12w=t.return_12w;
     const isActive=(themes.active_themes||[]).includes(t.name);
-    html+=`<tr${isActive?' style="background:rgba(63,185,80,.08);"':''}>
+    const themeLeaders=leaders[t.name];
+    const hasLeaders=Array.isArray(themeLeaders)&&themeLeaders.length>0;
+    const rowId='leaders-'+(themeIdx++);
+
+    let trStyle='';
+    if(isActive)trStyle+='background:rgba(63,185,80,.08);';
+    if(hasLeaders)trStyle+='cursor:pointer;';
+    const trAttrs=`${trStyle?` style="${trStyle}"`:''}${hasLeaders?` onclick="toggleLeaders('${rowId}')"`:''}`;
+    const caret=hasLeaders?`<span id="${rowId}-caret" style="color:var(--cyan);font-size:10px;">&#9656;</span> `:'';
+
+    html+=`<tr${trAttrs}>
       <td class="rank-cell">${t.rank!=null?'#'+t.rank:'—'}</td>
-      <td class="name-cell">${t.name}${isActive?' <span style="color:var(--green);font-size:10px;">ACTIVE</span>':''}</td>
+      <td class="name-cell">${caret}${t.name}${isActive?' <span style="color:var(--green);font-size:10px;">ACTIVE</span>':''}</td>
       <td class="proxy-cell">${t.proxy}</td>
       <td class="return-cell ${r4w!=null?(r4w>=0?'pos':'neg'):''}">${r4w!=null?r4w.toFixed(2)+'%':'—'}</td>
       <td class="return-cell ${r12w!=null?(r12w>=0?'pos':'neg'):''}">${r12w!=null?r12w.toFixed(2)+'%':'—'}</td>
       <td class="return-cell">${t.composite!=null?t.composite.toFixed(1):'—'}</td>
       <td style="font-size:11px;">${t.consecutive_top_n_weeks>0?`<span style="color:var(--cyan);">${t.consecutive_top_n_weeks}w in top 2</span>`:'—'}</td>
     </tr>`;
+    if(hasLeaders){
+      html+=`<tr id="${rowId}" style="display:none;"><td colspan="7" style="padding:0;">${renderLeaders(themeLeaders)}</td></tr>`;
+    }
   }
   html+=`</tbody></table></div>`;
 
@@ -413,6 +428,52 @@ function render(){
 
   // Fetch and render history
   loadHistory();
+}
+
+// ===== Constituent leaders (Layer 2 expandable) =====
+function toggleLeaders(id){
+  const row=document.getElementById(id);
+  if(!row)return;
+  const show=row.style.display==='none';
+  row.style.display=show?'table-row':'none';
+  const caret=document.getElementById(id+'-caret');
+  if(caret)caret.innerHTML=show?'&#9662;':'&#9656;';
+}
+
+function renderWarnings(ws){
+  if(!ws||!ws.length)return '<span style="color:var(--dim);font-size:11px;">—</span>';
+  const map={
+    earnings_within_7d:{label:'Earnings &le;7d',bg:'rgba(210,153,34,.18)',fg:'var(--yellow)'},
+    at_52w_high:{label:'52W High',bg:'rgba(57,197,187,.16)',fg:'var(--cyan)'},
+    rsi_overbought:{label:'RSI&gt;70',bg:'rgba(248,81,73,.16)',fg:'var(--red)'},
+  };
+  return ws.map(w=>{
+    const m=map[w]||{label:w,bg:'rgba(110,118,129,.18)',fg:'var(--dim)'};
+    return `<span style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;margin-right:4px;background:${m.bg};color:${m.fg};">${m.label}</span>`;
+  }).join('');
+}
+
+function renderLeaders(list){
+  let h=`<div style="padding:8px 8px 12px 28px;background:rgba(110,118,129,.06);">
+    <div style="font-size:11px;color:var(--dim);margin-bottom:6px;">Top constituents by composite (4W + 12W) momentum</div>
+    <table class="theme-table" style="font-size:12px;">
+      <thead><tr><th>Rank</th><th>Ticker</th><th>Price</th><th>4W</th><th>12W</th><th>RSI</th><th>Warnings</th></tr></thead>
+      <tbody>`;
+  for(const c of list){
+    const r4=c.return_4w,r12=c.return_12w,rsi=c.rsi_14;
+    const rsiCol=(rsi!=null&&rsi>70)?'var(--red)':'var(--text)';
+    h+=`<tr>
+      <td class="rank-cell">#${c.composite_rank}</td>
+      <td class="name-cell">${c.ticker}</td>
+      <td class="return-cell">${c.current_price!=null?'$'+Number(c.current_price).toFixed(2):'—'}</td>
+      <td class="return-cell ${r4!=null?(r4>=0?'pos':'neg'):''}">${r4!=null?r4.toFixed(2)+'%':'—'}</td>
+      <td class="return-cell ${r12!=null?(r12>=0?'pos':'neg'):''}">${r12!=null?r12.toFixed(2)+'%':'—'}</td>
+      <td class="return-cell" style="color:${rsiCol};">${rsi!=null?rsi:'—'}</td>
+      <td>${renderWarnings(c.warnings||[])}</td>
+    </tr>`;
+  }
+  h+=`</tbody></table></div>`;
+  return h;
 }
 
 async function loadHistory(){

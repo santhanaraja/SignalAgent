@@ -809,6 +809,53 @@ def framework_gauges_json():
         )
 
 
+@app.route("/api/framework/leaders.json")
+def framework_leaders_json():
+    """
+    Public JSON API — returns just the per-theme constituent leaders.
+
+    Response shape:
+    {
+      "generated_at": "...",
+      "theme_leaders": {
+        "Semis": [
+          { "ticker": "NVDA", "current_price": 1450.0, "return_4w": 22.5,
+            "return_12w": 78.3, "composite_rank": 1, "rsi_14": 64,
+            "warnings": [] },
+          ...
+        ],
+        ...
+      }
+    }
+    """
+    framework_path = os.path.join(PUBLIC_DIR, "framework.json")
+    if not os.path.exists(framework_path):
+        return app.response_class(
+            response=json.dumps({
+                "error": "Framework has not been run yet.",
+                "hint": "POST /api/framework/run to trigger a run.",
+            }),
+            status=404,
+            mimetype="application/json",
+        )
+    try:
+        with open(framework_path, "r") as f:
+            data = json.load(f)
+        return app.response_class(
+            response=json.dumps({
+                "generated_at": data.get("generated_at"),
+                "theme_leaders": data.get("theme_leaders", {}),
+            }, cls=NumpyEncoder),
+            mimetype="application/json",
+        )
+    except Exception as e:
+        return app.response_class(
+            response=json.dumps({"error": str(e)}),
+            status=500,
+            mimetype="application/json",
+        )
+
+
 # ------------------------------------------------------------------
 # Technicals API — Moving averages, indicators, ranges for any ticker
 # ------------------------------------------------------------------
@@ -818,6 +865,40 @@ TECHNICALS_DEFAULT_WATCHLIST = [
     "GOOGL", "GGLL", "IONQ", "MSTY", "SGOV",
 ]
 TECHNICALS_BATCH_LIMIT = 20
+
+
+def _framework_technicals_symbols():
+    """
+    Read theme proxies + all constituents from framework/config.yaml so the
+    technicals cache is preloaded for everything the framework references.
+    Returns [] on any failure (config missing, yaml unavailable, etc.).
+    """
+    symbols = []
+    try:
+        import yaml
+        cfg_path = os.path.join(FRAMEWORK_DIR, "config.yaml")
+        with open(cfg_path, "r") as f:
+            cfg = yaml.safe_load(f) or {}
+        for theme in cfg.get("themes", {}).get("watchlist", []):
+            if theme.get("proxy"):
+                symbols.append(theme["proxy"])
+            for c in theme.get("constituents", []) or []:
+                symbols.append(c)
+    except Exception as e:
+        print(f"[technicals] Could not load framework constituents: {e}")
+    return symbols
+
+
+def _effective_technicals_watchlist():
+    """Default watchlist unioned with framework proxies + constituents (deduped, order-preserving)."""
+    seen = set()
+    out = []
+    for sym in list(TECHNICALS_DEFAULT_WATCHLIST) + _framework_technicals_symbols():
+        u = (sym or "").upper()
+        if u and u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
 
 # Separate cache for technicals: { "SMH": { "data": {...}, "ts": time.time() } }
 _technicals_cache = {}
@@ -1063,17 +1144,18 @@ def technicals_single(symbol):
 
 
 def _preload_technicals_watchlist():
-    """Preload default watchlist into technicals cache at startup."""
-    print(f"[technicals] Preloading {len(TECHNICALS_DEFAULT_WATCHLIST)} tickers...")
+    """Preload default watchlist + framework constituents into technicals cache."""
+    watchlist = _effective_technicals_watchlist()
+    print(f"[technicals] Preloading {len(watchlist)} tickers (incl. framework constituents)...")
     loaded = 0
-    for sym in TECHNICALS_DEFAULT_WATCHLIST:
+    for sym in watchlist:
         try:
             result, _ = _compute_technicals(sym)
             if result is not None:
                 loaded += 1
         except Exception as e:
             print(f"[technicals] Preload failed for {sym}: {e}")
-    print(f"[technicals] Preloaded {loaded}/{len(TECHNICALS_DEFAULT_WATCHLIST)} tickers")
+    print(f"[technicals] Preloaded {loaded}/{len(watchlist)} tickers")
 
 
 def _technicals_refresh_loop():
@@ -1146,6 +1228,7 @@ if __name__ == "__main__":
     print(f"    GET http://localhost:{port}/api/framework/latest.json")
     print(f"    GET http://localhost:{port}/api/framework/history.json")
     print(f"    GET http://localhost:{port}/api/framework/gauges.json")
+    print(f"    GET http://localhost:{port}/api/framework/leaders.json")
     print(f"    GET http://localhost:{port}/api/technicals/<TICKER>.json")
     print(f"    GET http://localhost:{port}/api/technicals/batch.json?tickers=SMH,QTUM")
     print("=" * 60 + "\n")

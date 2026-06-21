@@ -121,7 +121,17 @@ class ThemeRanker:
         # --- Load state ---
         theme_history = self._load_theme_history()
         qualified = self._load_qualified_themes()
-        active_themes = qualified.get("active", [])
+        active_records = qualified.get("active", [])
+        # The active list may hold legacy name-strings or {name, proxy, ...}
+        # records; normalize to a list of names for all in-memory logic.
+        active_themes = [self._active_name(a) for a in active_records]
+        price_by_name = {t["name"]: t.get("current_price") for t in theme_data}
+
+        # Consecutive-week counts must look only at PAST weeks. compute() runs
+        # before save_weekly_snapshot(), so on a same-day re-run today's snapshot
+        # is already in history — exclude it so this week isn't double-counted.
+        today_iso = datetime.date.today().isoformat()
+        past_history = [h for h in theme_history if h.get("date") != today_iso]
 
         # --- Entry signals ---
         entry_signals = []
@@ -132,7 +142,7 @@ class ThemeRanker:
         max_active = ranking_cfg.get("max_active_themes", 2)
 
         for t in available:
-            consec = self._count_consecutive_top_n(t["name"], theme_history, top_n)
+            consec = self._count_consecutive_top_n(t["name"], past_history, top_n)
             t["consecutive_top_n_weeks"] = consec + 1 if t["rank"] <= top_n else 0
 
             if t["rank"] <= top_n and t["name"] not in active_themes:
@@ -171,7 +181,7 @@ class ThemeRanker:
                 continue
 
             if theme_ranked["rank"] is not None and theme_ranked["rank"] > exit_rank_threshold:
-                consec_below = self._count_consecutive_below_rank(active_name, theme_history, exit_rank_threshold)
+                consec_below = self._count_consecutive_below_rank(active_name, past_history, exit_rank_threshold)
                 if consec_below + 1 >= exit_consec_needed:
                     exit_signals.append({
                         "theme": active_name,
@@ -198,6 +208,13 @@ class ThemeRanker:
                     "action": f"EXIT SIGNAL — regime degraded to {regime_state}",
                     "reason": "regime_degradation",
                 })
+
+        # --- Update active membership in qualified_themes.json ---
+        # Entry signal -> add to active (with entry date + proxy price).
+        # Exit signal  -> remove from active. This closes the lifecycle so
+        # future runs can evaluate exit conditions against real positions.
+        self._update_active_state(qualified, active_records, entry_signals,
+                                  exit_signals, price_by_name)
 
         # Concentration limits
         conc = self.themes_cfg.get("concentration_limits", {})
@@ -267,6 +284,63 @@ class ThemeRanker:
             except (json.JSONDecodeError, IOError):
                 pass
         return {"active": [], "pending": []}
+
+    @staticmethod
+    def _active_name(record) -> str:
+        """Return the theme name from an active record (dict) or legacy string."""
+        return record["name"] if isinstance(record, dict) else record
+
+    def _update_active_state(self, qualified: dict, active_records: list,
+                             entry_signals: list, exit_signals: list,
+                             price_by_name: dict):
+        """
+        Update + persist the qualified_themes.json "active" list for this run.
+
+        Entry signal -> add the theme (with entry date + proxy entry price).
+        Exit signal  -> remove the theme. Writes the file only when membership
+        actually changes, so idempotent re-runs leave it untouched.
+        """
+        updated = list(active_records)
+        changed = False
+        max_active = self.themes_cfg.get("ranking", {}).get("max_active_themes", 2)
+
+        # Remove any theme that fired a confirmed EXIT SIGNAL.
+        exited = {s["theme"] for s in exit_signals if "EXIT SIGNAL" in s.get("action", "")}
+        if exited:
+            pruned = [a for a in updated if self._active_name(a) not in exited]
+            if len(pruned) != len(updated):
+                updated = pruned
+                changed = True
+
+        # Add any theme that fired a confirmed ENTRY SIGNAL.
+        today_iso = datetime.date.today().isoformat()
+        current_names = {self._active_name(a) for a in updated}
+        for s in entry_signals:
+            if "ENTRY SIGNAL" not in s.get("action", ""):
+                continue
+            if len(updated) >= max_active:
+                break  # never persist more than max_active_themes positions
+            name = s["theme"]
+            if name in current_names:
+                continue
+            updated.append({
+                "name": name,
+                "proxy": s.get("proxy"),
+                "entry_date": today_iso,
+                "entry_price": price_by_name.get(name),
+            })
+            current_names.add(name)
+            changed = True
+
+        if changed:
+            qualified["active"] = updated
+            self._save_qualified_themes(qualified)
+
+    def _save_qualified_themes(self, qualified: dict):
+        """Persist qualified_themes.json (active/pending lifecycle state)."""
+        path = os.path.join(self.STATE_DIR, "qualified_themes.json")
+        with open(path, "w") as f:
+            json.dump(qualified, f, indent=2)
 
     def save_weekly_snapshot(self, result: dict):
         """Append this week's ranking to theme_history.json."""
