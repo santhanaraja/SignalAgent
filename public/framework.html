@@ -304,7 +304,9 @@ function render(){
     const r4w=t.return_4w;
     const r12w=t.return_12w;
     const isActive=(themes.active_themes||[]).includes(t.name);
-    const themeLeaders=leaders[t.name];
+    const entry=leaders[t.name];
+    const themeLeaders=entry&&entry.leaders;
+    const isQualified=!!(entry&&entry.qualified);
     const hasLeaders=Array.isArray(themeLeaders)&&themeLeaders.length>0;
     const rowId='leaders-'+(themeIdx++);
 
@@ -312,7 +314,7 @@ function render(){
     if(isActive)trStyle+='background:rgba(63,185,80,.08);';
     if(hasLeaders)trStyle+='cursor:pointer;';
     const trAttrs=`${trStyle?` style="${trStyle}"`:''}${hasLeaders?` onclick="toggleLeaders('${rowId}')"`:''}`;
-    const caret=hasLeaders?`<span id="${rowId}-caret" style="color:var(--cyan);font-size:10px;">&#9656;</span> `:'';
+    const caret=hasLeaders?`<span id="${rowId}-caret" style="color:${isQualified?'var(--cyan)':'var(--dim)'};font-size:10px;">&#9656;</span> `:'';
 
     html+=`<tr${trAttrs}>
       <td class="rank-cell">${t.rank!=null?'#'+t.rank:'—'}</td>
@@ -324,7 +326,7 @@ function render(){
       <td style="font-size:11px;">${t.consecutive_top_n_weeks>0?`<span style="color:var(--cyan);">${t.consecutive_top_n_weeks}w in top 2</span>`:'—'}</td>
     </tr>`;
     if(hasLeaders){
-      html+=`<tr id="${rowId}" style="display:none;"><td colspan="7" style="padding:0;">${renderLeaders(themeLeaders)}</td></tr>`;
+      html+=`<tr id="${rowId}" style="display:none;"><td colspan="7" style="padding:0;">${renderLeaders(entry)}</td></tr>`;
     }
   }
   html+=`</tbody></table></div>`;
@@ -453,11 +455,17 @@ function renderWarnings(ws){
   }).join('');
 }
 
-function renderLeaders(list){
-  let h=`<div style="padding:8px 8px 12px 28px;background:rgba(110,118,129,.06);">
-    <div style="font-size:11px;color:var(--dim);margin-bottom:6px;">Top constituents by composite (4W + 12W) momentum</div>
+function renderLeaders(entry){
+  const qualified=!!(entry&&entry.qualified);
+  const list=(entry&&entry.leaders)||[];
+  const opacity=qualified?'1':'0.7';
+  const subtitle=qualified
+    ?'Top constituents by composite (4W + 12W) momentum'
+    :'Top constituents by composite (4W + 12W) momentum &middot; informational (not deployment-ready)';
+  let h=`<div style="padding:8px 8px 12px 28px;background:rgba(110,118,129,.06);opacity:${opacity};">
+    <div style="font-size:11px;color:var(--dim);margin-bottom:6px;">${subtitle}</div>
     <table class="theme-table" style="font-size:12px;">
-      <thead><tr><th>Rank</th><th>Ticker</th><th>Price</th><th>4W</th><th>12W</th><th>RSI</th><th>Warnings</th></tr></thead>
+      <thead><tr><th>Rank</th><th>Ticker</th><th>Price</th><th>4W</th><th>12W</th><th>RSI</th><th>${qualified?'Warnings':'&mdash;'}</th></tr></thead>
       <tbody>`;
   for(const c of list){
     const r4=c.return_4w,r12=c.return_12w,rsi=c.rsi_14;
@@ -469,7 +477,7 @@ function renderLeaders(list){
       <td class="return-cell ${r4!=null?(r4>=0?'pos':'neg'):''}">${r4!=null?r4.toFixed(2)+'%':'—'}</td>
       <td class="return-cell ${r12!=null?(r12>=0?'pos':'neg'):''}">${r12!=null?r12.toFixed(2)+'%':'—'}</td>
       <td class="return-cell" style="color:${rsiCol};">${rsi!=null?rsi:'—'}</td>
-      <td>${renderWarnings(c.warnings||[])}</td>
+      <td>${qualified?renderWarnings(c.warnings||[]):'<span style="color:var(--dim);font-size:11px;">—</span>'}</td>
     </tr>`;
   }
   h+=`</tbody></table></div>`;

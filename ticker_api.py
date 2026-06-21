@@ -812,18 +812,27 @@ def framework_gauges_json():
 @app.route("/api/framework/leaders.json")
 def framework_leaders_json():
     """
-    Public JSON API — returns just the per-theme constituent leaders.
+    Public JSON API — returns the per-theme constituent leaders for ALL themes.
+
+    Each theme carries a "qualified" flag (deployment-ready top-2 + active) and
+    its top-3 "leaders". Warnings (earnings_within_7d / at_52w_high /
+    rsi_overbought) are populated only for qualified themes; non-qualified themes
+    are informational and always return warnings: [].
 
     Response shape:
     {
       "generated_at": "...",
       "theme_leaders": {
-        "Semis": [
-          { "ticker": "NVDA", "current_price": 1450.0, "return_4w": 22.5,
-            "return_12w": 78.3, "composite_rank": 1, "rsi_14": 64,
-            "warnings": [] },
-          ...
-        ],
+        "Semis": {
+          "qualified": true,
+          "leaders": [
+            { "ticker": "MU", "current_price": 1133.99, "return_4w": 51.0,
+              "return_12w": 219.15, "composite_rank": 2, "rsi_14": 66,
+              "warnings": ["earnings_within_7d", "at_52w_high"] },
+            ...
+          ]
+        },
+        "Energy": { "qualified": false, "leaders": [ { ..., "warnings": [] }, ... ] },
         ...
       }
     }

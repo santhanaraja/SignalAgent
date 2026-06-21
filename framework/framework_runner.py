@@ -228,9 +228,13 @@ def run_framework(force_fetch: bool = False) -> dict:
         if name not in qualified_names:
             qualified_names.append(name)
 
+    # Rank constituents for ALL themes (informational visibility); only the
+    # qualified subset gets the full warning pipeline.
+    all_theme_names = [t["name"] for t in config.get("themes", {}).get("watchlist", [])]
     constituent_ranker = ConstituentRanker(config, fetch_data, fetch_next_earnings)
-    theme_leaders = constituent_ranker.compute(qualified_names)
-    print(f"[framework] Constituent leaders ranked for: {', '.join(qualified_names) or 'none'}")
+    theme_leaders = constituent_ranker.compute(all_theme_names, qualified_names)
+    print(f"[framework] Constituent leaders ranked for {len(theme_leaders)} themes "
+          f"(qualified: {', '.join(qualified_names) or 'none'})")
 
     # --- Layer 3: Rules ---
     print("[framework] Evaluating rules...")

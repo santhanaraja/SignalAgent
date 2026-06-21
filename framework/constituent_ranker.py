@@ -36,40 +36,55 @@ class ConstituentRanker:
     # ------------------------------------------------------------------
     # Public entry point
     # ------------------------------------------------------------------
-    def compute(self, qualified_theme_names: list) -> dict:
+    def compute(self, all_theme_names: list, qualified_theme_names: list = None) -> dict:
         """
-        Rank constituents for each qualified theme.
+        Rank constituents for ALL themes, flagging which are deployment-qualified.
 
         Args:
-            qualified_theme_names: theme names (e.g. ["Semis", "Quantum"]) to rank.
+            all_theme_names: every theme name to rank (e.g. all 8 watchlist themes).
+            qualified_theme_names: the subset that is deployment-qualified (top-2 by
+                composite + active). Only these get the expensive warning pipeline
+                (earnings lookup + 52-week-high check); the rest return warnings=[].
 
         Returns:
-            { theme_name: [ {ticker, current_price, return_4w, return_12w,
-                             composite_rank, rsi_14, warnings[]}, ... ] }
+            { theme_name: { "qualified": bool,
+                            "leaders": [ {ticker, current_price, return_4w,
+                                          return_12w, composite_rank, rsi_14,
+                                          warnings[]}, ... ] } }
             (top TOP_N constituents per theme, best composite first).
         """
         ranking_cfg = self.themes_cfg.get("ranking", {})
         by_name = {t["name"]: t for t in self.themes_cfg.get("watchlist", [])}
+        qualified_set = set(qualified_theme_names or [])
 
-        leaders = {}
-        for theme_name in qualified_theme_names:
+        result = {}
+        for theme_name in all_theme_names:
             theme = by_name.get(theme_name)
             if not theme:
                 continue
             constituents = theme.get("constituents", []) or []
             if not constituents:
                 continue
-            leaders[theme_name] = self._rank_theme_constituents(constituents, ranking_cfg)
-        return leaders
+            is_qualified = theme_name in qualified_set
+            result[theme_name] = {
+                "qualified": is_qualified,
+                "leaders": self._rank_theme_constituents(constituents, ranking_cfg, is_qualified),
+            }
+        return result
 
     # ------------------------------------------------------------------
     # Per-theme ranking
     # ------------------------------------------------------------------
-    def _rank_theme_constituents(self, tickers: list, ranking_cfg: dict) -> list:
-        """Compute returns for each constituent, rank by composite, return top N."""
+    def _rank_theme_constituents(self, tickers: list, ranking_cfg: dict, qualified: bool) -> list:
+        """Compute returns for each constituent, rank by composite, return top N.
+
+        Warnings (earnings / 52w-high / RSI-overbought) are computed only when
+        `qualified` is True; non-qualified themes return warnings=[] and skip the
+        expensive earnings-fetcher calls and 52-week-high work.
+        """
         computed = []
         for ticker in tickers:
-            data = self._compute_constituent(ticker, ranking_cfg)
+            data = self._compute_constituent(ticker, ranking_cfg, qualified)
             if data is not None:
                 computed.append(data)
 
@@ -102,12 +117,17 @@ class ConstituentRanker:
                 "return_12w": c["return_12w"],
                 "composite_rank": i + 1,
                 "rsi_14": c["rsi_14"],
-                "warnings": self._build_warnings(c),
+                "warnings": self._build_warnings(c) if qualified else [],
             })
         return leaders
 
-    def _compute_constituent(self, ticker: str, ranking_cfg: dict) -> dict:
-        """Fetch 1y data and compute returns, RSI, and 52w-high proximity."""
+    def _compute_constituent(self, ticker: str, ranking_cfg: dict, qualified: bool) -> dict:
+        """Fetch 1y data and compute returns + RSI.
+
+        The 52-week-high proximity (at_52w_high) and overbought flags are computed
+        only for qualified themes (they feed warnings); non-qualified themes skip
+        that work and leave both flags False.
+        """
         try:
             df = self.fetcher(ticker, period="1y")
             lookback_4w = ranking_cfg.get("lookback_4w", 20)
@@ -124,22 +144,26 @@ class ConstituentRanker:
             ret_4w = ((current - price_4w_ago) / price_4w_ago) * 100
             ret_12w = ((current - price_12w_ago) / price_12w_ago) * 100
 
-            # 52-week high (prefer the High column; fall back to Close)
-            high_series = df["High"] if "High" in df.columns else close
-            high_52w = float(high_series.max())
-            at_52w_high = high_52w > 0 and current >= high_52w * self.NEAR_52W_HIGH_PCT
-
             rsi = self._rsi([float(x) for x in list(close)], self.RSI_PERIOD)
 
-            return {
+            data = {
                 "ticker": ticker,
                 "current_price": round(current, 2),
                 "return_4w": round(ret_4w, 2),
                 "return_12w": round(ret_12w, 2),
                 "rsi_14": round(rsi) if rsi is not None else None,
-                "at_52w_high": at_52w_high,
-                "rsi_overbought": rsi is not None and rsi > self.RSI_OVERBOUGHT,
+                "at_52w_high": False,
+                "rsi_overbought": False,
             }
+
+            # Expensive warning inputs — qualified (deployment-ready) themes only.
+            if qualified:
+                high_series = df["High"] if "High" in df.columns else close
+                high_52w = float(high_series.max())
+                data["at_52w_high"] = high_52w > 0 and current >= high_52w * self.NEAR_52W_HIGH_PCT
+                data["rsi_overbought"] = rsi is not None and rsi > self.RSI_OVERBOUGHT
+
+            return data
         except Exception:
             return None
 
