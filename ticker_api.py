@@ -865,6 +865,50 @@ def framework_leaders_json():
         )
 
 
+@app.route("/api/universe/candidates.json")
+def universe_candidates_json():
+    """
+    Public JSON API — inspect the candidate source universe (read-only).
+
+    Serves the pre-built public/universe_candidates.json produced by
+    `python universe_source.py`. The universe layer is not yet wired into the
+    signal pipeline, so this endpoint only reflects the last build.
+
+    Response shape:
+    {
+      "generated_at": "...",
+      "total_count": 540,
+      "by_source": { "etf_holdings": .., "sp500": .., "manual_additions": .., "overlap_count": .. },
+      "by_gics_sub_industry": { "Semiconductors": 18, ... },
+      "unclassified": 12,
+      "unclassified_tickers": [ ... ]
+    }
+    """
+    path = os.path.join(PUBLIC_DIR, "universe_candidates.json")
+    if not os.path.exists(path):
+        return app.response_class(
+            response=json.dumps({
+                "error": "Candidate universe has not been built yet.",
+                "hint": "Run: python universe_source.py",
+            }),
+            status=404,
+            mimetype="application/json",
+        )
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+        return app.response_class(
+            response=json.dumps(data, cls=NumpyEncoder),
+            mimetype="application/json",
+        )
+    except Exception as e:
+        return app.response_class(
+            response=json.dumps({"error": str(e)}),
+            status=500,
+            mimetype="application/json",
+        )
+
+
 # ------------------------------------------------------------------
 # Technicals API — Moving averages, indicators, ranges for any ticker
 # ------------------------------------------------------------------

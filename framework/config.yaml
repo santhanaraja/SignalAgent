@@ -160,3 +160,41 @@ standing_rules:
   R25: "Don't add to position because it's working. Add only on pullbacks per pre-committed plan."
   R26: "No margin leverage on aggressive options trades."
   R27: "Flexibility means switching themes by rules, not by feel."
+
+# ---------------------------------------------------------------------------
+# Dynamic dashboard universe (source layer — not yet wired into signal_engine)
+# Consumed by universe_source.py / gics_classifier.py. UniverseSource receives
+# this `universe` subtree as its `config` arg.
+# ---------------------------------------------------------------------------
+universe:
+  source:
+    etf_holdings:
+      - SPY
+      - QQQ
+      - IWM
+      - XLE
+      - XLF
+      - XLK
+      - XLV
+      - XLI
+      - XLY
+      - XLP
+      - XLU
+      - XLB
+      - XLRE
+      - XLC
+      - SMH
+      - AIQ
+      - QTUM
+      - ITA
+      - IBIT
+      - XBI
+      - GLD
+    include_sp500: true
+    manual_additions: []
+    manual_exclusions:
+      - PSTG  # currently failing yfinance >=20 days quality gate
+
+  cache:
+    universe_ttl_days: 7
+    gics_ttl_days: 30
