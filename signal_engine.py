@@ -638,13 +638,20 @@ def compute_moving_averages(series):
 
 
 def compute_ytd_return(df):
-    """Compute YTD return from first trading day of current year."""
+    """Compute YTD return from the first VALID close of the current year.
+
+    Yahoo intermittently returns phantom bars with NaN Close (e.g. a Jan-2
+    row on some tickers); without dropna the NaN baseline propagates through
+    group averages into signals.json as invalid bare-NaN JSON.
+    """
     current_year = datetime.datetime.now().year
-    year_data = df[df.index.year == current_year]
-    if len(year_data) < 2:
+    closes = df[df.index.year == current_year]["Close"].dropna()
+    if len(closes) < 2:
         return 0.0
-    first_close = year_data["Close"].iloc[0]
-    last_close = year_data["Close"].iloc[-1]
+    first_close = closes.iloc[0]
+    last_close = closes.iloc[-1]
+    if not first_close:
+        return 0.0
     return round(((last_close - first_close) / first_close) * 100, 2)
 
 
