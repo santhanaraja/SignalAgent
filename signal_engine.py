@@ -2028,6 +2028,9 @@ def run_engine():
             "beating_sp500_count": beating_count,
             "breaker_status": breaker_status,
             "breaker_alerts": breaker_alerts,
+            # rotation-week audit: candidates that did NOT make the cut
+            # (empty for fallback/legacy groups — UI omits the strip)
+            "near_misses": group_info.get("near_misses", []),
             "stocks": stocks_in_group
         })
 

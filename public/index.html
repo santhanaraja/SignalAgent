@@ -187,6 +187,8 @@
   .ts-reduce{background:rgba(240,136,62,.15);color:#f0883e;border:1px solid rgba(240,136,62,.25);}
   .ts-avoid{background:rgba(248,81,73,.18);color:#f85149;border:1px solid rgba(248,81,73,.3);}
   .reasoning{font-size:10px;color:var(--dim);max-width:300px;white-space:normal;line-height:1.4;}
+  .near-miss-strip{padding:8px 18px 12px;font-size:11px;color:var(--dim);line-height:1.8;border-top:1px solid var(--border);}
+  .near-miss-strip .nm-t{color:var(--text);opacity:.75;font-weight:600;}
 
   /* Stage badges */
   .stg{padding:2px 7px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.3px;white-space:nowrap;}
@@ -327,6 +329,19 @@ function fmtComma(v){return v?v.toLocaleString('en-US',{minimumFractionDigits:2,
    lacked a valid year-start price for a ticker. */
 function fmtYtd(v){return (v===null||v===undefined||isNaN(v))?'—':(v>=0?'+':'')+v+'%';}
 function ytdColor(v){return (v===null||v===undefined||isNaN(v))?'var(--dim)':(v>=0?'var(--green)':'var(--red)');}
+/* Near-miss strip: rounded YTD + short annotation for gate failures */
+function nmYtd(v){return (v===null||v===undefined||isNaN(v))?'—':(v>=0?'+':'')+Math.round(v)+'%';}
+function nmNote(s){return {failed_volume_gate:'low vol',failed_score_gate:'low score',failed_mcap_gate:'small cap',failed_history_gate:'short history'}[s]||'';}
+function nearMissStrip(g){
+  const nm = g.near_misses||[];
+  if(!nm.length) return '';
+  const items = nm.map(n=>{
+    const note = nmNote(n.status);
+    const title = (n.fails&&n.fails.length)?` title="${n.fails.join('; ')}"`:'';
+    return `<span${title}><span class="nm-t">${n.ticker}</span> ${n.score==null?'—':n.score} (${nmYtd(n.ytd)}${note?', '+note:''})</span>`;
+  });
+  return `<div class="near-miss-strip">Not selected: ${items.join(' · ')}</div>`;
+}
 function breakerIcon(status){return {critical:'🔴',warning:'🟠',watch:'🟡',clear:'🟢'}[status]||'⚪';}
 function tsClass(ts){
   if(!ts) return 'ts-hold';
@@ -659,6 +674,7 @@ function renderGroups(){
         </tr>`}).join('')}
         </tbody></table></div>
       </div>
+      ${nearMissStrip(g)}
     </div></div>`;
   });
 

@@ -689,7 +689,12 @@ def build_active_universe(write=True, verbose=True):
     groups = {}
     for g in selected:
         chosen = [q["ticker"] for q in g["qualifiers"][:rot["max_tickers_per_group"]]]
-        groups[g["name"]] = _group_schema_entry(g["name"], chosen, sector_map)
+        entry = _group_schema_entry(g["name"], chosen, sector_map)
+        # Compact per-group audit for the dashboard's "near misses" strip —
+        # embedded here so signals.json (hourly) can never drift from the
+        # rotation-week selection it was built with.
+        entry["near_misses"] = _near_misses_from_ranking(g)
+        groups[g["name"]] = entry
 
     total_selected = sum(len(g["tickers"]) for g in groups.values())
     if len(groups) < MIN_VIABLE_GROUPS or total_selected < MIN_VIABLE_TICKERS:
@@ -767,6 +772,34 @@ def _write_ranking_json(active):
 # ----------------------------------------------------------------------
 # Loader for signal_engine (cache-aware)
 # ----------------------------------------------------------------------
+def _near_misses_from_ranking(rank_entry):
+    """Compact non-selected candidates of a group (score desc, matching the
+    audit ordering): outranked_within_group + gate failures. no_valid_data
+    tickers are omitted (nothing meaningful to show)."""
+    out = []
+    for t in (rank_entry or {}).get("tickers", []):
+        if t.get("status") in ("selected", "no_valid_data"):
+            continue
+        nm = {"ticker": t["ticker"], "score": t["score"], "ytd": t["ytd"],
+              "status": t["status"]}
+        if t.get("fails"):
+            nm["fails"] = t["fails"]
+        out.append(nm)
+    return out
+
+
+def _with_near_misses(cached):
+    """Groups view with near_misses guaranteed. Artifacts built before the
+    near-miss embed lack the key on group entries — retrofit it from the
+    same artifact's ranking section (same build, so still consistent)."""
+    groups = cached["groups"]
+    by_name = {r.get("name"): r for r in cached.get("ranking", [])}
+    for name, entry in groups.items():
+        if "near_misses" not in entry:
+            entry["near_misses"] = _near_misses_from_ranking(by_name.get(name))
+    return groups
+
+
 def load_cached_active():
     """Read data/universe_active.json; None if missing, malformed, or not
     viable (malformed == not viable == rebuild; never crash the caller)."""
@@ -796,14 +829,14 @@ def get_active_industry_groups(force=False):
     """
     cached = load_cached_active()
     if (not force) and cached and cached.get("week_key") == rotation_week_key():
-        return cached["groups"]
+        return _with_near_misses(cached)
     try:
         return build_active_universe(write=True)["groups"]
     except Exception as e:
         print(f"[builder] rebuild failed: {e}")
         if cached:
             print(f"[builder] falling back to stale universe from {cached.get('built_at')}")
-            return cached["groups"]
+            return _with_near_misses(cached)
         return None
 
 
