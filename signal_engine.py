@@ -26,18 +26,22 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-def sanitize_for_json(obj):
+def sanitize_for_json(obj, _path=""):
     """Recursively map non-finite floats (NaN/Inf) to None before dumping.
 
     Python's json module emits bare NaN/Infinity tokens by default — invalid
     JSON that strict parsers (browsers) reject outright. Applied to every
     signals.json/artifact write so no future NaN source can blank consumers.
+    Each replacement is logged with its key path so new NaN sources surface
+    in run logs instead of being silently nulled.
     """
     if isinstance(obj, dict):
-        return {k: sanitize_for_json(v) for k, v in obj.items()}
+        return {k: sanitize_for_json(v, f"{_path}.{k}" if _path else str(k))
+                for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
-        return [sanitize_for_json(v) for v in obj]
+        return [sanitize_for_json(v, f"{_path}[{i}]") for i, v in enumerate(obj)]
     if isinstance(obj, (float, np.floating)) and not np.isfinite(obj):
+        print(f"[sanitize] WARN: non-finite value ({obj}) at {_path or '<root>'} -> null")
         return None
     return obj
 
