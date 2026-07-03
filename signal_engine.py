@@ -25,6 +25,22 @@ class NumpyEncoder(json.JSONEncoder):
             return obj.tolist()
         return super().default(obj)
 
+
+def sanitize_for_json(obj):
+    """Recursively map non-finite floats (NaN/Inf) to None before dumping.
+
+    Python's json module emits bare NaN/Infinity tokens by default — invalid
+    JSON that strict parsers (browsers) reject outright. Applied to every
+    signals.json/artifact write so no future NaN source can blank consumers.
+    """
+    if isinstance(obj, dict):
+        return {k: sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [sanitize_for_json(v) for v in obj]
+    if isinstance(obj, (float, np.floating)) and not np.isfinite(obj):
+        return None
+    return obj
+
 # Try yfinance first, fall back to direct API
 try:
     import yfinance as yf
@@ -1930,7 +1946,9 @@ def run_engine():
             continue
 
         stocks_in_group.sort(key=lambda x: x["ytd_return"], reverse=True)
-        avg_ytd = round(np.mean(ytd_returns), 2) if ytd_returns else 0
+        # nan-safe mean: ignore missing/NaN member returns; 0 if none valid
+        ytd_valid = [v for v in ytd_returns if v is not None and np.isfinite(v)]
+        avg_ytd = round(float(np.mean(ytd_valid)), 2) if ytd_valid else 0
         avg_score = round(np.mean([s["score"] for s in stocks_in_group]), 1)
         beating_count = sum(1 for s in stocks_in_group if s["beating_sp500"])
 
@@ -2021,6 +2039,7 @@ def run_engine():
         "total_groups": len(groups_output),
         "groups": groups_output
     }
+    output = sanitize_for_json(output)
 
     signals_path = os.path.join(DATA_DIR, "signals.json")
     os.makedirs(DATA_DIR, exist_ok=True)

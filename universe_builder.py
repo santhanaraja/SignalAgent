@@ -88,11 +88,14 @@ class UniverseBuildError(RuntimeError):
 
 def _atomic_write_json(path, obj):
     """Write JSON via tmp-file + rename so API readers never see a partial
-    document. Raises on failure — artifact writes must not fail silently."""
+    document. Non-finite floats become null (bare NaN is invalid JSON for
+    strict parsers). Raises on failure — artifact writes must not fail
+    silently."""
+    from signal_engine import sanitize_for_json
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w") as f:
-        json.dump(obj, f, indent=2)
+        json.dump(sanitize_for_json(obj), f, indent=2)
     os.replace(tmp, path)
 
 DEFAULT_ROTATION = {
