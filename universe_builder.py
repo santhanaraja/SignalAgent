@@ -441,6 +441,7 @@ def _ticker_metrics(ticker, df, sp500_ytd=None):
         "r3m": momentum["return_3m"],
         "r1m": momentum["return_1m"],
         "score": score,
+        "score_components": _details.get("score_components"),
         "signal": signal,
         "history_days": int(span_days),
         "rows": int(len(df)),
@@ -665,7 +666,8 @@ def build_active_universe(write=True, verbose=True):
                 tickers_out.append({"ticker": t, "score": None, "ytd": None,
                                     "status": "no_valid_data", "fails": []})
                 continue
-            entry = {"ticker": t, "score": m["score"], "ytd": m["ytd"], "fails": []}
+            entry = {"ticker": t, "score": m["score"], "ytd": m["ytd"],
+                     "components": m.get("score_components"), "fails": []}
             if t in qual_by_ticker:
                 if g["exclusion_reason"] == "below_min_candidates":
                     entry["status"] = "group_below_min_candidates"
@@ -782,6 +784,8 @@ def _near_misses_from_ranking(rank_entry):
             continue
         nm = {"ticker": t["ticker"], "score": t["score"], "ytd": t["ytd"],
               "status": t["status"]}
+        if t.get("components"):
+            nm["components"] = t["components"]
         if t.get("fails"):
             nm["fails"] = t["fails"]
         out.append(nm)

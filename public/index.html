@@ -329,15 +329,33 @@ function fmtComma(v){return v?v.toLocaleString('en-US',{minimumFractionDigits:2,
    lacked a valid year-start price for a ticker. */
 function fmtYtd(v){return (v===null||v===undefined||isNaN(v))?'—':(v>=0?'+':'')+v+'%';}
 function ytdColor(v){return (v===null||v===undefined||isNaN(v))?'var(--dim)':(v>=0?'var(--green)':'var(--red)');}
-/* Near-miss strip: rounded YTD + short annotation for gate failures */
+/* Near-miss strip: rounded YTD + short annotation for gate failures
+   (score-gate failures show no note — the score itself says it) */
 function nmYtd(v){return (v===null||v===undefined||isNaN(v))?'—':(v>=0?'+':'')+Math.round(v)+'%';}
-function nmNote(s){return {failed_volume_gate:'low vol',failed_score_gate:'low score',failed_mcap_gate:'small cap',failed_history_gate:'short history'}[s]||'';}
+function nmNote(s){return {failed_volume_gate:'low vol',failed_mcap_gate:'small cap',failed_history_gate:'short history'}[s]||'';}
+
+/* Score-breakdown tooltip (components emitted by score_stock — see docs/scoring.md).
+   Thresholds mirror signal_engine: bands 75/60/45/30, qualifier gate 50. */
+function sgn(v){return (v>=0?'+':'')+v;}
+function scoreBand(sc){return sc>=75?'strong-buy':sc>=60?'buy':sc>=45?'hold':sc>=30?'sell':'strong-sell';}
+function scoreGateLine(sc){const d=sc-50;return `${sc} → ${scoreBand(sc)} band, ${Math.abs(d)} ${d>=0?'above':'under'} the ≥50 qualifier gate`;}
+function scoreCompLine(c,sc){return `base 50 · RSI ${sgn(c.rsi)}/±15 · MACD ${sgn(c.macd)}/±13 · MA ${sgn(c.ma)}/±14 · YTD ${sgn(c.ytd)}/+12 · Vol ${sgn(c.vol)}/±3 → ${sc}`;}
+function scoreTitleAttr(c, sc, detail){
+  if(!c || sc==null) return '';
+  const lines = [scoreCompLine(c,sc)];
+  if(detail) lines.push(detail);
+  lines.push(scoreGateLine(sc));
+  return ` title="${lines.join('&#10;')}"`;
+}
+
 function nearMissStrip(g){
   const nm = g.near_misses||[];
   if(!nm.length) return '';
   const items = nm.map(n=>{
     const note = nmNote(n.status);
-    const title = (n.fails&&n.fails.length)?` title="${n.fails.join('; ')}"`:'';
+    const detail = (n.fails&&n.fails.length)?n.fails.join('; '):null;
+    let title = scoreTitleAttr(n.components, n.score, detail);
+    if(!title && detail) title = ` title="${detail}"`;
     return `<span${title}><span class="nm-t">${n.ticker}</span> ${n.score==null?'—':n.score} (${nmYtd(n.ytd)}${note?', '+note:''})</span>`;
   });
   return `<div class="near-miss-strip">Not selected: ${items.join(' · ')}</div>`;
@@ -624,7 +642,7 @@ function renderGroups(){
           <td>${tvLink(s.ticker)}${s.beating_sp500?'<span class="sp">S&P✓</span>':''}</td>
           <td class="mono" style="font-weight:600">$${s.price?s.price.toFixed(2):'—'}</td>
           <td class="ytd ${s.ytd_return==null?'':(s.ytd_return>=0?'up':'dn')}">${fmtYtd(s.ytd_return)}</td>
-          <td><div style="display:flex;align-items:center;gap:6px"><div class="bar"><div class="bar-fill" style="width:${s.score}%;background:${scoreColor(s.score)}"></div></div><span style="font-size:11px;font-weight:600;color:${scoreColor(s.score)}">${s.score}</span></div></td>
+          <td${scoreTitleAttr(s.score_components, s.score, `RSI ${fmtNum(s.rsi,1)} · MACD ${s.macd>s.macd_signal?'above':'below'} signal, hist ${sgn(+fmtNum(s.macd_histogram,2))} · YTD ${fmtYtd(s.ytd_return)}${s.ytd_return>100?' (overextended)':''} · vol ${s.volume_ratio||1}x`)}><div style="display:flex;align-items:center;gap:6px"><div class="bar"><div class="bar-fill" style="width:${s.score}%;background:${scoreColor(s.score)}"></div></div><span style="font-size:11px;font-weight:600;color:${scoreColor(s.score)}">${s.score}</span></div></td>
           <td><div class="dot ${s.signal}"></div><span style="font-size:11px;font-weight:600;color:${scoreColor(s.score)}">${s.signal.toUpperCase()}</span></td>
           <td>${stgBadge(s.stage_analysis)}</td>
           <td><span class="ts-badge ${tsClass(s.trade_signal)}">${s.trade_signal||'—'}</span></td>

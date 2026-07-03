@@ -926,10 +926,15 @@ def check_thesis_breakers(group_name, group_info, group_stocks, macro_data, sp50
 def score_stock(df, group_info=None):
     """
     Compute a composite score (0-100) and signal for a stock.
+
+    Additive from a base of 50 across five components; per-component points
+    are returned in details["score_components"] ({rsi, macd, ma, ytd, vol})
+    for the dashboard's score-breakdown tooltip. See docs/scoring.md.
     """
     close = df["Close"]
     score = 50
     details = {}
+    components = {}
 
     # --- RSI ---
     rsi = compute_rsi(close)
@@ -937,17 +942,19 @@ def score_stock(df, group_info=None):
     details["rsi"] = round(current_rsi, 1)
 
     if current_rsi < 30:
-        score += 15
+        pts = 15
     elif current_rsi < 40:
-        score += 8
+        pts = 8
     elif current_rsi < 60:
-        score += 3
+        pts = 3
     elif current_rsi < 70:
-        score -= 3
+        pts = -3
     elif current_rsi < 80:
-        score -= 8
+        pts = -8
     else:
-        score -= 15
+        pts = -15
+    components["rsi"] = pts
+    score += pts
 
     # --- MACD ---
     macd_line, signal_line, histogram = compute_macd(close)
@@ -961,15 +968,17 @@ def score_stock(df, group_info=None):
     details["macd_histogram"] = round(current_hist, 3)
 
     if current_macd > current_signal:
-        score += 8
-        if current_hist > prev_hist:
-            score += 5
+        pts = 8 + (5 if current_hist > prev_hist else 0)
     else:
-        score -= 8
-        if current_hist < prev_hist:
-            score -= 5
+        pts = -8 - (5 if current_hist < prev_hist else 0)
+    components["macd"] = pts
+    score += pts
 
     # --- Moving Averages ---
+    # NOTE (known bias, kept as-is): when MA20/MA50 are NaN (fewer than
+    # 20/50 bars), they default to current_price, so all three comparisons
+    # below fail and a young listing takes the full -14. In practice the
+    # universe's 90-day history gate keeps such names out.
     ma20, ma50, ma200 = compute_moving_averages(close)
     current_price = close.iloc[-1]
     ma20_val = ma20.iloc[-1] if not pd.isna(ma20.iloc[-1]) else current_price
@@ -981,48 +990,49 @@ def score_stock(df, group_info=None):
     details["ma50"] = round(ma50_val, 2)
     details["ma200"] = round(ma200_val, 2) if ma200_val else None
 
-    if current_price > ma20_val:
-        score += 4
-    else:
-        score -= 4
-    if current_price > ma50_val:
-        score += 6
-    else:
-        score -= 6
-    if ma20_val > ma50_val:
-        score += 4
-    else:
-        score -= 4
+    pts = (4 if current_price > ma20_val else -4) \
+        + (6 if current_price > ma50_val else -6) \
+        + (4 if ma20_val > ma50_val else -4)
+    components["ma"] = pts
+    score += pts
 
     # --- YTD Momentum ---
     ytd_return = compute_ytd_return(df)
     details["ytd_return"] = ytd_return
 
     if ytd_return > 50:
-        score += 8
+        pts = 8
     elif ytd_return > 20:
-        score += 12
+        pts = 12
     elif ytd_return > 5:
-        score += 6
+        pts = 6
     elif ytd_return > 0:
-        score += 2
+        pts = 2
     elif ytd_return > -10:
-        score -= 4
+        pts = -4
     else:
-        score -= 10
+        pts = -10
 
-    if ytd_return > 100:
-        score -= 10
-    elif ytd_return > 150:
-        score -= 15
+    # Overextension penalty: >150 checked first (was dead code below the
+    # >100 branch — fixed 2026-07-03, mega-winners now -15 not -10)
+    if ytd_return > 150:
+        pts -= 15
+    elif ytd_return > 100:
+        pts -= 10
+    components["ytd"] = pts
+    score += pts
 
     # --- Volume ---
     vol_ratio = compute_volume_trend(df)
     details["volume_ratio"] = vol_ratio
     if vol_ratio > 1.5:
-        score += 3
+        pts = 3
     elif vol_ratio < 0.7:
-        score -= 3
+        pts = -3
+    else:
+        pts = 0
+    components["vol"] = pts
+    score += pts
 
     # --- Momentum Metrics ---
     momentum = compute_momentum_metrics(df)
@@ -1030,6 +1040,7 @@ def score_stock(df, group_info=None):
 
     score = max(0, min(100, score))
     details["composite_score"] = score
+    details["score_components"] = components
 
     if score >= 75:
         signal = "strong-buy"
@@ -1919,6 +1930,7 @@ def run_engine():
                 stocks_in_group.append({
                     "ticker": ticker,
                     "score": sig["score"],
+                    "score_components": d.get("score_components"),
                     "signal": sig["signal"],
                     "ytd_return": d.get("ytd_return", 0),
                     "price": d.get("price", 0),
