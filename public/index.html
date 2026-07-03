@@ -323,6 +323,10 @@ function fmtMcap(v){if(!v)return '—';if(v>=1e12)return '$'+(v/1e12).toFixed(1)
 function fmtPct(v){if(v===null||v===undefined)return '—';return (v*100).toFixed(1)+'%';}
 function fmtNum(v,d){if(v===null||v===undefined)return '—';return Number(v).toFixed(d||1);}
 function fmtComma(v){return v?v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';}
+/* Signed percent with null/NaN guard — YTD can be null when the pipeline
+   lacked a valid year-start price for a ticker. */
+function fmtYtd(v){return (v===null||v===undefined||isNaN(v))?'—':(v>=0?'+':'')+v+'%';}
+function ytdColor(v){return (v===null||v===undefined||isNaN(v))?'var(--dim)':(v>=0?'var(--green)':'var(--red)');}
 function breakerIcon(status){return {critical:'🔴',warning:'🟠',watch:'🟡',clear:'🟢'}[status]||'⚪';}
 function tsClass(ts){
   if(!ts) return 'ts-hold';
@@ -342,10 +346,22 @@ function stgBadge(s){
 }
 
 async function loadData(){
+  let r;
   try{
-    const r = await fetch('signals.json?t='+Date.now());
+    r = await fetch('signals.json?t='+Date.now());
     if(!r.ok) throw new Error('No signals.json');
-    const newData = await r.json();
+  }catch(e){
+    // Genuinely no data available (missing file / network) — empty state.
+    document.getElementById('mainContent').style.display='block';
+    document.getElementById('overviewSection').style.display='none';
+    document.getElementById('mainContent').innerHTML = `<div class="empty"><h2>No Live Data Yet</h2><p>Run the signal engine first:<br><code style="background:var(--surface2);padding:4px 8px;border-radius:4px;font-size:13px">python signal_engine.py && python history_manager.py</code></p></div>`;
+    return;
+  }
+  try{
+    // signals.json can contain bare NaN for missing numerics (Python json.dump
+    // default) — invalid JSON for browsers. Map NaN value tokens to null.
+    const text = await r.text();
+    const newData = JSON.parse(text.replace(/:\s*NaN\b/g, ': null'));
     const dataChanged = prevTimestamp && newData.timestamp !== prevTimestamp;
     prevTimestamp = newData.timestamp;
     DATA = newData;
@@ -357,9 +373,12 @@ async function loadData(){
       setTimeout(()=>{document.title='Market Pulse Dashboard — Live';},5000);
     }
   }catch(e){
+    // Data WAS fetched but failed to parse/render — surface the real error
+    // instead of masquerading as "no data" (that hid a NaN-JSON outage).
+    console.error('Dashboard failed to parse/render signals.json:', e);
     document.getElementById('mainContent').style.display='block';
     document.getElementById('overviewSection').style.display='none';
-    document.getElementById('mainContent').innerHTML = `<div class="empty"><h2>No Live Data Yet</h2><p>Run the signal engine first:<br><code style="background:var(--surface2);padding:4px 8px;border-radius:4px;font-size:13px">python signal_engine.py && python history_manager.py</code></p></div>`;
+    document.getElementById('mainContent').innerHTML = `<div class="empty"><h2>Data Error</h2><p>signals.json was fetched but could not be rendered:<br><code style="background:var(--surface2);padding:4px 8px;border-radius:4px;font-size:13px">${(e && e.message) || e}</code></p></div>`;
   }
 }
 
@@ -414,10 +433,10 @@ function renderHeatmap(){
     const stocks = query ? g.stocks.filter(s=>s.ticker.toLowerCase().includes(query)||g.name.toLowerCase().includes(query)) : g.stocks;
     if(query && !stocks.length && !g.name.toLowerCase().includes(query)) return;
 
-    html += `<div class="hm-group-label" onclick="drillToGroup(${gi})">#${g.rank} ${g.name} (${g.avg_ytd>=0?'+':''}${g.avg_ytd}%) ${breakerIcon(g.breaker_status||'clear')}</div>`;
+    html += `<div class="hm-group-label" onclick="drillToGroup(${gi})">#${g.rank} ${g.name} (${fmtYtd(g.avg_ytd)}) ${breakerIcon(g.breaker_status||'clear')}</div>`;
     stocks.forEach(s=>{
       const stgLbl = s.stage_analysis ? 'S'+s.stage_analysis.stage+' '+s.stage_analysis.stage_name : '—';
-      html += `<div class="hm-tile" style="background:${scoreBg(s.score)}" onmouseenter="showTT(event,this)" onmouseleave="hideTT()" data-ticker="${s.ticker}" data-score="${s.score}" data-signal="${s.signal}" data-ytd="${s.ytd_return}" data-price="${s.price?s.price.toFixed(2):'—'}" data-rsi="${fmtNum(s.rsi,1)}" data-group="${g.name}" data-trade="${s.trade_signal||'—'}" data-stage="${stgLbl}">
+      html += `<div class="hm-tile" style="background:${scoreBg(s.score)}" onmouseenter="showTT(event,this)" onmouseleave="hideTT()" data-ticker="${s.ticker}" data-score="${s.score}" data-signal="${s.signal}" data-ytd="${s.ytd_return==null?'':s.ytd_return}" data-price="${s.price?s.price.toFixed(2):'—'}" data-rsi="${fmtNum(s.rsi,1)}" data-group="${g.name}" data-trade="${s.trade_signal||'—'}" data-stage="${stgLbl}">
         <div class="hm-ticker"><a href="${tvUrl(s.ticker)}" target="_blank" rel="noopener" title="Open in TradingView">${s.ticker}</a></div>
         <div class="hm-score">${s.score}</div>
       </div>`;
@@ -434,14 +453,14 @@ function renderBarChart(){
     if(query && !g.name.toLowerCase().includes(query)) return false;
     return true;
   });
-  const maxYtd = Math.max(...filtered.map(g=>Math.abs(g.avg_ytd)),1);
+  const maxYtd = Math.max(...filtered.map(g=>Math.abs(g.avg_ytd||0)),1);
   let html = '';
   filtered.forEach(g=>{
-    const pct = Math.abs(g.avg_ytd)/maxYtd*100;
-    const col = g.avg_ytd >= 0 ? 'var(--green)' : 'var(--red)';
+    const pct = Math.abs(g.avg_ytd||0)/maxYtd*100;
+    const col = ytdColor(g.avg_ytd);
     html += `<div class="bar-row">
       <div class="bar-label" title="${g.name}">${g.name}</div>
-      <div class="bar-track"><div class="bar-fill2" style="width:${pct}%;background:${col}"><span class="bar-val">${g.avg_ytd>=0?'+':''}${g.avg_ytd}%</span></div></div>
+      <div class="bar-track"><div class="bar-fill2" style="width:${pct}%;background:${col}"><span class="bar-val">${fmtYtd(g.avg_ytd)}</span></div></div>
     </div>`;
   });
   document.getElementById('barChart').innerHTML = html;
@@ -556,7 +575,7 @@ function renderGroups(){
         </div>
       </div>
       <div class="g-right">
-        <div class="g-ytd" style="color:${g.avg_ytd>=0?'var(--green)':'var(--red)'}">${g.avg_ytd>=0?'+':''}${g.avg_ytd}%</div>
+        <div class="g-ytd" style="color:${ytdColor(g.avg_ytd)}">${fmtYtd(g.avg_ytd)}</div>
         <div class="sig-badge ${sigClass(g.group_signal)}">${g.group_signal.replace('-',' ')}</div>
         <span class="breaker-badge breaker-${bs}">${bs.toUpperCase()}</span>
         <svg class="chev" id="ch${i}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
@@ -589,7 +608,7 @@ function renderGroups(){
         ${(query?stocks:g.stocks).map(s=>`<tr>
           <td>${tvLink(s.ticker)}${s.beating_sp500?'<span class="sp">S&P✓</span>':''}</td>
           <td class="mono" style="font-weight:600">$${s.price?s.price.toFixed(2):'—'}</td>
-          <td class="ytd ${s.ytd_return>=0?'up':'dn'}">${s.ytd_return>=0?'+':''}${s.ytd_return}%</td>
+          <td class="ytd ${s.ytd_return==null?'':(s.ytd_return>=0?'up':'dn')}">${fmtYtd(s.ytd_return)}</td>
           <td><div style="display:flex;align-items:center;gap:6px"><div class="bar"><div class="bar-fill" style="width:${s.score}%;background:${scoreColor(s.score)}"></div></div><span style="font-size:11px;font-weight:600;color:${scoreColor(s.score)}">${s.score}</span></div></td>
           <td><div class="dot ${s.signal}"></div><span style="font-size:11px;font-weight:600;color:${scoreColor(s.score)}">${s.signal.toUpperCase()}</span></td>
           <td>${stgBadge(s.stage_analysis)}</td>
@@ -611,7 +630,7 @@ function renderGroups(){
           <td class="mono" style="font-weight:600">$${s.price?s.price.toFixed(2):'—'}</td>
           <td class="mono" style="color:${(s.return_1m||0)>=0?'var(--green)':'var(--red)'}">${(s.return_1m||0)>=0?'+':''}${fmtNum(s.return_1m,1)}%</td>
           <td class="mono" style="color:${(s.return_3m||0)>=0?'var(--green)':'var(--red)'}">${(s.return_3m||0)>=0?'+':''}${fmtNum(s.return_3m,1)}%</td>
-          <td class="ytd ${s.ytd_return>=0?'up':'dn'}">${s.ytd_return>=0?'+':''}${s.ytd_return}%</td>
+          <td class="ytd ${s.ytd_return==null?'':(s.ytd_return>=0?'up':'dn')}">${fmtYtd(s.ytd_return)}</td>
           <td class="mono" style="color:${(s.pct_from_52w_high||0)>-5?'var(--green)':'var(--red)'}">${fmtNum(s.pct_from_52w_high,1)}%</td>
           <td class="mono" style="font-size:10px;color:var(--dim)">$${fmtNum(s.low_52w,0)} — $${fmtNum(s.high_52w,0)}</td>
           <td class="mono" style="color:${(s.rs_vs_ma50||0)>=0?'var(--green)':'var(--red)'};">${(s.rs_vs_ma50||0)>=0?'+':''}${fmtNum(s.rs_vs_ma50,1)}%</td>
@@ -655,7 +674,7 @@ function showTT(e,el){
     <div class="tt-row"><span class="tt-label">Price:</span> <span>$${el.dataset.price}</span></div>
     <div class="tt-row"><span class="tt-label">Score:</span> <span style="color:${scoreHex(+el.dataset.score)}">${el.dataset.score}</span></div>
     <div class="tt-row"><span class="tt-label">Signal:</span> <span style="text-transform:uppercase">${el.dataset.signal}</span></div>
-    <div class="tt-row"><span class="tt-label">YTD:</span> <span style="color:${+el.dataset.ytd>=0?'var(--green)':'var(--red)'}">${+el.dataset.ytd>=0?'+':''}${el.dataset.ytd}%</span></div>
+    <div class="tt-row"><span class="tt-label">YTD:</span> <span style="color:${ytdColor(el.dataset.ytd===''?null:+el.dataset.ytd)}">${fmtYtd(el.dataset.ytd===''?null:+el.dataset.ytd)}</span></div>
     <div class="tt-row"><span class="tt-label">RSI:</span> <span>${el.dataset.rsi}</span></div>
     <div class="tt-row"><span class="tt-label">Trade:</span> <span class="ts-badge ${tsClass(el.dataset.trade)}" style="font-size:9px;padding:1px 6px;">${el.dataset.trade}</span></div>
     <div class="tt-row"><span class="tt-label">Stage:</span> <span>${el.dataset.stage||'—'}</span></div>
