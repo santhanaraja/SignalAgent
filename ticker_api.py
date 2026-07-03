@@ -870,9 +870,10 @@ def universe_candidates_json():
     """
     Public JSON API — inspect the candidate source universe (read-only).
 
-    Serves the pre-built public/universe_candidates.json produced by
-    `python universe_source.py`. The universe layer is not yet wired into the
-    signal pipeline, so this endpoint only reflects the last build.
+    Serves the pre-built public/universe_candidates.json, refreshed by the
+    weekly rotation (`python universe_builder.py --force`) or a standalone
+    `python universe_source.py` run. This is the candidate SOURCE pool the
+    weekly top-N active universe is selected from (see /api/universe/ranking.json).
 
     Response shape:
     {
@@ -890,6 +891,44 @@ def universe_candidates_json():
             response=json.dumps({
                 "error": "Candidate universe has not been built yet.",
                 "hint": "Run: python universe_source.py",
+            }),
+            status=404,
+            mimetype="application/json",
+        )
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+        return app.response_class(
+            response=json.dumps(data, cls=NumpyEncoder),
+            mimetype="application/json",
+        )
+    except Exception as e:
+        return app.response_class(
+            response=json.dumps({"error": str(e)}),
+            status=500,
+            mimetype="application/json",
+        )
+
+
+@app.route("/api/universe/ranking.json")
+def universe_ranking_json():
+    """
+    Public JSON API — full group-ranking audit table (read-only).
+
+    Serves the pre-built public/universe_ranking.json produced by the weekly
+    rotation (`python universe_builder.py --force`). Contains EVERY GICS
+    sub-industry group with composite/median returns, candidate + qualifier
+    counts, and a per-ticker status (selected / failed_score_gate /
+    group_below_min_candidates / group_outranked / ...) — see status_legend
+    in the payload. Observability only: the active universe consumed by
+    signal_engine is the separate top-N artifact.
+    """
+    path = os.path.join(PUBLIC_DIR, "universe_ranking.json")
+    if not os.path.exists(path):
+        return app.response_class(
+            response=json.dumps({
+                "error": "Universe ranking has not been built yet.",
+                "hint": "Run: python universe_builder.py --force",
             }),
             status=404,
             mimetype="application/json",

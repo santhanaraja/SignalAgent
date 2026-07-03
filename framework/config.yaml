@@ -198,3 +198,49 @@ universe:
   cache:
     universe_ttl_days: 7
     gics_ttl_days: 30
+
+  # Canonicalize classification labels to pure GICS sub-industry names.
+  # Applied as a read-time view in GICSClassifier — the on-disk cache keeps
+  # raw values, so edits here are reversible and take effect immediately.
+  # Left side: custom/legacy/yfinance labels observed in live data.
+  gics_aliases:
+    # Legacy custom INDUSTRY_GROUPS names -> pure GICS
+    "Semiconductors — Memory & HBM": "Semiconductors"
+    "Coal & Consumable Fuels (Uranium)": "Coal & Consumable Fuels"
+    # yfinance (Yahoo taxonomy) labels -> GICS equivalents
+    "Communication Equipment": "Communications Equipment"
+    "Engineering & Construction": "Construction & Engineering"
+    "Drug Manufacturers - Specialty & Generic": "Biotechnology"
+    "Diagnostics & Research": "Life Sciences Tools & Services"
+    "Computer Hardware": "Technology Hardware, Storage & Peripherals"
+    "Electrical Equipment & Parts": "Electrical Components & Equipment"
+    "Solar": "Electrical Components & Equipment"
+    "Uranium": "Coal & Consumable Fuels"
+    # Defensive: common Yahoo labels not yet observed in live data, mapped
+    # ahead of time so a future non-S&P ticker can't split an existing group.
+    "Semiconductor Equipment & Materials": "Semiconductor Materials & Equipment"
+    "Oil & Gas E&P": "Oil & Gas Exploration & Production"
+    "Oil & Gas Midstream": "Oil & Gas Storage & Transportation"
+    "Oil & Gas Integrated": "Integrated Oil & Gas"
+    "Banks - Regional": "Regional Banks"
+    "Banks - Diversified": "Diversified Banks"
+    "Software - Application": "Application Software"
+    "Software - Infrastructure": "Systems Software"
+    "Internet Content & Information": "Interactive Media & Services"
+    "Utilities - Independent Power Producers": "Independent Power Producers & Energy Traders"
+    "Insurance - Property & Casualty": "Property & Casualty Insurance"
+
+  # Weekly rotation parameters for the active dashboard universe
+  # (consumed by universe_builder.py).
+  rotation:
+    top_n: 15
+    min_candidates: 3              # groups need >=3 candidate tickers for a slot
+    max_tickers_per_group: 7
+    min_composite_score: 50        # existing dashboard score_stock scale (0-100)
+    min_market_cap: 500000000      # 500M USD (foreign caps FX-converted)
+    min_avg_volume: 500000         # 500K shares/day (63-trading-day mean)
+    min_history_days: 90           # calendar days of price history
+    composite_weights:
+      ytd: 0.50
+      r3m: 0.30
+      r1m: 0.20

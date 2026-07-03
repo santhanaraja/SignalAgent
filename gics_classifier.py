@@ -4,15 +4,19 @@ GICS Classifier
 ===============
 Resolves a GICS sub-industry string for a ticker, with a 30-day on-disk cache.
 
-Resolution order (per spec — INDUSTRY_GROUPS first to avoid re-classifying
-tickers we already know, then cache, then a live yfinance lookup):
-  1. signal_engine.INDUSTRY_GROUPS base map  (read-only reuse; authoritative
-     custom group names, which are themselves GICS sub-industry labels)
+Resolution order (static base map first to avoid re-classifying tickers we
+already know, then cache, then a live yfinance lookup):
+  1. signal_engine.FALLBACK_INDUSTRY_GROUPS base map (read-only reuse of the
+     STATIC legacy groups — deliberately not the dynamic universe, which is
+     itself derived from this classifier and would be circular)
   2. on-disk cache (also seeded for free from the S&P 500 CSV's GICS column)
   3. yfinance Ticker(t).info["industryDisp"]  (Yahoo industry ~ GICS sub-industry)
 
-Does NOT modify INDUSTRY_GROUPS or signal_engine — it only imports the
-constant to read it.
+All three paths are canonicalized through the config alias map
+(universe.gics_aliases) at read time; the cache stores raw labels.
+
+Does NOT modify FALLBACK_INDUSTRY_GROUPS or signal_engine — it only imports
+the constant to read it.
 """
 
 import datetime
@@ -41,58 +45,74 @@ def _norm(sym):
 
 
 def _build_industry_groups_map():
-    """ticker -> custom group name from signal_engine.INDUSTRY_GROUPS (read-only)."""
+    """ticker -> group name from signal_engine.FALLBACK_INDUSTRY_GROUPS
+    (read-only; the static legacy constant, NOT the dynamic universe —
+    classifications must not depend on the groups derived from them)."""
     mapping = {}
     try:
-        from signal_engine import INDUSTRY_GROUPS
-        for group_name, info in INDUSTRY_GROUPS.items():
+        from signal_engine import FALLBACK_INDUSTRY_GROUPS
+        for group_name, info in FALLBACK_INDUSTRY_GROUPS.items():
             for t in info.get("tickers", []):
                 key = _norm(t)
                 if key:
                     mapping[key] = group_name
     except Exception as e:
-        print(f"[gics] could not import INDUSTRY_GROUPS base map: {e}")
+        print(f"[gics] could not import FALLBACK_INDUSTRY_GROUPS base map: {e}")
     return mapping
 
 
 class GICSClassifier:
-    """Classify tickers by GICS sub-industry with caching + INDUSTRY_GROUPS reuse."""
+    """Classify tickers by GICS sub-industry with caching + static base-map reuse."""
 
     GICS_TTL_DAYS = 30
 
-    def __init__(self, cache_dir, ttl_days=None):
+    def __init__(self, cache_dir, ttl_days=None, aliases=None):
+        """
+        Args:
+            aliases: optional {label: canonical_gics_sub_industry} map
+                     (config `universe.gics_aliases`). Applied as a read-time
+                     view on every resolution path — the on-disk cache keeps
+                     raw values so the map stays reversible/extensible.
+        """
         self.cache_dir = cache_dir
         os.makedirs(self.cache_dir, exist_ok=True)
         self.cache_path = os.path.join(self.cache_dir, "gics_cache.json")
         self.ttl_days = ttl_days or self.GICS_TTL_DAYS
         self.cache = self._load_cache()
         self.industry_groups_map = _build_industry_groups_map()
+        self.aliases = dict(aliases or {})
         self._dirty = False
+
+    def canon(self, sub_industry):
+        """Canonical GICS name for a raw classification label."""
+        if sub_industry is None:
+            return None
+        return self.aliases.get(sub_industry, sub_industry)
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
     def classify(self, ticker, allow_remote=True):
-        """Return the GICS sub-industry for `ticker` (None if unresolved)."""
+        """Return the canonical GICS sub-industry for `ticker` (None if unresolved)."""
         t = _norm(ticker)
         if not t:
             return None
 
-        # 1. INDUSTRY_GROUPS base mapping (already-classified tickers)
+        # 1. FALLBACK_INDUSTRY_GROUPS base mapping (already-classified tickers)
         if t in self.industry_groups_map:
-            return self.industry_groups_map[t]
+            return self.canon(self.industry_groups_map[t])
 
         # 2. cache (incl. S&P 500 seed)
         cached = self._cache_get(t)
         if cached is not None:
-            return cached
+            return self.canon(cached)
 
         # 3. live yfinance lookup
         if allow_remote:
             sub = self._fetch_industry(t)
             if sub:
                 self._cache_put(t, sub, "yfinance")
-                return sub
+                return self.canon(sub)
         return None
 
     def classify_batch(self, tickers, allow_remote=True, sleep=0.3):
@@ -123,9 +143,9 @@ class GICSClassifier:
         """Pre-populate cache from a {ticker: sub_industry} map (e.g. S&P 500 GICS).
 
         Only fills gaps (never overwrites a fresh cached/known value), and skips
-        tickers already covered by the INDUSTRY_GROUPS base map — so that map and
-        the existing cache stay the single authoritative source per ticker (no
-        orphaned/conflicting cache entries).
+        tickers already covered by the FALLBACK_INDUSTRY_GROUPS base map — so that
+        map and the existing cache stay the single authoritative source per ticker
+        (no orphaned/conflicting cache entries).
         """
         for t, sub in (mapping or {}).items():
             tn = _norm(t)

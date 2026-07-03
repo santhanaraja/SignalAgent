@@ -11,9 +11,9 @@ Assembles a *candidate* ticker universe from multiple feeds:
 Then (via GICSClassifier) classifies each candidate by GICS sub-industry and
 writes an inspectable snapshot to data/ + public/universe_candidates.json.
 
-This is the FOUNDATION layer only — it does NOT touch INDUSTRY_GROUPS,
-signal_engine.py, history_manager.py, the framework, or any UI. Next weekend
-wires the candidate universe into signal_engine to replace INDUSTRY_GROUPS.
+This is the candidate SOURCE layer. universe_builder.py consumes it weekly
+(Friday-evening rotation) to build the active universe that signal_engine
+serves via get_industry_groups(); this module touches nothing downstream.
 
 Run directly to build + print the universe:
     python universe_source.py
@@ -268,7 +268,8 @@ def build_universe_candidates(config_path=None, write=True, allow_remote=True):
     tickers = sorted(detailed["tickers"])
 
     cache_cfg = uni_cfg.get("cache", {}) or {}
-    gics = GICSClassifier(src.cache_dir, ttl_days=cache_cfg.get("gics_ttl_days", 30))
+    gics = GICSClassifier(src.cache_dir, ttl_days=cache_cfg.get("gics_ttl_days", 30),
+                          aliases=uni_cfg.get("gics_aliases"))
     # Seed authoritative GICS from the S&P 500 CSV (free; avoids .info calls).
     gics.seed(src.sp500_gics_map, source="sp500_csv")
     by_gics = gics.get_universe_by_gics(tickers, allow_remote=allow_remote)
@@ -287,14 +288,24 @@ def build_universe_candidates(config_path=None, write=True, allow_remote=True):
     }
 
     if write:
-        for d in (os.path.join(BASE_DIR, "data"), os.path.join(BASE_DIR, "public")):
-            try:
-                os.makedirs(d, exist_ok=True)
-                with open(os.path.join(d, "universe_candidates.json"), "w") as f:
-                    json.dump(out, f, indent=2)
-            except Exception as e:
-                print(f"[universe] write failed for {d}: {e}")
+        try:
+            write_candidates_artifact(out)
+        except Exception as e:
+            print(f"[universe] candidates write failed: {e}")
     return out, tickers, by_gics
+
+
+def write_candidates_artifact(out):
+    """Atomically write data|public/universe_candidates.json. Raises on failure
+    (universe_builder calls this only after its viability floor passes, so a
+    degraded candidate list is never published)."""
+    for d in (os.path.join(BASE_DIR, "data"), os.path.join(BASE_DIR, "public")):
+        os.makedirs(d, exist_ok=True)
+        path = os.path.join(d, "universe_candidates.json")
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(out, f, indent=2)
+        os.replace(tmp, path)
 
 
 if __name__ == "__main__":

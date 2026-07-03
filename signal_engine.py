@@ -40,11 +40,16 @@ PUBLIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
 # ============================================================
 # GICS SUB-INDUSTRY DEFINITIONS
 # ============================================================
-# Names follow GICS Level 3/4 classification standard
-# Each group includes thesis-breaker conditions that can be
-# programmatically checked against market data
+# The active universe is DYNAMIC: get_industry_groups() serves the
+# weekly top-N built by universe_builder.py (Friday 20:00 ET rotation —
+# after the weekly close, serving the following trading week — cached in
+# data/universe_active.json). The hardcoded groups below are
+# retained as FALLBACK_INDUSTRY_GROUPS — the safety net when no viable
+# dynamic universe exists — and as the authoritative classification
+# seed for gics_classifier. Names follow the GICS sub-industry standard;
+# each group carries the metadata the thesis-breaker checks consume.
 # ============================================================
-INDUSTRY_GROUPS = {
+FALLBACK_INDUSTRY_GROUPS = {
     "Technology Hardware, Storage & Peripherals": {
         "gics_code": "45202030",
         "gics_level": "Sub-Industry",
@@ -181,6 +186,26 @@ INDUSTRY_GROUPS = {
 
 # Macro proxy tickers for thesis-breaker checks
 MACRO_TICKERS = ["^GSPC", "GLD", "UUP", "USO", "UNG", "XLE"]
+
+
+def get_industry_groups():
+    """Active INDUSTRY_GROUPS for this run.
+
+    Serves the cached dynamic universe if it belongs to the current rotation
+    week; otherwise universe_builder rebuilds it (self-healing when a Friday
+    rotation was missed). Falls back to FALLBACK_INDUSTRY_GROUPS only when
+    no viable dynamic universe exists at all (fresh checkout + total data
+    failure), so the dashboard never goes empty.
+    """
+    try:
+        from universe_builder import get_active_industry_groups
+        groups = get_active_industry_groups()
+        if groups:
+            return groups
+        print("[engine] no viable dynamic universe — using FALLBACK_INDUSTRY_GROUPS")
+    except Exception as e:
+        print(f"[engine] dynamic universe unavailable ({e}) — using FALLBACK_INDUSTRY_GROUPS")
+    return FALLBACK_INDUSTRY_GROUPS
 
 
 # ============================================================
@@ -1779,9 +1804,14 @@ def run_engine():
         else:
             print(f"  {ticker}: SKIP")
 
+    # Resolve this week's active universe (dynamic top-N; falls back to the
+    # hardcoded groups only if no viable dynamic universe exists)
+    industry_groups = get_industry_groups()
+    print(f"Active universe: {len(industry_groups)} groups")
+
     # Collect all unique tickers
     all_tickers = set()
-    for group_name, group_info in INDUSTRY_GROUPS.items():
+    for group_name, group_info in industry_groups.items():
         all_tickers.update(group_info["tickers"])
 
     print(f"\nFetching data for {len(all_tickers)} unique tickers...")
@@ -1810,8 +1840,8 @@ def run_engine():
 
     print(f"\nComputing signals for {len(ticker_data)} tickers...")
     for ticker, df in ticker_data.items():
-        groups_for_ticker = [g for g, info in INDUSTRY_GROUPS.items() if ticker in info["tickers"]]
-        group_info = INDUSTRY_GROUPS.get(groups_for_ticker[0], {}) if groups_for_ticker else {}
+        groups_for_ticker = [g for g, info in industry_groups.items() if ticker in info["tickers"]]
+        group_info = industry_groups.get(groups_for_ticker[0], {}) if groups_for_ticker else {}
 
         score, signal, details = score_stock(df, group_info)
         details["beating_sp500"] = bool(details.get("ytd_return", 0) > sp500_ytd)
@@ -1851,7 +1881,7 @@ def run_engine():
 
     # Build group-level data
     groups_output = []
-    for group_name, group_info in INDUSTRY_GROUPS.items():
+    for group_name, group_info in industry_groups.items():
         stocks_in_group = []
         ytd_returns = []
 
