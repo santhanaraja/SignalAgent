@@ -144,6 +144,18 @@ themes:
     max_per_theme_pct_of_book: 15
     max_total_themes_pct_of_book: 25
 
+# ---------------------------------------------------------------------------
+# Position signal engine (Build 1B) — per-ticker exit/re-entry state machine.
+# Consumes the swing gauge and weekly theme qualification READ-ONLY.
+# Signals only; nothing is auto-executed. Input: framework/state/positions.json
+# ---------------------------------------------------------------------------
+positions:
+  sma_period: 20
+  confirmation_closes: 2       # consecutive closes above SMA20 to confirm
+  atr_period: 14
+  atr_mult: 0.5                # one close > SMA20 + 0.5*ATR(14) also confirms
+  slope_lookback_days: 5       # SMA20 flat-or-rising vs 5 sessions ago
+
 standing_rules:
   R1: "Weekly Sunday review (regime + themes). Do not skip."
   R2: "Risk-off regime -> no new aggressive positions."

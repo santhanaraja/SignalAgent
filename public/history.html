@@ -49,6 +49,7 @@
   .type-ticker_removed{background:rgba(248,81,73,.08);color:var(--red);}
   .type-score_change{background:rgba(210,153,34,.12);color:var(--yellow);}
   .type-group_rank_change{background:rgba(188,140,255,.12);color:var(--purple);}
+  .type-position_state_change{background:rgba(88,166,255,.12);color:#58a6ff;}
   .event-time{font-size:11px;color:var(--dim);}
   .event-desc{font-size:13px;font-weight:500;}
   .event-detail{font-size:11px;color:var(--dim);margin-top:4px;}
@@ -118,6 +119,7 @@
   <button class="pill" onclick="filtType('group_signal_change',this)">Group Changes</button>
   <button class="pill" onclick="filtType('ticker_added',this)">Added</button>
   <button class="pill" onclick="filtType('ticker_removed',this)">Removed</button>
+  <button class="pill" onclick="filtType('position_state_change',this)">Position States</button>
   <input class="search" type="text" placeholder="Search ticker or group..." oninput="searchH(this.value)">
 </div>
 
@@ -173,6 +175,19 @@ async function loadHistory(){
     const text = await r.text();
     HISTORY = JSON.parse(text.replace(/:\s*NaN\b/g, ': null'));
   }catch(e){ return loadFailed(e); }
+  // Position-state events live in their own file (separate writer — the
+  // signal pipeline rewrites history.json and would clobber a shared
+  // file). Merge them into the timeline; absence is fine (pre-1B).
+  try{
+    const pr = await fetch('position_events.json?t='+Date.now());
+    if(pr.ok){
+      const pev = JSON.parse((await pr.text()).replace(/:\s*NaN\b/g, ': null'));
+      const merged = (HISTORY.changes||[]).concat(pev.changes||[]);
+      // keep file convention: oldest -> newest (renderChanges reverses)
+      merged.sort((a,b)=>(a.timestamp||'').localeCompare(b.timestamp||''));
+      HISTORY.changes = merged;
+    }
+  }catch(e){ /* position events optional */ }
   retryDelay = 2000;
   if(!(HISTORY.changes||[]).length){
     // Genuinely empty history — distinct from a failed load
@@ -229,6 +244,14 @@ function renderChanges(){
       detailHtml = `Signal remains: ${detail.signal}`;
     } else if(c.type==='group_rank_change'){
       detailHtml = `Rank moved ${detail.from_rank>detail.to_rank?'up':'down'}`;
+    } else if(c.type==='position_state_change'){
+      detailHtml = `${detail.from_state||'untracked'} → ${detail.to_state}`
+        + (detail.close!=null?` · Close: ${detail.close}`:'')
+        + (detail.sma20!=null?` · SMA20: ${detail.sma20}`:'')
+        + (detail.extension_pct!=null?` · Ext: ${detail.extension_pct>0?'+':''}${detail.extension_pct}%${detail.extension_atr!=null?` (${detail.extension_atr}×ATR)`:''}`:'')
+        + (detail.conditions_met?` · Conditions: ${detail.conditions_met}`:'')
+        + (detail.a_plus_only?' · A+ only (Choppy)':'')
+        + (detail.stop?` · ${detail.stop}`:'');
     }
 
     html += `<div class="event ${c.severity}">

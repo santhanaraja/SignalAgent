@@ -162,6 +162,48 @@ Caution/Risk-off (advisory, including intraday). Theme QUALIFICATION
   — previously two consecutive trading days satisfied a "2 Sunday" rule.
   theme_history retention keeps 53 true ISO weeks of daily snapshots.
 
+## Position signal engine (Build 1B)
+
+`framework/position_signals.py` — per-ticker exit/re-entry state machine
+over `framework/state/positions.json` (holdings + watchlist). Signals
+only; nothing is auto-executed. Consumes the swing gauge and the weekly
+theme qualification read-only. Served at `/api/framework/signals.json`
+(distinct from the dashboard's stock-scoring `signals.json`).
+
+Re-entry requires ALL five: (1) close above SMA20; (2) two consecutive
+closes above SMA20 OR one close > 0.5×ATR(14) above it; (3) regime gate —
+Trending = full, Choppy = conditional (`a_plus_only` flag), Caution/
+Risk-off = blocked; (4) SMA20 flat-or-rising vs 5 sessions ago;
+(5) the ticker's theme still qualified (active or ranked top-2). Themes
+outside the framework watchlist (e.g. `"SmallCap/Broad"`, or explicitly
+`"external:<name>"`) pass condition 5 automatically but carry a
+`no_theme_mapping` flag — never silently true.
+
+Each ticker also carries two informational extension readings —
+`extension_pct` (close vs SMA20, %) and `extension_atr` (same distance
+in ATR(14) multiples). Display only, never gating: the discretion layer
+decides what "too extended to chase" means (e.g. MRNA printing READY 33%
+above its SMA20). Both surface in the transition events on history.html.
+
+States: `HELD → EXIT_FIRED (close below SMA20 — the exit signal, stop
+shown) → WATCHING (distance to SMA20 shown) → RE_ENTRY_ARMING (reclaim,
+conditions itemized) → RE_ENTRY_READY (all five)`. positions.json is
+authoritative for what is held: a HOLDING whose five conditions complete
+returns to HELD (stop resumes); pure watch-entries top out at READY. The
+machine is strictly close-basis (R11): the fetcher's intraday live-quote
+append is stripped, so intraday runs evaluate the last completed daily
+bar and only the post-close run advances states.
+
+Every transition is emitted as a `position_state_change` history event
+into `data/position_events.json` (+ public mirror) — same event schema
+as history.json but a separate file, because history_manager rewrites
+history.json from its own in-memory copy every pipeline run and would
+clobber a co-writer. history.html merges both files into one timeline
+(filter chip "Position States"). Parameters live in config.yaml
+`positions:` (SMA 20, 2 confirming closes, ATR 14 × 0.5, slope lookback
+5 sessions). Engine state persists in `framework/state/position_state.json`;
+a fetch failure never seeds or mutates a ticker's persisted state.
+
 ## API
 
 `/api/framework/gauges.json` returns `gauges` (3 voters), `backdrop_gate`,

@@ -17,6 +17,7 @@ from .regime_calculator import RegimeCalculator
 from .theme_ranker import ThemeRanker
 from .rule_engine import RuleEngine
 from .constituent_ranker import ConstituentRanker
+from .position_signals import PositionSignalEngine
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -262,6 +263,22 @@ def run_framework(force_fetch: bool = False) -> dict:
     print(f"[framework] Constituent leaders ranked for {len(theme_leaders)} themes "
           f"(qualified: {', '.join(qualified_names) or 'none'})")
 
+    # --- Layer 2.75: Position signal engine (exit / re-entry state machine) ---
+    print("[framework] Evaluating position signals...")
+    try:
+        pos_engine = PositionSignalEngine(config, fetch_data)
+        position_signals = pos_engine.compute(regime_result, theme_result)
+        n_pos = len(position_signals.get("tickers", {}))
+        n_trans = len(position_signals.get("transitions", []))
+        print(f"[framework] Position signals: {n_pos} tickers evaluated, "
+              f"{n_trans} state transition(s)")
+    except Exception as e:
+        # A malformed positions.json or engine fault must not take down the
+        # regime/theme/rules layers.
+        print(f"[framework] Position signal engine failed: {e}")
+        position_signals = {"error": f"position engine failed: {e}",
+                            "tickers": {}, "transitions": []}
+
     # --- Layer 3: Rules ---
     print("[framework] Evaluating rules...")
     rule_engine = RuleEngine(config)
@@ -277,6 +294,7 @@ def run_framework(force_fetch: bool = False) -> dict:
         "regime": regime_result,
         "themes": theme_result,
         "theme_leaders": theme_leaders,
+        "position_signals": position_signals,
         "rules": rules_result,
         "standing_rules_text": config.get("standing_rules", {}),
     }

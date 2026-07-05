@@ -817,6 +817,61 @@ def framework_gauges_json():
         )
 
 
+@app.route("/api/framework/signals.json")
+def framework_signals_json():
+    """
+    Public JSON API — position signal engine output (Build 1B).
+    Distinct from the dashboard's /signals.json (stock scoring): this is
+    the per-ticker exit/re-entry state machine over positions.json.
+
+    Response shape:
+    {
+      "generated_at": "...",
+      "regime_state": "Risk-on / Trending",
+      "tickers": {
+        "IWM": { "state": "RE_ENTRY_READY", "close": ..., "sma20": ...,
+                 "conditions": { "1_trigger": {...}, ... "5_thesis": {...} },
+                 "conditions_met": 5, "stop": {...} },
+        ...
+      },
+      "transitions": [ ...today's state-change events... ]
+    }
+    """
+    framework_path = os.path.join(PUBLIC_DIR, "framework.json")
+    if not os.path.exists(framework_path):
+        return app.response_class(
+            response=json.dumps({
+                "error": "Framework has not been run yet.",
+                "hint": "POST /api/framework/run to trigger a run.",
+            }),
+            status=404,
+            mimetype="application/json",
+        )
+    try:
+        with open(framework_path, "r") as f:
+            data = json.load(f)
+        pos = data.get("position_signals")
+        if not pos:
+            return app.response_class(
+                response=json.dumps({
+                    "error": "No position signals in the latest framework run.",
+                    "hint": "Re-run the framework (POST /api/framework/run).",
+                }),
+                status=404,
+                mimetype="application/json",
+            )
+        return app.response_class(
+            response=json.dumps(pos, cls=NumpyEncoder),
+            mimetype="application/json",
+        )
+    except Exception as e:
+        return app.response_class(
+            response=json.dumps({"error": str(e)}),
+            status=500,
+            mimetype="application/json",
+        )
+
+
 @app.route("/api/framework/leaders.json")
 def framework_leaders_json():
     """
