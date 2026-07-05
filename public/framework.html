@@ -244,8 +244,8 @@ function render(){
         <div class="regime-action">${regime.action||''}</div>
       </div>
       <div class="regime-meta">
-        <div class="label">Gauge Score</div>
-        <div style="font-size:18px;font-weight:700;color:${regimeColor};">${regime.risk_on_count||0}/5 Risk-On</div>
+        <div class="label">Voter Score</div>
+        <div style="font-size:18px;font-weight:700;color:${regimeColor};">${regime.risk_on_count||0}/${Object.keys(gauges).length||3} Risk-On</div>
         <div style="font-size:11px;margin-top:4px;">${regime.caution_count||0} Caution &middot; ${regime.risk_off_count||0} Risk-Off</div>
         ${regime.consecutive_weeks_at_state>1?`<div style="font-size:11px;margin-top:4px;">${regime.consecutive_weeks_at_state} consecutive weeks</div>`:''}
       </div>
@@ -256,14 +256,20 @@ function render(){
     html+=`<div class="override-banner show"><strong>INTRA-WEEK OVERRIDE:</strong> ${regime.intra_week_override}</div>`;
   }
 
-  // Gauges grid
+  // Backdrop-gate banner: explain a gate-capped state (voters can all be
+  // green while the regime reads Caution — the gate is why)
+  const gate=regime.backdrop_gate||null;
+  if(gate&&gate.capped){
+    const why=gate.reason==='data_unavailable'?'SPY/200DMA data unavailable (gate fails closed)':'SPY closed below its 200DMA';
+    html+=`<div class="override-banner show"><strong>BACKDROP GATE:</strong> ${why} — regime capped at Caution. ${gate.detail||''}</div>`;
+  }
+
+  // Gauges grid: 3 voters, then the gate + macro inputs as distinct tiles
   html+=`<div class="gauges-grid">`;
   const gaugeNames={
-    spy_vs_200dma:'SPY vs 200DMA',
     vix_5d_avg:'VIX 5-Day Avg',
     hy_spread:'HY Credit Spread',
     breadth:'S&P 500 Breadth',
-    yield_curve:'Yield Curve (30Y-2Y)',
   };
   for(const[key,label] of Object.entries(gaugeNames)){
     const g=gauges[key]||{};
@@ -278,6 +284,39 @@ function render(){
       <div class="gauge-value">${typeof val==='number'?val.toFixed(2):val}</div>
       <div class="gauge-detail">${g.detail||''}</div>
       ${g.source?`<div class="gauge-detail">Source: ${g.source}</div>`:''}
+    </div>`;
+  }
+  // Backdrop gate tile (not a voter)
+  if(gate){
+    const gsig=gate.open?'risk_on':'risk_off';
+    const gtext=gate.open?'gate open':'gate shut';
+    html+=`
+    <div class="gauge-card">
+      <div class="gauge-header">
+        <div class="gauge-name">SPY vs 200DMA &middot; GATE</div>
+        <div class="gauge-signal ${gsig}">${gtext}</div>
+      </div>
+      <div class="gauge-value">${gate.value!=null?Number(gate.value).toFixed(2):'—'}</div>
+      <div class="gauge-detail">${gate.detail||''}</div>
+      <div class="gauge-detail">Backdrop gate — caps risk-on states below the 200DMA; not a voter</div>
+    </div>`;
+  }
+  // Macro input tiles (computed, non-voting)
+  const macros=regime.macro_inputs||{};
+  const macroNames={yield_curve:'Yield Curve'};
+  for(const[key,label] of Object.entries(macroNames)){
+    const m=macros[key];
+    if(!m)continue;
+    const sig=m.signal||'unavailable';
+    html+=`
+    <div class="gauge-card">
+      <div class="gauge-header">
+        <div class="gauge-name">${label} &middot; MACRO</div>
+        <div class="gauge-signal ${sig}">${sig.replace('_',' ')}</div>
+      </div>
+      <div class="gauge-value">${m.value!=null?Number(m.value).toFixed(2):'—'}</div>
+      <div class="gauge-detail">${m.detail||''}</div>
+      <div class="gauge-detail">Macro input — informational, does not vote${m.source?` &middot; Source: ${m.source}`:''}</div>
     </div>`;
   }
   html+=`</div></div>`;
@@ -495,7 +534,7 @@ async function loadHistory(){
     const recent=rh.slice(-10).reverse();
     let html=`<div style="overflow-x:auto;"><table class="theme-table">
       <thead><tr>
-        <th>Date/Time</th><th>Regime</th><th>SPY vs 200DMA</th><th>VIX 5d Avg</th><th>HY Spread</th><th>Breadth</th><th>Yield Curve</th>
+        <th>Date/Time</th><th>Regime</th><th>SPY Gate</th><th>VIX 5d Avg</th><th>HY Spread</th><th>Breadth</th><th>Yield Curve (macro)</th>
       </tr></thead><tbody>`;
 
     for(const r of recent){
@@ -508,11 +547,31 @@ async function loadHistory(){
         const col=sig==='risk_on'?'var(--green)':sig==='caution'?'var(--yellow)':sig==='risk_off'?'var(--red)':'var(--dim)';
         return `<td style="font-family:'SF Mono',monospace;font-size:12px;color:${col};" title="${gauge.detail||''}">${val}</td>`;
       };
+      // SPY column: 5-gauge era rows have gauges.spy_vs_200dma (a vote);
+      // 3-voter era rows carry it as backdrop_gate (open/shut, no vote).
+      const spyCell=()=>{
+        if(g.spy_vs_200dma)return gv('spy_vs_200dma');
+        const bg=r.backdrop_gate;
+        if(!bg)return '<td style="color:var(--dim);">—</td>';
+        const col=bg.open?'var(--green)':'var(--red)';
+        const val=bg.value!=null?Number(bg.value).toFixed(2):'—';
+        return `<td style="font-family:'SF Mono',monospace;font-size:12px;color:${col};" title="${bg.detail||''}">${val}${bg.capped?' ⛔':''}</td>`;
+      };
+      // Yield curve: 5-gauge era rows have gauges.yield_curve (a vote);
+      // 3-voter era rows carry it under macro_inputs (informational).
+      const ycCell=()=>{
+        if(g.yield_curve)return gv('yield_curve');
+        const m=(r.macro_inputs||{}).yield_curve;
+        if(!m)return '<td style="color:var(--dim);">—</td>';
+        const col=m.signal==='risk_on'?'var(--green)':m.signal==='caution'?'var(--yellow)':m.signal==='risk_off'?'var(--red)':'var(--dim)';
+        const val=m.value!=null?Number(m.value).toFixed(2):'—';
+        return `<td style="font-family:'SF Mono',monospace;font-size:12px;color:${col};" title="${m.detail||''}">${val}</td>`;
+      };
       const ts=r.generated_at?fmtEST(r.generated_at):r.date;
       html+=`<tr>
         <td style="font-size:11px;white-space:nowrap;">${ts}</td>
         <td><span style="font-size:11px;font-weight:700;">${r.regime}</span></td>
-        ${gv('spy_vs_200dma')}${gv('vix_5d_avg')}${gv('hy_spread')}${gv('breadth')}${gv('yield_curve')}
+        ${spyCell()}${gv('vix_5d_avg')}${gv('hy_spread')}${gv('breadth')}${ycCell()}
       </tr>`;
     }
     html+=`</tbody></table></div>`;

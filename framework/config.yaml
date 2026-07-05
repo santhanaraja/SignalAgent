@@ -3,8 +3,15 @@ framework:
   last_updated: "2026-06-12"
 
 regime:
+  # SWING-horizon gauge (weeks-long holds, checked daily).
+  # Voters: vix_5d_avg, hy_spread, breadth.
+  # spy_vs_200dma is the backdrop GATE (binary cap, not a voter).
+  # yield_curve is a non-voting macro input (routed to macro_inputs).
   gauges:
     spy_vs_200dma:
+      # BACKDROP GATE — any SPY close below the 200DMA caps risk-on states
+      # at Caution. The thresholds below are kept for the gauge's own
+      # signal classification (display), not for the vote.
       proxy: "SPY"
       lookback_days: 200
       risk_on_threshold: 0      # SPY > 200DMA = risk on
@@ -35,38 +42,43 @@ regime:
       caution_threshold: 50
       risk_off_threshold: 30
     yield_curve:
-      # 30Y-2Y Treasury spread (percentage points)
-      # Primary: FRED CSV (DGS30 - DGS2, no API key needed)
-      # Secondary: FRED API (if FRED_API_KEY set)
-      # Fallback: yfinance ^TYX - ^IRX
+      # NON-VOTING macro input: 30Y-2Y Treasury spread (percentage points).
+      # Primary: FRED API DGS30-DGS2 (requires FRED_API_KEY — set it in the
+      #          Render env to get the true 2Y leg)
+      # Secondary: FRED public CSV (keyless; Akamai-blocked as of 2026-07)
+      # Fallback: yfinance ^TYX - ^IRX, labeled "30Y-3mo" (^IRX is the
+      #          3-month bill, never presented as 2Y)
       fred_long: "DGS30"
       fred_short: "DGS2"
       risk_on_threshold: 0.50    # > 50bp positive spread = risk_on
       caution_threshold: 0.00    # 0bp to 50bp = caution
       risk_off_threshold: 0.00   # < 0bp (inverted) = risk_off
 
+  # The min/max fields below are INFORMATIONAL — the authoritative mapping
+  # lives in RegimeCalculator._determine_state() (3-voter ladder: 3 risk_on
+  # -> Trending, 2 -> Choppy, 1 -> Caution, 0 -> Risk-off; ANY risk_off vote
+  # caps at Caution; Risk-off requires 0 risk_on or 2+ risk_off; the 200DMA
+  # gate caps risk-on states). Only name/action/color are read by code.
   states:
     - name: "Risk-on / Trending"
-      min_risk_on_gauges: 4          # 4 of 5 gauges at risk_on
-      max_caution_gauges: 1
+      min_risk_on_gauges: 3          # all 3 voters at risk_on
+      max_caution_gauges: 0
       max_risk_off_gauges: 0
       action: "Full deployment. Aggressive sleeve active. New themes considered."
       color: "#3fb950"
     - name: "Risk-on / Choppy"
       min_risk_on_gauges: 2
-      max_caution_gauges: 2
+      max_caution_gauges: 1
       max_risk_off_gauges: 0
       action: "Hold existing positions; new entries only on A+ setups; tighter stops."
       color: "#d29922"
     - name: "Caution"
-      min_risk_on_gauges: 0
-      max_caution_gauges: 5
-      min_caution_gauges: 3
+      min_risk_on_gauges: 1          # or any single risk_off vote, or gate cap
       max_risk_off_gauges: 1
       action: "No new aggressive positions; raise stops; consider trimming."
       color: "#f0883e"
     - name: "Risk-off"
-      min_risk_off_gauges: 2
+      min_risk_off_gauges: 2         # or zero risk_on votes (all voters reporting)
       action: "Defensive: no new entries; close speculative; cash / hedge."
       color: "#f85149"
 

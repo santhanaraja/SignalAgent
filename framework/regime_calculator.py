@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """
-Regime Calculator — Computes the 5-gauge regime score and determines
-the current market regime state (Risk-on Trending / Choppy / Caution / Risk-off).
+Regime Calculator — SWING-horizon regime gauge (weeks-long holds, checked daily).
 
-Uses EOD close prices only. No intraday noise.
+Three fast voters (VIX 5d avg, HY credit spread, breadth) vote
+risk_on / caution / risk_off. SPY vs its 200DMA is a binary backdrop GATE,
+not a voter: any close below the 200DMA caps risk-on states at Caution.
+The yield curve (a months-horizon macro input) is computed but does NOT
+vote — its output is routed to macro_inputs for future consumers
+(Gauge B, WFC-specific logic).
+
+State names are unchanged and load-bearing downstream
+(framework page, rule engine, theme entry gates):
+Risk-on / Trending, Risk-on / Choppy, Caution, Risk-off.
 """
 
 import datetime
@@ -11,7 +19,7 @@ import numpy as np
 
 
 class RegimeCalculator:
-    """Computes the 5-gauge regime score and outputs current regime state."""
+    """Computes the 3-voter swing regime score and outputs current regime state."""
 
     def __init__(self, config: dict, fetcher):
         """
@@ -24,39 +32,76 @@ class RegimeCalculator:
 
     def compute(self, regime_history: list = None) -> dict:
         """
-        Compute regime from all 5 gauges.
+        Compute the swing regime: 3 voters + 200DMA backdrop gate.
+
+        Voters: vix_5d_avg, hy_spread, breadth.
+        Gate:   spy_vs_200dma — SPY below its 200DMA caps any risk-on state
+                at Caution; never upgrades Risk-off. Fails closed (cap
+                applies) when SPY data is unavailable: unknown ≠ permitted.
+        Macro:  yield_curve — computed, never counted in the vote.
 
         Args:
             regime_history: list of past regime states (for consecutive-Sunday tracking)
 
-        Returns dict with regime state, gauge details, and action recommendation.
+        Returns dict with regime state, voter gauges, backdrop_gate,
+        macro_inputs, and action recommendation.
         """
-        gauges = {}
         gauge_cfgs = self.regime_cfg["gauges"]
 
-        # --- Gauge 1: SPY vs 200DMA ---
-        gauges["spy_vs_200dma"] = self._compute_spy_200dma(gauge_cfgs["spy_vs_200dma"])
+        # --- Backdrop gate input: SPY vs 200DMA (not a voter) ---
+        spy_gauge = self._compute_spy_200dma(gauge_cfgs["spy_vs_200dma"])
 
-        # --- Gauge 2: VIX 5-day average ---
-        gauges["vix_5d_avg"] = self._compute_vix_5d(gauge_cfgs["vix_5d_avg"])
+        # --- Voters ---
+        gauges = {
+            "vix_5d_avg": self._compute_vix_5d(gauge_cfgs["vix_5d_avg"]),
+            "hy_spread": self._compute_hy_spread(gauge_cfgs["hy_spread"]),
+            "breadth": self._compute_breadth(gauge_cfgs["breadth"]),
+        }
 
-        # --- Gauge 3: HY credit spread ---
-        gauges["hy_spread"] = self._compute_hy_spread(gauge_cfgs["hy_spread"])
+        # --- Macro inputs: computed and published, never in the tally ---
+        yield_curve = self._compute_yield_curve(gauge_cfgs["yield_curve"])
+        yield_curve["role"] = "macro_input"
+        macro_inputs = {"yield_curve": yield_curve}
 
-        # --- Gauge 4: S&P 500 breadth (% above 50DMA) ---
-        gauges["breadth"] = self._compute_breadth(gauge_cfgs["breadth"])
-
-        # --- Gauge 5: Yield curve (30Y-2Y) ---
-        gauges["yield_curve"] = self._compute_yield_curve(gauge_cfgs["yield_curve"])
-
-        # --- Determine regime state ---
+        # --- Tally the 3 voters ---
         signals = [g["signal"] for g in gauges.values()]
         risk_on_count = signals.count("risk_on")
         caution_count = signals.count("caution")
         risk_off_count = signals.count("risk_off")
         unavailable_count = signals.count("unavailable")
 
-        regime_state = self._determine_state(risk_on_count, caution_count, risk_off_count)
+        base_state = self._determine_state(risk_on_count, risk_off_count,
+                                           unavailable_count)
+
+        # --- Backdrop gate: cap risk-on states below the 200DMA ---
+        # Gate on the RAW pct (display value is rounded to 2dp; a close a
+        # hair below the MA must still shut the gate). Non-finite or
+        # missing data fails CLOSED: unknown is not permitted.
+        spy_pct = spy_gauge.get("pct_raw", spy_gauge.get("value"))
+        if spy_pct is None or not np.isfinite(spy_pct):
+            gate_open, gate_reason = False, "data_unavailable"
+        elif spy_pct < 0:
+            gate_open, gate_reason = False, "below_200dma"
+        else:
+            gate_open, gate_reason = True, None
+
+        regime_state = base_state
+        gate_capped = False
+        if not gate_open and base_state.startswith("Risk-on"):
+            regime_state = "Caution"
+            gate_capped = True
+
+        backdrop_gate = {
+            "gauge": "spy_vs_200dma",
+            "role": "backdrop_gate",
+            "open": gate_open,
+            "capped": gate_capped,
+            "reason": gate_reason,
+            "value": spy_gauge.get("value"),
+            "detail": spy_gauge.get("detail"),
+            "price": spy_gauge.get("price"),
+            "ma200": spy_gauge.get("ma200"),
+        }
 
         # --- Check consecutive-Sunday history ---
         # Deduplicate by ISO week so daily runs don't inflate the count.
@@ -92,11 +137,16 @@ class RegimeCalculator:
         confirmations_needed = self.regime_cfg["change_protocol"]["consecutive_confirmations_required"]
 
         # --- Check intra-week override triggers ---
+        # Triggers may reference voters, the backdrop-gate input
+        # (spy_vs_200dma), or macro inputs — config keeps working unchanged.
+        trigger_lookup = dict(gauges)
+        trigger_lookup["spy_vs_200dma"] = spy_gauge
+        trigger_lookup.update(macro_inputs)
         intra_week_override = None
         for trigger in self.regime_cfg["change_protocol"].get("intra_week_override_triggers", []):
             gauge_name = trigger["gauge"]
-            if gauge_name in gauges and gauges[gauge_name]["value"] is not None:
-                val = gauges[gauge_name]["value"]
+            if gauge_name in trigger_lookup and trigger_lookup[gauge_name]["value"] is not None:
+                val = trigger_lookup[gauge_name]["value"]
                 cond = trigger["condition"]
                 threshold = trigger["value"]
                 triggered = False
@@ -126,6 +176,8 @@ class RegimeCalculator:
             "regime": regime_state,
             "regime_color": color,
             "gauges": gauges,
+            "backdrop_gate": backdrop_gate,
+            "macro_inputs": macro_inputs,
             "risk_on_count": risk_on_count,
             "caution_count": caution_count,
             "risk_off_count": risk_off_count,
@@ -137,30 +189,38 @@ class RegimeCalculator:
             "action": action,
         }
 
-    def _determine_state(self, risk_on, caution, risk_off):
+    def _determine_state(self, risk_on, risk_off, unavailable=0):
         """
-        Map gauge signal counts to a regime state.
-        Pure function of current gauge signals — no history anchoring.
+        Map the 3 voter signals to a regime state (before the backdrop gate).
+        Pure function of current voter signals — no history anchoring.
 
-        Priority order (check best and worst first, fall through to middle):
-          1. Risk-off   — 2+ risk_off gauges (most severe, checked first)
-          2. Risk-on/Trending — 4+ risk_on, 0 risk_off
-          3. Risk-on/Choppy  — 2+ risk_on, 0 risk_off
-          4. Caution    — everything else (default)
+        Ladder on the risk_on tally:
+          3 -> Risk-on / Trending, 2 -> Risk-on / Choppy,
+          1 -> Caution, 0 -> Risk-off.
+        Qualifiers:
+          - risk_off votes are heavier than caution: ANY risk_off vote caps
+            the state at Caution regardless of the tally (credit
+            deteriorating while vol is calm must never print risk-on).
+          - Risk-off requires 0 risk_on votes with all voters reporting,
+            OR 2+ risk_off votes.
+          - 2+ voters unavailable -> Caution: a one-voter tally is not
+            evidence, in either direction.
+        Order matters: 2 confirmed risk_off dominate missing data, and the
+        unavailable guard must precede the 0-risk_on floor so a data outage
+        can never print Risk-off.
         """
-        # 1. Risk-off: severe downturn signals dominate
         if risk_off >= 2:
             return "Risk-off"
-
-        # 2. Risk-on / Trending: strong broad-based risk appetite
-        if risk_on >= 4 and risk_off == 0:
+        if unavailable >= 2:
+            return "Caution"
+        if risk_on == 0 and unavailable == 0:
+            return "Risk-off"
+        if risk_off >= 1:
+            return "Caution"
+        if risk_on == 3:
             return "Risk-on / Trending"
-
-        # 3. Risk-on / Choppy: moderate risk appetite, some caution
-        if risk_on >= 2 and risk_off == 0:
+        if risk_on == 2:
             return "Risk-on / Choppy"
-
-        # 4. Caution: anything with 1 risk_off or insufficient risk_on
         return "Caution"
 
     # ==============================================================
@@ -179,6 +239,13 @@ class RegimeCalculator:
             ma200 = float(close.rolling(cfg["lookback_days"]).mean().iloc[-1])
             pct_vs_ma = ((current_price - ma200) / ma200) * 100
 
+            # A NaN close anywhere in the window poisons the rolling mean.
+            # Non-finite must read as unavailable (the gate then fails
+            # closed), never as an open gate or a silent risk_off vote.
+            if not np.isfinite(pct_vs_ma):
+                return {"value": None, "signal": "unavailable",
+                        "detail": "SPY/200DMA computed non-finite value"}
+
             if pct_vs_ma >= cfg["risk_on_threshold"]:
                 signal = "risk_on"
             elif pct_vs_ma >= cfg["caution_threshold"]:
@@ -192,6 +259,9 @@ class RegimeCalculator:
                 "detail": f"SPY ${current_price:.2f} vs 200DMA ${ma200:.2f} ({pct_vs_ma:+.1f}%)",
                 "price": round(current_price, 2),
                 "ma200": round(ma200, 2),
+                # unrounded, for the gate comparison — round(-0.004, 2) is
+                # -0.0 and would read as "at/above the MA"
+                "pct_raw": float(pct_vs_ma),
             }
         except Exception as e:
             return {"value": None, "signal": "unavailable", "detail": f"Error: {e}"}
@@ -381,31 +451,44 @@ class RegimeCalculator:
     def _compute_yield_curve(self, cfg):
         """
         Yield curve: 30Y-2Y Treasury spread in percentage points.
-        Primary: FRED CSV download (no API key required).
-        Secondary: FRED API (if FRED_API_KEY is set).
-        Fallback: ^TYX (30Y yield) from yfinance (2Y approximated).
+        Macro input only — computed and published, never in the swing vote.
+
+        Primary: FRED API DGS30/DGS2 (requires FRED_API_KEY; same fetch
+                 pattern as the HY spread gauge).
+        Secondary: FRED public CSV (keyless; Akamai resets non-browser
+                 clients as of 2026-07, kept in case it recovers).
+        Fallback: yfinance ^TYX (30Y) minus ^IRX (13-week bill), labeled
+                 "30Y-3mo". ^IRX is the 3-MONTH bill — it must never be
+                 presented as the 2Y.
 
         Thresholds (in percentage points):
           > 0.50 (50bp)  = risk_on  (healthy steepening)
           0 to 0.50      = caution  (flat)
           < 0            = risk_off (inverted)
         """
+        # Try FRED API first (needs key; the true DGS2 series)
+        yc = self._try_fred_api_yield_curve(cfg)
+        if yc is not None:
+            return yc
+
         # Try FRED CSV (no API key needed)
         yc = self._try_fred_csv_yield_curve(cfg)
         if yc is not None:
             return yc
 
-        # Try FRED API (needs key)
-        yc = self._try_fred_api_yield_curve(cfg)
-        if yc is not None:
-            return yc
-
-        # Last resort: ^TYX from yfinance for 30Y yield
+        # Last resort: ^TYX-^IRX from yfinance, honestly labeled
         return self._try_yfinance_yield_curve(cfg)
 
-    def _classify_yield_spread(self, spread, dgs30, dgs2, source, date_str=""):
-        """Common spread classification for all yield curve sources."""
+    def _classify_yield_spread(self, spread, long_yield, short_yield, source,
+                               date_str="", short_label="2Y"):
+        """Common spread classification for all yield curve sources.
+
+        short_label names the short leg honestly: "2Y" only when the short
+        leg is a true 2-year series (FRED DGS2); the ^IRX fallback passes
+        "3mo". The dgs30/dgs2 keys are emitted only for true DGS data.
+        """
         spread_bp = round(spread * 100)  # basis points for display
+        label = f"30Y-{short_label}"
 
         if spread > 0.50:
             signal = "risk_on"
@@ -418,15 +501,20 @@ class RegimeCalculator:
             trend = "inverted"
 
         date_note = f", as of {date_str}" if date_str else ""
-        return {
+        result = {
             "value": round(spread, 4),
             "signal": signal,
-            "detail": f"30Y-2Y spread: {spread_bp}bp ({dgs30:.2f}% - {dgs2:.2f}%) — {trend}{date_note}",
+            "detail": f"{label} spread: {spread_bp}bp ({long_yield:.2f}% - {short_yield:.2f}%) — {trend}{date_note}",
             "source": source,
             "spread_bp": spread_bp,
-            "dgs30": round(dgs30, 2),
-            "dgs2": round(dgs2, 2),
+            "spread_label": label,
+            "long_yield": round(long_yield, 2),
+            "short_yield": round(short_yield, 2),
         }
+        if short_label == "2Y":
+            result["dgs30"] = round(long_yield, 2)
+            result["dgs2"] = round(short_yield, 2)
+        return result
 
     def _try_fred_csv_yield_curve(self, cfg):
         """Fetch 30Y and 2Y yields from FRED public CSV (no API key)."""
@@ -529,30 +617,36 @@ class RegimeCalculator:
             return None
 
     def _try_yfinance_yield_curve(self, cfg):
-        """Last resort: ^TYX for 30Y yield from yfinance."""
+        """Last resort: ^TYX (30Y) minus ^IRX (13-week bill) from yfinance.
+
+        There is no 2Y ticker on yfinance. ^IRX is the 3-MONTH bill, so this
+        measures the 30Y-3mo spread — labeled as such, never as 30Y-2Y.
+        """
         try:
             # ^TYX = CBOE 30-Year Treasury Yield (in %, e.g. 4.85 = 4.85%)
             tyx_df = self.fetcher("^TYX", period="1mo")
             if tyx_df is not None and len(tyx_df) >= 1:
                 yield_30y = float(tyx_df["Close"].iloc[-1])
 
-                # No direct 2Y ticker on yfinance. Estimate from short-term proxy.
-                # ^IRX = 13-week T-bill rate. Rough approximation for short end.
+                # ^IRX = 13-week T-bill rate (3-month, NOT a 2Y proxy)
                 irx_df = self.fetcher("^IRX", period="1mo")
                 if irx_df is not None and len(irx_df) >= 1:
                     yield_short = float(irx_df["Close"].iloc[-1])
                     spread = yield_30y - yield_short
                     return self._classify_yield_spread(
                         spread, yield_30y, yield_short,
-                        "yfinance (^TYX-^IRX approx)"
+                        "yfinance (^TYX-^IRX)", short_label="3mo"
                     )
                 else:
-                    # Can only report 30Y level, no spread
+                    # 30Y level only — no short leg, so no spread. value
+                    # must stay None: consumers read value as a SPREAD and
+                    # a 30Y level (~5) would masquerade as a 500bp spread.
                     return {
-                        "value": round(yield_30y, 2),
-                        "signal": "caution",
-                        "detail": f"30Y yield: {yield_30y:.2f}% (no 2Y data for spread calc)",
+                        "value": None,
+                        "signal": "unavailable",
+                        "detail": f"30Y yield {yield_30y:.2f}% only — no short-leg data for spread",
                         "source": "yfinance ^TYX only",
+                        "long_yield": round(yield_30y, 2),
                     }
 
             return {"value": None, "signal": "unavailable", "detail": "Yield curve data unavailable"}

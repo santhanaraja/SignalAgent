@@ -752,22 +752,28 @@ def framework_history_json():
 @app.route("/api/framework/gauges.json")
 def framework_gauges_json():
     """
-    Public JSON API — returns just the 5 regime gauges as a compact object.
+    Public JSON API — returns the swing regime gauges as a compact object.
     Useful for quick regime checks without downloading the full framework output.
+
+    gauges holds the 3 swing VOTERS (counts range 0-3). spy_vs_200dma is
+    the backdrop_gate (binary cap, not a voter); yield_curve lives under
+    macro_inputs (computed, non-voting).
 
     Response shape:
     {
       "generated_at": "...",
       "regime": "Risk-on / Trending",
-      "risk_on_count": 4,
-      "caution_count": 1,
+      "risk_on_count": 3,
+      "caution_count": 0,
       "risk_off_count": 0,
       "consecutive_weeks": 2,
       "gauges": {
-        "spy_vs_200dma": { "value": 12.3, "signal": "risk_on", "detail": "..." },
-        "vix_5d_avg":    { "value": 15.8, "signal": "risk_on", "detail": "..." },
-        ...
-      }
+        "vix_5d_avg": { "value": 15.8, "signal": "risk_on", "detail": "..." },
+        "hy_spread":  { ... },
+        "breadth":    { ... }
+      },
+      "backdrop_gate": { "gauge": "spy_vs_200dma", "open": true, "capped": false, ... },
+      "macro_inputs":  { "yield_curve": { "value": 0.84, "signal": "risk_on", ... } }
     }
     """
     framework_path = os.path.join(PUBLIC_DIR, "framework.json")
@@ -792,9 +798,11 @@ def framework_gauges_json():
             "risk_on_count": regime.get("risk_on_count"),
             "caution_count": regime.get("caution_count"),
             "risk_off_count": regime.get("risk_off_count"),
-            "consecutive_weeks": regime.get("consecutive_weeks"),
+            "consecutive_weeks": regime.get("consecutive_weeks_at_state"),
             "regime_change_pending": regime.get("regime_change_pending", False),
             "gauges": regime.get("gauges", {}),
+            "backdrop_gate": regime.get("backdrop_gate"),
+            "macro_inputs": regime.get("macro_inputs"),
         }
 
         return app.response_class(

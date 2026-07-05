@@ -164,7 +164,7 @@ def save_regime_history(history: list, new_entry: dict):
             "detail": gdata.get("detail"),
         }
 
-    history.append({
+    entry = {
         "date": new_entry.get("date"),
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "regime": new_entry.get("regime"),
@@ -172,7 +172,30 @@ def save_regime_history(history: list, new_entry: dict):
         "caution_count": new_entry.get("caution_count"),
         "risk_off_count": new_entry.get("risk_off_count"),
         "gauges": gauge_snapshot,
-    })
+    }
+    # 3-voter era: keep the 200DMA gate and macro series in history so the
+    # SPY/yield-curve time series survives their removal from the voter dict.
+    # (Counts range 0-3 from these entries onward, 0-5 before.)
+    bg = new_entry.get("backdrop_gate")
+    if bg is not None:
+        entry["backdrop_gate"] = {
+            "open": bg.get("open"),
+            "capped": bg.get("capped"),
+            "reason": bg.get("reason"),
+            "value": bg.get("value"),
+            "detail": bg.get("detail"),
+        }
+    if new_entry.get("macro_inputs"):
+        entry["macro_inputs"] = {
+            name: {"value": m.get("value"), "signal": m.get("signal"),
+                   "detail": m.get("detail")}
+            for name, m in new_entry["macro_inputs"].items()
+        }
+    # NaN/Inf -> null before the write: this file is re-served verbatim by
+    # /api/framework/history*, where a bare NaN token breaks JSON.parse in
+    # the browser. Deferred import, same pattern as universe_builder.
+    from signal_engine import sanitize_for_json
+    history.append(sanitize_for_json(entry))
     # Keep last 52 weeks
     history = history[-52:]
     path = os.path.join(STATE_DIR, "regime_history.json")
@@ -199,8 +222,11 @@ def run_framework(force_fetch: bool = False) -> dict:
     regime_history = load_regime_history()
     regime_calc = RegimeCalculator(config, fetch_data)
     regime_result = regime_calc.compute(regime_history)
+    _gate = regime_result.get("backdrop_gate", {})
+    _gate_note = "gate open" if _gate.get("open") else f"gate SHUT: {_gate.get('reason')}"
     print(f"[framework] Regime: {regime_result['regime']} ({regime_result['risk_on_count']} risk-on, "
-          f"{regime_result['caution_count']} caution, {regime_result['risk_off_count']} risk-off)")
+          f"{regime_result['caution_count']} caution, {regime_result['risk_off_count']} risk-off "
+          f"of 3 voters; {_gate_note})")
 
     # Save regime history
     save_regime_history(regime_history, regime_result)
@@ -256,6 +282,12 @@ def run_framework(force_fetch: bool = False) -> dict:
     }
 
     # --- Write output ---
+    # NaN/Inf -> null guard on the full payload (same policy as every
+    # signals.json write). Deferred import mirrors universe_builder.py and
+    # avoids a module-level cycle.
+    from signal_engine import sanitize_for_json
+    output = sanitize_for_json(output)
+
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # Latest
