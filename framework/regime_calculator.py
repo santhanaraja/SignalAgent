@@ -18,6 +18,11 @@ import datetime
 import numpy as np
 
 
+def _today():
+    """Today's date — module-level so tests can inject replay dates."""
+    return datetime.date.today()
+
+
 class RegimeCalculator:
     """Computes the 3-voter swing regime score and outputs current regime state."""
 
@@ -103,6 +108,13 @@ class RegimeCalculator:
             "ma200": spy_gauge.get("ma200"),
         }
 
+        # --- Degraded-week streaks (R4 confirmation protocol) ---
+        # Weekly close = latest entry per ISO week (ISO weeks end Sunday, so
+        # the weekly close IS the Sunday review state). Consumed by
+        # theme_ranker: qualification mutates only on confirmed degradation.
+        degraded_incl_current, degraded_completed = self._degraded_week_streaks(
+            regime_history, regime_state, backdrop_gate)
+
         # --- Check consecutive-Sunday history ---
         # Deduplicate by ISO week so daily runs don't inflate the count.
         # Each ISO week keeps only the latest entry.
@@ -172,7 +184,7 @@ class RegimeCalculator:
                 break
 
         return {
-            "date": datetime.date.today().isoformat(),
+            "date": _today().isoformat(),
             "regime": regime_state,
             "regime_color": color,
             "gauges": gauges,
@@ -185,9 +197,68 @@ class RegimeCalculator:
             "regime_change_pending": regime_change_pending,
             "consecutive_weeks_at_state": consecutive_weeks,
             "confirmations_needed": confirmations_needed,
+            "consecutive_degraded_weeks": degraded_incl_current,
+            "consecutive_degraded_weeks_completed": degraded_completed,
             "intra_week_override": intra_week_override,
             "action": action,
         }
+
+    DEGRADED_STATES = ("Caution", "Risk-off")
+
+    def _degraded_week_streaks(self, regime_history, current_state, current_gate):
+        """
+        Two consecutive-degraded-week counts over weekly closes (latest
+        entry per ISO week; Caution/Risk-off = degraded):
+
+        - incl_current: streak ending with the current run as this week's
+          provisional close (0 if the current state is not degraded).
+        - completed: streak over COMPLETED weeks only (current ISO week
+          excluded) — the basis for a delayed weekly review, so a Monday
+          catch-up reaches the same conclusion the missed Sunday would have.
+
+        Weeks whose Caution came solely from a data_unavailable gate cap
+        are transparent: they neither count nor break a streak (an outage
+        is not evidence in either direction).
+        """
+        def outage_only(gate):
+            return bool(gate) and gate.get("capped") \
+                and gate.get("reason") == "data_unavailable"
+
+        this_week = _today().isocalendar()[:2]
+        weekly = {}
+        for entry in regime_history or []:
+            try:
+                d = datetime.date.fromisoformat(entry["date"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            wk = d.isocalendar()[:2]
+            if wk == this_week:
+                continue
+            cur = weekly.get(wk)
+            if cur is None or entry["date"] > cur["date"]:
+                weekly[wk] = entry
+
+        completed = 0
+        # Staleness guard: if the most recent completed weekly close is
+        # older than the immediately-previous ISO week (pipeline outage),
+        # the evidence is stale — do not confirm degradation across the
+        # gap. isocalendar of "7 days ago" is exactly the previous week.
+        prev_week = (_today() - datetime.timedelta(days=7)).isocalendar()[:2]
+        if weekly and max(weekly.keys()) < prev_week:
+            weekly = {}
+        for wk in sorted(weekly.keys(), reverse=True):
+            e = weekly[wk]
+            if e.get("regime") in self.DEGRADED_STATES:
+                if not outage_only(e.get("backdrop_gate")):
+                    completed += 1
+            else:
+                break
+
+        if current_state not in self.DEGRADED_STATES:
+            incl_current = 0
+        else:
+            incl_current = completed + (0 if outage_only(current_gate) else 1)
+        return incl_current, completed
 
     def _determine_state(self, risk_on, risk_off, unavailable=0):
         """

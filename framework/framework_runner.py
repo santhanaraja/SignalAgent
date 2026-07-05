@@ -234,7 +234,7 @@ def run_framework(force_fetch: bool = False) -> dict:
     # --- Layer 2: Theme Rotation ---
     print("[framework] Computing theme rankings...")
     theme_ranker = ThemeRanker(config, fetch_data)
-    theme_result = theme_ranker.compute(regime_result["regime"])
+    theme_result = theme_ranker.compute(regime_result["regime"], regime_result)
 
     # Save theme history snapshot
     theme_ranker.save_weekly_snapshot(theme_result)

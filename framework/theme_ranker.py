@@ -10,6 +10,11 @@ import os
 import numpy as np
 
 
+def _today():
+    """Today's date — module-level so tests can inject replay dates."""
+    return datetime.date.today()
+
+
 class ThemeRanker:
     """Rank themes by composite momentum and manage qualification state."""
 
@@ -63,9 +68,14 @@ class ThemeRanker:
                 "detail": f"{proxy}: error — {e}",
             }
 
-    def compute(self, regime_state: str) -> dict:
+    def compute(self, regime_state: str, regime_meta: dict = None) -> dict:
         """
         Rank all themes, evaluate entry/exit, return full result.
+
+        regime_meta: the full regime result dict. Supplies the degraded-week
+        streaks and confirmations_needed for the R4 confirmation protocol.
+        Signals fire fast (every run); qualification state mutates only on
+        the weekly (Sunday) review — see _update_active_state.
         """
         watchlist = self.themes_cfg["watchlist"]
         ranking_cfg = self.themes_cfg["ranking"]
@@ -127,11 +137,17 @@ class ThemeRanker:
         active_themes = [self._active_name(a) for a in active_records]
         price_by_name = {t["name"]: t.get("current_price") for t in theme_data}
 
-        # Consecutive-week counts must look only at PAST weeks. compute() runs
-        # before save_weekly_snapshot(), so on a same-day re-run today's snapshot
-        # is already in history — exclude it so this week isn't double-counted.
-        today_iso = datetime.date.today().isoformat()
-        past_history = [h for h in theme_history if h.get("date") != today_iso]
+        # Consecutive-week counts run over COMPLETED weekly closes: latest
+        # snapshot per ISO week (ISO weeks end Sunday — the weekly close IS
+        # the Sunday review), current in-progress week excluded. The live
+        # rank counts as this week's provisional (+1 in the counters), so
+        # "2 consecutive Sundays" means: this week plus the last completed
+        # weekly close. theme_history holds DAILY snapshots; counting raw
+        # entries would let 2 consecutive trading days satisfy a 2-Sunday
+        # rule (that bug admitted Semis/Biotech on Tue 2026-06-30).
+        today_iso = _today().isoformat()
+        past_history = self._weekly_dedupe(
+            theme_history, exclude_week=_today().isocalendar()[:2])
 
         # --- Entry signals ---
         entry_signals = []
@@ -202,11 +218,32 @@ class ThemeRanker:
                     })
 
             if exit_cfg.get("regime_degradation_triggers_exit", True) and regime_state in ("Caution", "Risk-off"):
+                # Signals fire on every run (advisory, including intraday).
+                # "Confirmed" follows the R4 protocol: N consecutive weekly
+                # closes degraded — completed weeks, plus the current run
+                # only when today IS the weekly close (Sunday). The action
+                # string encodes it for rule_engine's existing matchers:
+                # "EXIT SIGNAL" -> action_needed, "Warning" -> advisory.
+                meta = regime_meta or {}
+                needed = meta.get("confirmations_needed", 2)
+                if _today().weekday() == 6:
+                    degraded_n = meta.get("consecutive_degraded_weeks", 0)
+                else:
+                    degraded_n = meta.get("consecutive_degraded_weeks_completed", 0)
+                confirmed = degraded_n >= needed
+                if confirmed:
+                    action = (f"EXIT SIGNAL — regime degraded to {regime_state} "
+                              f"({degraded_n} consecutive weekly closes)")
+                else:
+                    action = (f"Warning — regime degraded to {regime_state} "
+                              f"({degraded_n}/{needed} weekly closes, unconfirmed)")
                 exit_signals.append({
                     "theme": active_name,
                     "proxy": theme_ranked.get("proxy", ""),
-                    "action": f"EXIT SIGNAL — regime degraded to {regime_state}",
+                    "action": action,
                     "reason": "regime_degradation",
+                    "confirmed": confirmed,
+                    "degraded_weeks": degraded_n,
                 })
 
         # --- Update active membership in qualified_themes.json ---
@@ -214,7 +251,7 @@ class ThemeRanker:
         # Exit signal  -> remove from active. This closes the lifecycle so
         # future runs can evaluate exit conditions against real positions.
         self._update_active_state(qualified, active_records, entry_signals,
-                                  exit_signals, price_by_name)
+                                  exit_signals, price_by_name, regime_meta)
 
         # Concentration limits
         conc = self.themes_cfg.get("concentration_limits", {})
@@ -225,7 +262,7 @@ class ThemeRanker:
         concentration_notes.append(f"Max total themes: {max_total}% of book")
 
         return {
-            "date": datetime.date.today().isoformat(),
+            "date": _today().isoformat(),
             "ranked_themes": ranked,
             "entry_signals": entry_signals,
             "exit_signals": exit_signals,
@@ -238,6 +275,28 @@ class ThemeRanker:
     # ==============================================================
     # History helpers
     # ==============================================================
+
+    @staticmethod
+    def _weekly_dedupe(history: list, exclude_week=None) -> list:
+        """
+        Latest snapshot per ISO week (ISO weeks end Sunday, so the weekly
+        close IS the Sunday review), oldest -> newest. Entries from
+        exclude_week (the in-progress week) are dropped so only COMPLETED
+        weekly closes count toward consecutive-Sunday rules.
+        """
+        weekly = {}
+        for entry in history:
+            try:
+                d = datetime.date.fromisoformat(entry.get("date", ""))
+            except (TypeError, ValueError):
+                continue
+            wk = d.isocalendar()[:2]
+            if exclude_week is not None and wk == exclude_week:
+                continue
+            cur = weekly.get(wk)
+            if cur is None or entry["date"] > cur["date"]:
+                weekly[wk] = entry
+        return [weekly[wk] for wk in sorted(weekly.keys())]
 
     def _count_consecutive_top_n(self, theme_name: str, history: list, top_n: int) -> int:
         """Count how many consecutive past weeks this theme was in top N."""
@@ -290,22 +349,68 @@ class ThemeRanker:
         """Return the theme name from an active record (dict) or legacy string."""
         return record["name"] if isinstance(record, dict) else record
 
+    def _weekly_review_due(self, qualified: dict, today) -> bool:
+        """
+        Qualification state mutates only on the weekly (Sunday) review — R1.
+        Fallback: if the Sunday run was missed (no review since the most
+        recent past Sunday), the first run after it acts as the delayed
+        review. Bootstrap (no last_weekly_review marker): review is due —
+        the marker's only writer is the review itself, so waiting for a
+        Sunday RUN would deadlock under a weekday-only run cadence.
+        """
+        if today.weekday() == 6:
+            return True
+        last_review = qualified.get("last_weekly_review")
+        if not last_review:
+            return True
+        last_sunday = today - datetime.timedelta(days=today.weekday() + 1)
+        try:
+            return datetime.date.fromisoformat(last_review) < last_sunday
+        except ValueError:
+            return True
+
     def _update_active_state(self, qualified: dict, active_records: list,
                              entry_signals: list, exit_signals: list,
-                             price_by_name: dict):
+                             price_by_name: dict, regime_meta: dict = None):
         """
-        Update + persist the qualified_themes.json "active" list for this run.
+        Update + persist the qualified_themes.json "active" list.
 
-        Entry signal -> add the theme (with entry date + proxy entry price).
-        Exit signal  -> remove the theme. Writes the file only when membership
-        actually changes, so idempotent re-runs leave it untouched.
+        Runs only on the weekly review (Sunday, or delayed catch-up — see
+        _weekly_review_due); all other runs leave state untouched, however
+        loud the day's signals are. Entry signal -> add the theme. Exit
+        signal -> remove it, except regime-degradation exits, which also
+        need the degradation confirmed on the review basis: consecutive
+        degraded weekly closes >= confirmations_needed, counting the
+        current run only when today IS the weekly close (Sunday). A
+        delayed review counts the same completed weeks the missed Sunday
+        would have; if the regime has RECOVERED by the delayed run there
+        is no degradation signal to act on, so no exit is manufactured
+        (deliberately conservative in the regime-flip window).
         """
+        today = _today()
+        if not self._weekly_review_due(qualified, today):
+            return
+
+        meta = regime_meta or {}
+        needed = meta.get("confirmations_needed", 2)
+        if today.weekday() == 6:
+            degraded_n = meta.get("consecutive_degraded_weeks", 0)
+        else:
+            degraded_n = meta.get("consecutive_degraded_weeks_completed", 0)
+        regime_exit_confirmed = degraded_n >= needed
+
         updated = list(active_records)
         changed = False
         max_active = self.themes_cfg.get("ranking", {}).get("max_active_themes", 2)
 
         # Remove any theme that fired a confirmed EXIT SIGNAL.
-        exited = {s["theme"] for s in exit_signals if "EXIT SIGNAL" in s.get("action", "")}
+        exited = set()
+        for s in exit_signals:
+            if "EXIT SIGNAL" not in s.get("action", ""):
+                continue
+            if s.get("reason") == "regime_degradation" and not regime_exit_confirmed:
+                continue
+            exited.add(s["theme"])
         if exited:
             pruned = [a for a in updated if self._active_name(a) not in exited]
             if len(pruned) != len(updated):
@@ -313,7 +418,7 @@ class ThemeRanker:
                 changed = True
 
         # Add any theme that fired a confirmed ENTRY SIGNAL.
-        today_iso = datetime.date.today().isoformat()
+        today_iso = _today().isoformat()
         current_names = {self._active_name(a) for a in updated}
         for s in entry_signals:
             if "ENTRY SIGNAL" not in s.get("action", ""):
@@ -332,7 +437,11 @@ class ThemeRanker:
             current_names.add(name)
             changed = True
 
-        if changed:
+        # Record that the weekly review ran (drives the missed-Sunday
+        # fallback), even when membership did not change.
+        marker_changed = qualified.get("last_weekly_review") != today.isoformat()
+        qualified["last_weekly_review"] = today.isoformat()
+        if changed or marker_changed:
             qualified["active"] = updated
             self._save_qualified_themes(qualified)
 
@@ -361,8 +470,10 @@ class ThemeRanker:
         history = [h for h in history if h.get("date") != result["date"]]
         history.append(snapshot)
 
-        # Keep last 52 weeks
-        history = history[-52:]
+        # Keep 53 true ISO weeks of DAILY snapshots (the old [-52:] kept 52
+        # daily entries — ~10 weeks — starving the consecutive-Sunday rules)
+        cutoff = (_today() - datetime.timedelta(weeks=53)).isoformat()
+        history = [h for h in history if h.get("date", "") >= cutoff]
 
         path = os.path.join(self.STATE_DIR, "theme_history.json")
         with open(path, "w") as f:

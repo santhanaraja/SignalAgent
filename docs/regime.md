@@ -127,14 +127,40 @@ snapshots; counts range 0–3 (0–5 before). The history keeps only the
 (e.g. 2026-06-25 flashed Caution intraday on an HY dip; the surviving
 EOD entry reads Choppy).
 
-## Known coupling (flagged, intentionally not changed here)
+## R4 semantics: signals fast, state slow
 
-`theme_ranker.py` fires `EXIT SIGNAL — regime degraded` and **removes
-active themes from `qualified_themes.json` on a single Caution/Risk-off
-print** (any run, including intraday; the 2-consecutive-Sunday
-confirmation protocol is computed but not consulted). The gauge measures;
-rules act. Whether R4 should require confirmation is a separate semantics
-review — do not tune the measurement to quiet the rule.
+Regime-degradation signals still fire on **every** run where the state is
+Caution/Risk-off (advisory, including intraday). Theme QUALIFICATION
+(`qualified_themes.json`) mutates only on the **weekly (Sunday) review**:
+
+- All active-list mutations (entry adds, rank-exit removals, regime-exit
+  removals) apply only on the Sunday run. If the Sunday run was missed,
+  the first run after it acts as the delayed review
+  (`last_weekly_review` marker in qualified_themes.json; a missing
+  marker — bootstrap or corrupted state — makes the first run
+  review-eligible, since the marker's only writer is the review itself).
+- Regime-exit removals additionally require the degradation **confirmed**:
+  ≥ `consecutive_confirmations_required` (2) consecutive degraded weekly
+  closes. The confirmation basis is completed weekly closes, plus the
+  current run only when today IS the weekly close (Sunday) — a delayed
+  Monday review counts the same completed weeks the missed Sunday would
+  have; if the regime has recovered by the delayed run there is no
+  degradation signal to act on, so no exit is manufactured (deliberately
+  conservative in the regime-flip window). The regime calculator exports
+  both streaks (`consecutive_degraded_weeks`,
+  `consecutive_degraded_weeks_completed`); weeks whose Caution came
+  solely from a `data_unavailable` gate cap are transparent (neither
+  count nor break), and a missing previous-week close (pipeline outage)
+  zeroes the completed streak — stale evidence never confirms an exit.
+- Signal strings encode status for the untouched rule engine:
+  `"Warning — regime degraded to X (n/2 weekly closes, unconfirmed)"`
+  (advisory) vs `"EXIT SIGNAL — regime degraded to X (n consecutive
+  weekly closes)"` (action_needed, mutation-eligible).
+- The consecutive-Sunday counters for theme entry (2 weeks top-N) and
+  rank exit (3 weeks below #3) run over **weekly closes** (latest
+  snapshot per ISO week, in-progress week excluded), not daily snapshots
+  — previously two consecutive trading days satisfied a "2 Sunday" rule.
+  theme_history retention keeps 53 true ISO weeks of daily snapshots.
 
 ## API
 

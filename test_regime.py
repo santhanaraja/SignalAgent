@@ -300,6 +300,11 @@ def test_output_shape():
              + r["unavailable_count"])
     assert total == 3, f"counts must cover exactly the 3 voters, got {total}"
     assert r["regime"] in (TRENDING, CHOPPY, CAUTION, RISK_OFF)
+    # R4 confirmation-protocol export — theme_ranker consumes exactly these
+    # key names; renaming either silently disables confirmed regime exits
+    assert "consecutive_degraded_weeks" in r
+    assert "consecutive_degraded_weeks_completed" in r
+    assert "confirmations_needed" in r
     print("  output shape (3 voters + backdrop_gate + macro_inputs): OK")
 
 
