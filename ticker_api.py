@@ -632,19 +632,111 @@ def _run_framework_refresh():
             return False, str(e)
 
 
-@app.route("/api/framework/latest")
-def framework_latest():
-    """Return the latest framework output (regime + themes + rules)."""
+# ------------------------------------------------------------------
+# Serve-layer shape sentinel (stale-serve fix): a regime endpoint must
+# never serve a shape the current code cannot produce. framework.json is
+# baked into every deploy from the last CI commit and can predate the
+# current schema (the pre-1A 5-voter artifact served 2026-07-06 ~9:15 ET
+# between Render cold-boot and the first boot refresh). Validity is
+# STRUCTURAL — the "schema" tag stamped by framework_runner is
+# informational/versioning; the invariants below decide.
+# ------------------------------------------------------------------
+FRAMEWORK_SCHEMA = "regime-1a-3voter"
+_REGIME_VOTERS = {"vix_5d_avg", "hy_spread", "breadth"}
+FRAMEWORK_STALE_AFTER_HOURS = 6   # age flag threshold — informational, never a 503
+
+
+def _framework_shape_valid(data):
+    """Structural invariants of the current regime output schema."""
+    regime = (data or {}).get("regime") or {}
+    return (
+        isinstance(regime.get("backdrop_gate"), dict)
+        and isinstance(regime.get("macro_inputs"), dict)
+        and set((regime.get("gauges") or {}).keys()) == _REGIME_VOTERS
+    )
+
+
+def _framework_stale_hours(data):
+    """Age in hours when past the freshness threshold, else None.
+    Weekend/overnight age is legitimate (Friday close IS the latest
+    close) — this flags it, it never blocks serving."""
+    try:
+        gen = datetime.datetime.fromisoformat(str(data.get("generated_at")))
+        if gen.tzinfo is None:
+            gen = gen.replace(tzinfo=datetime.timezone.utc)
+        age = (datetime.datetime.now(datetime.timezone.utc) - gen).total_seconds() / 3600
+        return round(age, 1) if age > FRAMEWORK_STALE_AFTER_HOURS else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _kick_framework_refresh():
+    """Fire-and-forget refresh; _run_framework_refresh's running guard
+    makes duplicate kicks harmless."""
+    if not _framework_status["running"]:
+        threading.Thread(target=_run_framework_refresh, daemon=True).start()
+
+
+def _load_framework_payload():
+    """
+    (payload, error_response) for the current-state framework endpoints.
+    Missing file -> 404. Unparseable or shape-invalid -> kick a refresh
+    and 503 with Retry-After — the baked artifact predates the current
+    schema and must not be served. A valid payload past the freshness
+    threshold gets an informational top-level stale_hours field.
+    """
     framework_path = os.path.join(PUBLIC_DIR, "framework.json")
     if not os.path.exists(framework_path):
-        return jsonify({
-            "status": "error",
-            "error": "Framework has not been run yet. Trigger a run via POST /api/framework/run.",
-        }), 404
-
+        return None, app.response_class(
+            response=json.dumps({
+                "status": "error",
+                "error": "Framework has not been run yet.",
+                "hint": "POST /api/framework/run to trigger a run.",
+            }),
+            status=404,
+            mimetype="application/json",
+        )
     try:
         with open(framework_path, "r") as f:
             data = json.load(f)
+    except Exception:
+        data = None
+    if not data or not _framework_shape_valid(data):
+        _kick_framework_refresh()
+        resp = app.response_class(
+            response=json.dumps({
+                "status": "warming_up",
+                "error": "regime state regenerating — the stored artifact "
+                         "predates the current schema (fresh computation "
+                         "kicked off; typically ready within ~3 minutes)",
+                "retry_after": 180,
+                "framework_status": {
+                    "running": _framework_status.get("running"),
+                    "last_run": _framework_status.get("last_run"),
+                    "last_error": _framework_status.get("last_error"),
+                },
+            }, cls=NumpyEncoder),
+            status=503,
+            mimetype="application/json",
+        )
+        resp.headers["Retry-After"] = "180"
+        return None, resp
+    stale = _framework_stale_hours(data)
+    if stale is not None:
+        data = dict(data)
+        data["stale_hours"] = stale
+    return data, None
+
+
+@app.route("/api/framework/latest")
+def framework_latest():
+    """Return the latest framework output (regime + themes + rules).
+    503 while a schema-stale artifact is being regenerated; stale_hours
+    flags valid-but-old data (e.g. Friday close served on a Sunday)."""
+    data, err = _load_framework_payload()
+    if err is not None:
+        return err
+    try:
         return app.response_class(
             response=json.dumps({"status": "success", **data}, cls=NumpyEncoder),
             mimetype="application/json",
@@ -742,31 +834,17 @@ def framework_latest_json():
     """
     Public JSON API — returns the full framework output as clean JSON.
     Same data the dashboard reads from framework.json.
-    No wrapper, no status field — just the raw framework object.
+    No wrapper, no status field — just the raw framework object
+    (plus stale_hours when past the freshness threshold). 503 while a
+    schema-stale artifact is being regenerated.
     """
-    framework_path = os.path.join(PUBLIC_DIR, "framework.json")
-    if not os.path.exists(framework_path):
-        return app.response_class(
-            response=json.dumps({
-                "error": "Framework has not been run yet.",
-                "hint": "POST /api/framework/run to trigger a run.",
-            }),
-            status=404,
-            mimetype="application/json",
-        )
-    try:
-        with open(framework_path, "r") as f:
-            data = json.load(f)
-        return app.response_class(
-            response=json.dumps(data, cls=NumpyEncoder),
-            mimetype="application/json",
-        )
-    except Exception as e:
-        return app.response_class(
-            response=json.dumps({"error": str(e)}),
-            status=500,
-            mimetype="application/json",
-        )
+    data, err = _load_framework_payload()
+    if err is not None:
+        return err
+    return app.response_class(
+        response=json.dumps(data, cls=NumpyEncoder),
+        mimetype="application/json",
+    )
 
 
 @app.route("/api/framework/history.json")
@@ -824,21 +902,13 @@ def framework_gauges_json():
       "backdrop_gate": { "gauge": "spy_vs_200dma", "open": true, "capped": false, ... },
       "macro_inputs":  { "yield_curve": { "value": 0.84, "signal": "risk_on", ... } }
     }
+    503 while a schema-stale artifact is being regenerated (shape
+    sentinel); stale_hours flags valid-but-old data.
     """
-    framework_path = os.path.join(PUBLIC_DIR, "framework.json")
-    if not os.path.exists(framework_path):
-        return app.response_class(
-            response=json.dumps({
-                "error": "Framework has not been run yet.",
-                "hint": "POST /api/framework/run to trigger a run.",
-            }),
-            status=404,
-            mimetype="application/json",
-        )
+    data, err = _load_framework_payload()
+    if err is not None:
+        return err
     try:
-        with open(framework_path, "r") as f:
-            data = json.load(f)
-
         regime = data.get("regime", {})
         compact = {
             "generated_at": data.get("generated_at"),
@@ -853,6 +923,8 @@ def framework_gauges_json():
             "backdrop_gate": regime.get("backdrop_gate"),
             "macro_inputs": regime.get("macro_inputs"),
         }
+        if "stale_hours" in data:
+            compact["stale_hours"] = data["stale_hours"]
 
         return app.response_class(
             response=json.dumps(compact, cls=NumpyEncoder),
@@ -885,20 +957,13 @@ def framework_signals_json():
       },
       "transitions": [ ...today's state-change events... ]
     }
+    503 while a schema-stale artifact is being regenerated (shape
+    sentinel); stale_hours flags valid-but-old data.
     """
-    framework_path = os.path.join(PUBLIC_DIR, "framework.json")
-    if not os.path.exists(framework_path):
-        return app.response_class(
-            response=json.dumps({
-                "error": "Framework has not been run yet.",
-                "hint": "POST /api/framework/run to trigger a run.",
-            }),
-            status=404,
-            mimetype="application/json",
-        )
+    data, err = _load_framework_payload()
+    if err is not None:
+        return err
     try:
-        with open(framework_path, "r") as f:
-            data = json.load(f)
         pos = data.get("position_signals")
         if not pos:
             return app.response_class(
@@ -909,6 +974,9 @@ def framework_signals_json():
                 status=404,
                 mimetype="application/json",
             )
+        if "stale_hours" in data:
+            pos = dict(pos)
+            pos["stale_hours"] = data["stale_hours"]
         return app.response_class(
             response=json.dumps(pos, cls=NumpyEncoder),
             mimetype="application/json",

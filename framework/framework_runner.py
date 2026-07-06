@@ -290,6 +290,10 @@ def run_framework(force_fetch: bool = False) -> dict:
     # --- Assemble output ---
     output = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        # Serve-layer shape sentinel (mirrored in ticker_api): bump this tag
+        # whenever the regime output schema changes so a deploy-baked
+        # framework.json from an older schema is never served as current.
+        "schema": "regime-1a-3voter",
         "framework_version": config.get("framework", {}).get("version", "1.0"),
         "regime": regime_result,
         "themes": theme_result,

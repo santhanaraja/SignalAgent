@@ -170,11 +170,36 @@ function fmtEST(iso){
 let DATA = null;
 let fwRunning = false;
 
+// Boot-window grace (mirrors history.html's retry/backoff): a 503 from
+// the shape sentinel means a fresh regime computation is in progress
+// after a deploy — never show a blank page or an error wall for it.
+let fwRetryDelay = 2000;
+let fwRetryTimer = null;
+function showWarming(msg){
+  const el=document.getElementById('emptyState');
+  el.innerHTML=`<h2>⏳ Regime engine warming up</h2><p>${msg}</p>`;
+  el.style.display='block';
+}
+function scheduleRetry(msg){
+  showWarming(`${msg} — retrying in ${Math.round(fwRetryDelay/1000)}s…`);
+  fwRetryTimer=setTimeout(loadData, fwRetryDelay);
+  fwRetryDelay=Math.min(fwRetryDelay*2, 30000);
+}
 async function loadData(){
+  if(fwRetryTimer){clearTimeout(fwRetryTimer);fwRetryTimer=null;}
+  let r;
   try{
-    const r=await fetch('/api/framework/latest');
+    r=await fetch('/api/framework/latest');
+  }catch(e){
+    return scheduleRetry('Connection failed');
+  }
+  if(r.status===503){
+    return scheduleRetry('Fresh regime computation in progress after deploy (typically ~3 minutes)');
+  }
+  try{
     const j=await r.json();
     if(j.status==='success'){
+      fwRetryDelay=2000;
       DATA=j;
       render();
     } else {

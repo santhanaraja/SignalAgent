@@ -215,3 +215,16 @@ a fetch failure never seeds or mutates a ticker's persisted state.
 (`framework.json`, `/api/framework/latest.json`) carries the same fields
 under `regime`. All framework output passes through
 `signal_engine.sanitize_for_json` (NaN/Inf → null) before writing.
+
+**Shape sentinel** (stale-serve fix): framework.json is baked into every
+deploy from the last CI commit and can predate the current schema. The
+current-state endpoints (`gauges.json`, `latest`, `latest.json`,
+`signals.json`) validate structurally before serving — `backdrop_gate` +
+`macro_inputs` present, `gauges` keys exactly the 3 voters. An invalid
+artifact kicks a background refresh and returns **503** with
+`Retry-After` (never a shape current code can't produce); framework.html
+shows a "warming up" state and retries with backoff. Valid-but-old data
+serves normally with an informational top-level `stale_hours` flag
+(threshold 6h — Friday's close on a Sunday is legitimate). The output's
+`schema` tag ("regime-1a-3voter") is versioning metadata; bump it with
+any future schema change.
