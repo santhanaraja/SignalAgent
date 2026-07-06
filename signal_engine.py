@@ -1930,6 +1930,13 @@ def run_engine():
         stage_lbl = f"S{stage['stage']} {stage['stage_name']}" if stage.get('stage') else "?"
         print(f"  {ticker}: Score={score}, Signal={signal}, Stage={stage_lbl}, YTD={details.get('ytd_return', 'N/A')}%")
 
+    # Earnings-calendar layer (PER-510, display-only v1): daily-cached
+    # next-earnings map for the active universe. Missing date = no chip;
+    # a flaky calendar endpoint can never block the run.
+    from earnings_calendar import get_earnings_map, days_to_earnings
+    earnings_map = get_earnings_map(
+        [t for gi in industry_groups.values() for t in gi["tickers"]])
+
     # Build group-level data
     groups_output = []
     for group_name, group_info in industry_groups.items():
@@ -1942,6 +1949,8 @@ def run_engine():
                 d = sig["details"]
                 stocks_in_group.append({
                     "ticker": ticker,
+                    "next_earnings_date": earnings_map.get(ticker),
+                    "days_to_earnings": days_to_earnings(earnings_map.get(ticker)),
                     "score": sig["score"],
                     "score_components": d.get("score_components"),
                     "signal": sig["signal"],
@@ -2036,6 +2045,12 @@ def run_engine():
             )
             stock["trade_signal"] = trade_sig
             stock["trade_reasoning"] = trade_reason
+            # Earnings proximity note (PER-510): text only — the tally and
+            # decision ladder are untouched in v1
+            dte = stock.get("days_to_earnings")
+            if dte is not None and dte <= 7:
+                stock["trade_reasoning"] += (
+                    f"; earnings in {dte}d — R8: binary catalyst window")
 
         groups_output.append({
             "name": group_name,

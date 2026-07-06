@@ -383,7 +383,22 @@ def test_compute_persists_and_emits():
         regime = {"regime": TRENDING}
         themes = {"ranked_themes": [{"name": "Semis", "rank": 1},
                                     {"name": "Biotech", "rank": 2}]}
+
+        # Keep tests offline: stub the earnings map (PER-510) — AAA reports
+        # earnings in 3 days, others unknown
+        import earnings_calendar
+        old_gem = earnings_calendar.get_earnings_map
+        aaa_er = (datetime.date.today() + datetime.timedelta(days=3)).isoformat()
+        earnings_calendar.get_earnings_map = \
+            lambda ts: {t: (aaa_er if t == "AAA" else None) for t in ts}
+
         r1 = eng.compute(regime, themes)
+        # Earnings layer: fields present; note only on HELD/READY with ER ≤7d
+        assert r1["tickers"]["AAA"]["days_to_earnings"] == 3
+        assert r1["tickers"]["AAA"]["earnings_note"] == \
+            "earnings in 3d — R8: binary catalyst window"
+        assert r1["tickers"]["BBB"]["days_to_earnings"] is None
+        assert "earnings_note" not in r1["tickers"]["BBB"]   # WATCHING + no date
         assert r1["tickers"]["AAA"]["state"] == HELD
         assert r1["tickers"]["AAA"]["stop"]["type"] == "sma20_close"
         # thesis via the qualified_themes.json load path (Semis active)
@@ -434,8 +449,9 @@ def test_compute_persists_and_emits():
     finally:
         (PositionSignalEngine.STATE_DIR, PositionSignalEngine.DATA_DIR,
          PositionSignalEngine.PUBLIC_DIR) = olds
+        earnings_calendar.get_earnings_map = old_gem
         shutil.rmtree(tmp, ignore_errors=True)
-    print("  compute(): state persisted, events emitted once, mirrored: OK")
+    print("  compute(): state persisted, events emitted once, earnings layer: OK")
 
 
 if __name__ == "__main__":

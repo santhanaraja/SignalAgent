@@ -315,6 +315,21 @@ class PositionSignalEngine:
                    if isinstance(h, dict)] + \
                   [(w, "watching") for w in positions.get("watching", []) or []
                    if isinstance(w, dict)]
+
+        # Earnings-calendar layer (PER-510, display-only): daily-cached map
+        # for tracked names. Proximity matters most on HELD / RE_ENTRY_READY
+        # (R8: no naked momentum exposure through binary catalysts).
+        earnings_map = {}
+        try:
+            import sys
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+            from earnings_calendar import get_earnings_map, days_to_earnings
+            earnings_map = get_earnings_map(
+                [e.get("ticker") for e, _ in entries if e.get("ticker")])
+        except Exception as e:
+            print(f"[framework] earnings calendar unavailable: {e}")
+            days_to_earnings = lambda d: None
+
         seen = set()
         for entry, kind in entries:
             ticker = entry.get("ticker")
@@ -336,6 +351,12 @@ class PositionSignalEngine:
             result["kind"] = kind
             result["theme"] = entry.get("theme")
             result["note"] = entry.get("note")
+            result["next_earnings_date"] = earnings_map.get(ticker)
+            result["days_to_earnings"] = days_to_earnings(earnings_map.get(ticker))
+            dte = result["days_to_earnings"]
+            if dte is not None and dte <= 7 and result["state"] in (HELD, RE_ENTRY_READY):
+                result["earnings_note"] = (
+                    f"earnings in {dte}d — R8: binary catalyst window")
             tickers[ticker] = result
 
             if result.get("insufficient_data"):

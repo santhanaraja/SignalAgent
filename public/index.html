@@ -361,6 +361,14 @@ function nearMissStrip(g){
   return `<div class="near-miss-strip">Not selected: ${items.join(' · ')}</div>`;
 }
 function breakerIcon(status){return {critical:'🔴',warning:'🟠',watch:'🟡',clear:'🟢'}[status]||'⚪';}
+/* Earnings-proximity chip (PER-510, display-only): amber ≤7d, red ≤2d —
+   same inline-chip pattern as the theme-leader warning chips. */
+function erChip(d){
+  if(d==null||d>7) return '';
+  const fg = d<=2?'var(--red)':'var(--yellow)';
+  const bg = d<=2?'rgba(248,81,73,.18)':'rgba(210,153,34,.18)';
+  return `<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;background:${bg};color:${fg};white-space:nowrap;" title="Earnings in ${d} day${d===1?'':'s'} — R8: binary catalyst window">ER in ${d}d</span>`;
+}
 function tsClass(ts){
   if(!ts) return 'ts-hold';
   const t = ts.toUpperCase();
@@ -639,7 +647,7 @@ function renderGroups(){
           <th onclick="sortG(${i},'ticker')">Ticker</th><th onclick="sortG(${i},'price')">Price</th><th onclick="sortG(${i},'ytd_return')">YTD %</th><th onclick="sortG(${i},'score')">Score</th><th>Signal</th><th>Stage</th><th>Trade Signal</th><th onclick="sortG(${i},'rsi')">RSI</th><th>MACD</th><th>Price vs MA</th><th onclick="sortG(${i},'volume_ratio')">Vol</th><th>Reasoning</th>
         </tr></thead><tbody>
         ${(query?stocks:g.stocks).map(s=>`<tr>
-          <td>${tvLink(s.ticker)}${s.beating_sp500?'<span class="sp">S&P✓</span>':''}</td>
+          <td>${tvLink(s.ticker)}${s.beating_sp500?'<span class="sp">S&P✓</span>':''}${erChip(s.days_to_earnings)}</td>
           <td class="mono" style="font-weight:600">$${s.price?s.price.toFixed(2):'—'}</td>
           <td class="ytd ${s.ytd_return==null?'':(s.ytd_return>=0?'up':'dn')}">${fmtYtd(s.ytd_return)}</td>
           <td${scoreTitleAttr(s.score_components, s.score, `RSI ${fmtNum(s.rsi,1)} · MACD ${s.macd>s.macd_signal?'above':'below'} signal, hist ${sgn(+fmtNum(s.macd_histogram,2))} · YTD ${fmtYtd(s.ytd_return)}${s.ytd_return>100?' (overextended)':''} · vol ${s.volume_ratio||1}x`)}><div style="display:flex;align-items:center;gap:6px"><div class="bar"><div class="bar-fill" style="width:${s.score}%;background:${scoreColor(s.score)}"></div></div><span style="font-size:11px;font-weight:600;color:${scoreColor(s.score)}">${s.score}</span></div></td>

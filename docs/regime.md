@@ -184,6 +184,10 @@ Each ticker also carries two informational extension readings —
 in ATR(14) multiples). Display only, never gating: the discretion layer
 decides what "too extended to chase" means (e.g. MRNA printing READY 33%
 above its SMA20). Both surface in the transition events on history.html.
+Earnings proximity (PER-510, display-only): `next_earnings_date` +
+`days_to_earnings` per ticker (daily-cached via earnings_calendar.py),
+with an `earnings_note` ("R8: binary catalyst window") emitted only on
+HELD / RE_ENTRY_READY names within 7 days of earnings.
 
 States: `HELD → EXIT_FIRED (close below SMA20 — the exit signal, stop
 shown) → WATCHING (distance to SMA20 shown) → RE_ENTRY_ARMING (reclaim,
