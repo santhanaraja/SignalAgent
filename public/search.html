@@ -229,6 +229,7 @@
       <div class="trade-panel active" id="tp-position">
         <div class="trade-row"><span class="ts-badge" id="tradeBadge">—</span></div>
         <div class="trade-reasoning" id="tradeReasoning">—</div>
+        <div id="breakerContext"></div>
       </div>
 
       <!-- Swing Trading Panel -->
@@ -317,7 +318,7 @@ function tsClass(ts){
   if(t==='LONG ENTRY') return 'ts-long-entry';
   if(t==='SHORT ENTRY') return 'ts-short-entry';
   if(t==='WAIT FOR BREAKOUT') return 'ts-wait-breakout';
-  if(t==='WAIT FOR PULLBACK') return 'ts-wait-pullback';
+  if(t==='BREAKDOWN WATCH') return 'ts-wait-pullback';
   if(t==='RANGE BOUND') return 'ts-range-bound';
   if(t==='NO SETUP') return 'ts-no-setup';
   // Fallback
@@ -328,7 +329,15 @@ function tsClass(ts){
 function fmtMcap(v){if(!v)return '—';if(v>=1e12)return '$'+(v/1e12).toFixed(2)+'T';if(v>=1e9)return '$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return '$'+(v/1e6).toFixed(0)+'M';return '$'+v;}
 function fmtPct(v){if(v===null||v===undefined)return '—';return (v*100).toFixed(1)+'%';}
 function fmtNum(v,d){if(v===null||v===undefined)return '—';return Number(v).toFixed(d===undefined?2:d);}
-function stat(label,value,color){return `<div class="stat"><div class="l">${label}</div><div class="v" style="${color?'color:'+color:''}">${value}</div></div>`;}
+function stat(label,value,color,title){return `<div class="stat"${title?` title="${title}"`:''}><div class="l">${label}</div><div class="v" style="${color?'color:'+color:''}">${value}</div></div>`;}
+
+/* Score-breakdown tooltip — mirrors index.html (components from score_stock;
+   bands 75/60/45/30, qualifier gate 50 — see docs/scoring.md). PER-509. */
+function sgn(v){return (v>=0?'+':'')+v;}
+function scoreBand(sc){return sc>=75?'strong-buy':sc>=60?'buy':sc>=45?'hold':sc>=30?'sell':'strong-sell';}
+function scoreGateLine(sc){const dd=sc-50;return `${sc} → ${scoreBand(sc)} band, ${Math.abs(dd)} ${dd>=0?'above':'under'} the ≥50 qualifier gate`;}
+function scoreCompLine(c,sc){return `base 50 · RSI ${sgn(c.rsi)}/±15 · MACD ${sgn(c.macd)}/±13 · MA ${sgn(c.ma)}/±14 · YTD ${sgn(c.ytd)}/+12 · Vol ${sgn(c.vol)}/±3 → ${sc}`;}
+function scoreTooltipText(c,sc){return c&&sc!=null ? scoreCompLine(c,sc)+'\n'+scoreGateLine(sc) : '';}
 
 // Enter key
 document.getElementById('tickerInput').addEventListener('keydown', e=>{
@@ -421,6 +430,7 @@ function renderResults(d){
   scoreEl.textContent = d.score + '/100';
   scoreEl.style.color = scoreHex(d.score);
   scoreEl.style.background = d.score>=70?'rgba(63,185,80,.12)':d.score>=55?'rgba(210,153,34,.12)':'rgba(248,81,73,.12)';
+  scoreEl.title = scoreTooltipText(d.score_components, d.score);
 
   document.getElementById('resTime').textContent = 'Analyzed: ' + fmtEST(d.timestamp);
 
@@ -444,12 +454,15 @@ function renderResults(d){
 
   document.getElementById('stageDesc').textContent = sa.description || '—';
 
+  // Honest label (PER-509): the 6mo frame never has 150 bars, so this is
+  // the min(len,100)-day MA — ma_period reports the actual window.
   const ma150El = document.getElementById('stageMa150');
-  if (sa.ma150) {
-    const aboveMa150 = d.price > sa.ma150;
-    ma150El.innerHTML = `<span style="color:var(--dim)">MA150:</span> <span class="mono" style="font-weight:600">$${fmtNum(sa.ma150,2)}</span>
-      <span style="color:${aboveMa150?'var(--green)':'var(--red)'}; font-weight:600; font-size:11px;">${aboveMa150?'▲ Above':'▼ Below'} (${sa.price_vs_ma150_pct>=0?'+':''}${fmtNum(sa.price_vs_ma150_pct,1)}%)</span>
-      <span style="color:var(--dim); margin-left:8px;">Slope: ${sa.ma150_slope>=0?'+':''}${fmtNum(sa.ma150_slope,2)}%</span>`;
+  if (sa.ma100) {
+    const aboveMa = d.price > sa.ma100;
+    const maLabel = 'MA' + (sa.ma_period || 100);
+    ma150El.innerHTML = `<span style="color:var(--dim)">${maLabel}:</span> <span class="mono" style="font-weight:600">$${fmtNum(sa.ma100,2)}</span>
+      <span style="color:${aboveMa?'var(--green)':'var(--red)'}; font-weight:600; font-size:11px;">${aboveMa?'▲ Above':'▼ Below'} (${sa.price_vs_ma100_pct>=0?'+':''}${fmtNum(sa.price_vs_ma100_pct,1)}%)</span>
+      <span style="color:var(--dim); margin-left:8px;">Slope: ${sa.ma100_slope>=0?'+':''}${fmtNum(sa.ma100_slope,2)}%</span>`;
   } else {
     ma150El.innerHTML = '';
   }
@@ -466,6 +479,25 @@ function renderResults(d){
   tradeBadge.textContent = d.trade_signal;
   tradeBadge.className = 'ts-badge ' + tsClass(d.trade_signal);
   document.getElementById('tradeReasoning').textContent = d.trade_reasoning;
+
+  // Group breaker context (PER-509): the trade signal above was computed
+  // WITH this status — surface it, or say explicitly that none applied.
+  const bc = document.getElementById('breakerContext');
+  const gc = d.group_context;
+  if (gc && gc.breaker_status && gc.breaker_status !== 'clear') {
+    const col = gc.breaker_status==='critical' ? 'var(--red)'
+              : gc.breaker_status==='warning' ? 'var(--orange)' : 'var(--yellow)';
+    const icon = {critical:'🔴',warning:'🟠',watch:'🟡'}[gc.breaker_status]||'⚪';
+    const reasons = (gc.breaker_reasons||[])
+      .map(r=>`<div style="margin-top:4px;color:var(--dim);font-size:11px;">• ${r}</div>`).join('');
+    bc.innerHTML = `<div style="margin-top:10px;padding:10px 12px;border:1px solid ${col};border-radius:8px;background:rgba(248,81,73,.06);">
+      <span style="font-weight:700;color:${col};font-size:12px;">${icon} GROUP BREAKER: ${gc.breaker_status.toUpperCase()}</span>
+      <span style="color:var(--dim);font-size:11px;margin-left:6px;">${gc.group}</span>${reasons}</div>`;
+  } else if (gc) {
+    bc.innerHTML = `<div style="margin-top:8px;font-size:11px;color:var(--dim);">🟢 Group breakers clear — ${gc.group}</div>`;
+  } else {
+    bc.innerHTML = `<div style="margin-top:8px;font-size:11px;color:var(--dim);">No group context — not in the active universe; group breaker checks not applied.</div>`;
+  }
 
   // Swing trade signal
   const sw = d.swing_signal || {};
@@ -496,7 +528,7 @@ function renderResults(d){
   const macdBull = d.macd > d.macd_signal;
 
   document.getElementById('signalsGrid').innerHTML = [
-    stat('Score', d.score, scoreHex(d.score)),
+    stat('Score', d.score, scoreHex(d.score), scoreTooltipText(d.score_components, d.score)),
     stat('Signal', d.signal.toUpperCase(), scoreHex(d.score)),
     stat('RSI (14)', fmtNum(d.rsi,1), d.rsi>70?'var(--red)':d.rsi<30?'var(--green)':''),
     stat('MACD', fmtNum(d.macd,3), macdBull?'var(--green)':'var(--red)'),

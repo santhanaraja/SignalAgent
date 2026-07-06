@@ -71,6 +71,49 @@ def _save_history(history):
         json.dump(history, f, indent=2, cls=NumpyEncoder)
 
 
+def _group_breaker_context(symbol):
+    """
+    Group + breaker context for a symbol (PER-509).
+
+    Membership comes from the active universe artifact (authoritative for
+    the week); the group's live breaker status comes from the latest
+    signals.json group entry — breakers are group-level and only computed
+    by the engine run. Returns None when the symbol has no group in the
+    active universe (caller then keeps breaker_status="clear" but must
+    say so explicitly).
+    """
+    try:
+        ua_path = os.path.join(DATA_DIR, "universe_active.json")
+        if not os.path.exists(ua_path):
+            return None
+        with open(ua_path, "r") as f:
+            groups = json.load(f).get("groups", {})
+        group_name = None
+        for gname, g in groups.items():
+            if symbol in (g.get("tickers") or []):
+                group_name = gname
+                break
+        if group_name is None:
+            return None
+        ctx = {"group": group_name, "breaker_status": "clear",
+               "breaker_reasons": []}
+        signals_path = os.path.join(DATA_DIR, "signals.json")
+        if os.path.exists(signals_path):
+            with open(signals_path, "r") as f:
+                for g in json.load(f).get("groups", []):
+                    if g.get("name") == group_name:
+                        ctx["breaker_status"] = g.get("breaker_status", "clear")
+                        ctx["breaker_reasons"] = [
+                            a.get("message", a.get("description", ""))
+                            for a in (g.get("breaker_alerts") or [])
+                            if a.get("triggered")
+                        ][:3]
+                        break
+        return ctx
+    except Exception:
+        return None
+
+
 def _analyze_ticker(symbol):
     """Run full analysis pipeline for a single ticker."""
     # Check cache
@@ -90,8 +133,12 @@ def _analyze_ticker(symbol):
     fundamentals = fetch_fundamentals_yfinance(symbol)
     details["fundamentals"] = fundamentals
 
-    # Trade signals (no breaker context for ad-hoc)
-    trade_sig, trade_reason = compute_trade_signal(details, breaker_status="clear")
+    # Trade signal with REAL group breaker context when the symbol belongs
+    # to a selected group (PER-509 fix 1: hardcoded "clear" made J show
+    # BUY NOW here while the dashboard showed AVOID from the same function)
+    group_ctx = _group_breaker_context(symbol)
+    breaker_status = group_ctx["breaker_status"] if group_ctx else "clear"
+    trade_sig, trade_reason = compute_trade_signal(details, breaker_status=breaker_status)
     swing_signal = compute_swing_trade_signal(details, df)
     intraday_signal = compute_intraday_trade_signal(details, df)
     stage_analysis = compute_stage_analysis(details, df)
@@ -102,8 +149,10 @@ def _analyze_ticker(symbol):
         "price": details.get("price", 0),
         "score": score,
         "signal": signal,
+        "score_components": details.get("score_components"),
         "trade_signal": trade_sig,
         "trade_reasoning": trade_reason,
+        "group_context": group_ctx,
         # Technicals
         "rsi": details.get("rsi", 0),
         "macd": details.get("macd", 0),

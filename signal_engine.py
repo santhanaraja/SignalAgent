@@ -1547,13 +1547,16 @@ def compute_intraday_trade_signal(details, df):
     elif net <= -2 and not macd_bullish and price < prev_close:
         signal = "SHORT ENTRY"
     elif net <= -2 and price >= prev_close:
-        signal = "WAIT FOR PULLBACK"
+        # SHORT-side setup (trigger = prev-low break). Named BREAKDOWN
+        # WATCH: the old "WAIT FOR PULLBACK" collided with the position
+        # ladder's long-side patience signal of the same name (PER-509).
+        signal = "BREAKDOWN WATCH"
     elif abs(net) <= 1 and range_ratio < 0.8:
         signal = "RANGE BOUND"
     elif net >= 1:
         signal = "WAIT FOR BREAKOUT"
     elif net <= -1:
-        signal = "WAIT FOR PULLBACK"
+        signal = "BREAKDOWN WATCH"
     else:
         signal = "NO SETUP"
 
@@ -1582,7 +1585,7 @@ def compute_intraday_trade_signal(details, df):
         reward = target_price - entry_price
         rr = round(reward / risk, 1) if risk > 0 else 0
         risk_reward = f"1:{rr}"
-    elif signal == "WAIT FOR PULLBACK":
+    elif signal == "BREAKDOWN WATCH":
         entry_price = round(prev_low, 2)  # Trigger = prev low break
         stop_loss = round(prev_low + (1.5 * atr), 2)
         target_price = round(prev_low - (2 * atr), 2)
@@ -1614,16 +1617,21 @@ def compute_intraday_trade_signal(details, df):
 def compute_stage_analysis(details, df):
     """
     Determine the current Weinstein Stage for a stock.
-    Uses 150-day MA (≈30-week MA) as primary, with slope analysis,
-    price position, and volume confirmation.
+    Primary trend MA: 150-day (≈30-week) when the frame has ≥150 bars —
+    but on the production 6-month frame (~124 bars) the fallback
+    min(len, 100)-day MA ALWAYS fires, so what ships is effectively a
+    100-day MA. Fields/labels are named ma100 accordingly (honest labels,
+    PER-509); ma_period reports the actual window used. Display-only:
+    never feeds score or trade signals (see docs/scoring.md).
 
     Stages:
-        Stage 1 — Basing/Accumulation: Price consolidating near flat MA150
-        Stage 2 — Advancing/Markup:    Price above rising MA150 (ideal buy zone)
-        Stage 3 — Topping/Distribution: Price struggling, MA150 flattening after rise
-        Stage 4 — Declining/Markdown:   Price below falling MA150 (avoid/short)
+        Stage 1 — Basing/Accumulation: Price consolidating near flat primary MA
+        Stage 2 — Advancing/Markup:    Price above rising primary MA (ideal buy zone)
+        Stage 3 — Topping/Distribution: Price struggling, primary MA flattening after rise
+        Stage 4 — Declining/Markdown:   Price below falling primary MA (avoid/short)
 
-    Returns dict: {stage, stage_name, description, confidence, factors}
+    Returns dict: {stage, stage_name, description, confidence,
+                   ma100, ma100_slope, price_vs_ma100_pct, ma_period, factors}
     """
     price = details.get("price", 0)
     ma50 = details.get("ma50", price)
@@ -1640,19 +1648,23 @@ def compute_stage_analysis(details, df):
 
     close = df["Close"]
 
-    # --- Compute 150-day MA (≈30-week MA) ---
+    # --- Compute the primary trend MA ---
+    # 150-day when the frame allows; the production 6mo frame (~124 bars)
+    # always takes the fallback, so ma_period is 100 in practice.
     if len(close) >= 150:
+        ma_period = 150
         ma150 = close.rolling(150).mean()
         ma150_current = float(ma150.iloc[-1])
-        # Slope: compare current MA150 to 20 days ago
+        # Slope: compare current MA to 20 days ago
         ma150_20ago = float(ma150.iloc[-21]) if len(ma150) > 20 and not pd.isna(ma150.iloc[-21]) else ma150_current
         ma150_slope = (ma150_current - ma150_20ago) / ma150_20ago * 100 if ma150_20ago != 0 else 0
     else:
-        # Fallback to MA50 if not enough data for MA150
-        ma150_series = close.rolling(min(len(close), 100)).mean()
+        ma_period = min(len(close), 100)
+        ma150_series = close.rolling(ma_period).mean()
         ma150_current = float(ma150_series.iloc[-1]) if not pd.isna(ma150_series.iloc[-1]) else price
         ma150_20ago = float(ma150_series.iloc[-21]) if len(ma150_series) > 20 and not pd.isna(ma150_series.iloc[-21]) else ma150_current
         ma150_slope = (ma150_current - ma150_20ago) / ma150_20ago * 100 if ma150_20ago != 0 else 0
+    ma_label = f"MA{ma_period}"
 
     # --- Price position relative to MA150 ---
     price_vs_ma150_pct = (price - ma150_current) / ma150_current * 100 if ma150_current != 0 else 0
@@ -1679,30 +1691,30 @@ def compute_stage_analysis(details, df):
     # Price vs MA150
     if price_vs_ma150_pct > 5:
         stage_scores[2] += 3
-        factors.append(f"Price {price_vs_ma150_pct:+.1f}% above MA150 — bullish positioning")
+        factors.append(f"Price {price_vs_ma150_pct:+.1f}% above {ma_label} — bullish positioning")
     elif price_vs_ma150_pct > 0:
         stage_scores[2] += 1
         stage_scores[1] += 1
-        factors.append(f"Price {price_vs_ma150_pct:+.1f}% above MA150 — near support")
+        factors.append(f"Price {price_vs_ma150_pct:+.1f}% above {ma_label} — near support")
     elif price_vs_ma150_pct > -3:
         stage_scores[3] += 2
         stage_scores[1] += 1
-        factors.append(f"Price {price_vs_ma150_pct:+.1f}% near MA150 — testing support")
+        factors.append(f"Price {price_vs_ma150_pct:+.1f}% near {ma_label} — testing support")
     else:
         stage_scores[4] += 3
-        factors.append(f"Price {price_vs_ma150_pct:+.1f}% below MA150 — bearish positioning")
+        factors.append(f"Price {price_vs_ma150_pct:+.1f}% below {ma_label} — bearish positioning")
 
     # MA150 slope (primary trend)
     if ma150_slope > 0.5:
         stage_scores[2] += 3
-        factors.append(f"MA150 rising ({ma150_slope:+.2f}%) — uptrend confirmed")
+        factors.append(f"{ma_label} rising ({ma150_slope:+.2f}%) — uptrend confirmed")
     elif ma150_slope > -0.2:
         stage_scores[1] += 2
         stage_scores[3] += 2
-        factors.append(f"MA150 flat ({ma150_slope:+.2f}%) — consolidation/transition")
+        factors.append(f"{ma_label} flat ({ma150_slope:+.2f}%) — consolidation/transition")
     else:
         stage_scores[4] += 3
-        factors.append(f"MA150 falling ({ma150_slope:+.2f}%) — downtrend confirmed")
+        factors.append(f"{ma_label} falling ({ma150_slope:+.2f}%) — downtrend confirmed")
 
     # MA50 slope (shorter-term momentum)
     if ma50_slope > 1.0:
@@ -1726,10 +1738,10 @@ def compute_stage_analysis(details, df):
     # Volume pattern
     if vol_ratio >= 1.5 and price > ma150_current:
         stage_scores[2] += 1
-        factors.append(f"High volume ({vol_ratio:.1f}x) above MA150 — accumulation")
+        factors.append(f"High volume ({vol_ratio:.1f}x) above {ma_label} — accumulation")
     elif vol_ratio >= 1.5 and price < ma150_current:
         stage_scores[4] += 1
-        factors.append(f"High volume ({vol_ratio:.1f}x) below MA150 — distribution")
+        factors.append(f"High volume ({vol_ratio:.1f}x) below {ma_label} — distribution")
 
     # Trend strength confirmation
     if trend_strength >= 16:
@@ -1753,10 +1765,10 @@ def compute_stage_analysis(details, df):
 
     # Stage names and descriptions
     stage_info = {
-        1: ("Basing", "Accumulation phase — price consolidating near flat MA150. Watch for breakout above MA150 with volume."),
-        2: ("Advancing", "Markup phase — price above rising MA150. Ideal zone for long positions. Ride the trend."),
-        3: ("Topping", "Distribution phase — MA150 flattening after advance. Consider tightening stops or taking profits."),
-        4: ("Declining", "Markdown phase — price below falling MA150. Avoid new longs. Consider short positions."),
+        1: ("Basing", f"Accumulation phase — price consolidating near flat {ma_label}. Watch for breakout above {ma_label} with volume."),
+        2: ("Advancing", f"Markup phase — price above rising {ma_label}. Ideal zone for long positions. Ride the trend."),
+        3: ("Topping", f"Distribution phase — {ma_label} flattening after advance. Consider tightening stops or taking profits."),
+        4: ("Declining", f"Markdown phase — price below falling {ma_label}. Avoid new longs. Consider short positions."),
     }
 
     name, desc = stage_info[stage]
@@ -1766,9 +1778,10 @@ def compute_stage_analysis(details, df):
         "stage_name": name,
         "description": desc,
         "confidence": confidence,
-        "ma150": round(ma150_current, 2),
-        "ma150_slope": round(ma150_slope, 3),
-        "price_vs_ma150_pct": round(price_vs_ma150_pct, 2),
+        "ma100": round(ma150_current, 2),
+        "ma100_slope": round(ma150_slope, 3),
+        "price_vs_ma100_pct": round(price_vs_ma150_pct, 2),
+        "ma_period": ma_period,
         "factors": factors[:4],
     }
 
