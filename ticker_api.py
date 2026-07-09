@@ -1040,7 +1040,7 @@ def _assessment_positions(data):
             "days_to_earnings": x.get("days_to_earnings"),
         }
         for opt in ("earnings_note", "distance_to_sma20_pct", "a_plus_only",
-                    "conditions_met", "insufficient_data"):
+                    "extension_guard", "conditions_met", "insufficient_data"):
             if x.get(opt) is not None:
                 row[opt] = x[opt]
         # conditions itemized only for non-HELD names (the re-entry ladder);

@@ -82,8 +82,10 @@ def test_confirmation_consecutive_closes():
 
 def test_confirmation_via_atr_break():
     eng = _engine()
-    # single close far above SMA: > SMA20 + 0.5*ATR(14) confirms same-day
-    df = _bars([100.0] * 29 + [108.0])
+    # single close far above SMA: > SMA20 + 0.5*ATR(14) confirms same-day.
+    # spread=3 keeps ATR high enough that the jump stays inside the
+    # extension guard (~1.2xATR) — the guard has its own tests below.
+    df = _bars([100.0] * 29 + [108.0], spread=3.0)
     r = eng.evaluate({}, "watching", df, TRENDING, UNMAPPED, WATCHING)
     c2 = r["conditions"]["2_confirmation"]
     assert c2["met"] and "ATR14" in c2["detail"]
@@ -101,7 +103,9 @@ def test_confirmation_via_atr_break():
 
 def test_regime_gate_modes():
     eng = _engine()
-    df = _bars(np.linspace(90, 110, 40))   # rising: trigger/confirm/slope met
+    # rising: trigger/confirm/slope met; spread=4 keeps extension ~0.6xATR
+    # (inside the guard) so READY is reachable
+    df = _bars(np.linspace(90, 110, 40), spread=4.0)
     r_t = eng.evaluate({}, "watching", df, TRENDING, UNMAPPED, WATCHING)
     assert r_t["state"] == RE_ENTRY_READY
     assert r_t["conditions"]["3_regime_gate"]["mode"] == "full"
@@ -171,8 +175,11 @@ def _cycle(kind):
     closes += [118.0]                                 # violent reclaim (ATR break)
     closes += [96.0]                                  # back below
     seq, prev = [], None
+    # spread=5 keeps the reclaim inside the extension guard (~1.2xATR);
+    # the guard's own cycle is tested separately
     for i in range(40, len(closes) + 1):
-        r = eng.evaluate({}, kind, _bars(closes[:i]), TRENDING, UNMAPPED, prev)
+        r = eng.evaluate({}, kind, _bars(closes[:i], spread=5.0), TRENDING,
+                         UNMAPPED, prev)
         prev = r["state"]
         seq.append(r["state"])
     return seq
@@ -233,6 +240,148 @@ def test_synthetic_last_bar_stripped():
     r = eng.evaluate({}, "holding", stripped, TRENDING, UNMAPPED, HELD)
     assert r["state"] == HELD
     print("  synthetic live-quote bar stripped (no false intraday EXIT): OK")
+
+
+# ------------------------------------------------------------------
+# Extension guard (PER-508 item 20)
+# ------------------------------------------------------------------
+
+EXTENDED_DF_ARGS = (list(np.linspace(90, 110, 40)),)  # spread=1 -> ext ~2.4xATR
+
+
+def test_extension_guard_suppresses_extended_ready():
+    """The MRNA case: all 5 conditions met, but far above the mean —
+    a watcher must print EXTENDED_HOLD, never READY."""
+    eng = _engine()
+    df = _bars(*EXTENDED_DF_ARGS)                   # default spread=1
+    r = eng.evaluate({}, "watching", df, TRENDING, UNMAPPED, WATCHING)
+    assert r["extension_atr"] > 1.5, r["extension_atr"]
+    assert r["all_conditions_met"] is True          # pips stay honest
+    assert r["conditions_met"] == 5
+    assert r["state"] == "EXTENDED_HOLD", r["state"]
+    assert "re-entry suppressed" in r["extension_guard"]
+    assert "> 1.8×" in r["extension_guard"]
+    assert "a_plus_only" not in r                   # not READY -> no A+ flag
+    print("  extension guard: all-5 + extended watcher -> EXTENDED_HOLD: OK")
+
+
+def test_extension_guard_permits_healthy_trending_distance():
+    """Calibration pin (2026-07-09): Monday's actual fills came in at
+    1.06-1.64xATR extension — ARWR at 1.64x was the week's best entry.
+    A watcher in that class (1.5 < ext <= 1.8) must stay READY; the old
+    1.5 default would have suppressed exactly these entries."""
+    eng = _engine()
+    # flat 100s + one strong close: ext lands ~1.6xATR (computed, asserted)
+    df = _bars([100.0] * 29 + [107.0], spread=1.9)
+    r = eng.evaluate({}, "watching", df, TRENDING, UNMAPPED, WATCHING)
+    assert 1.5 < r["extension_atr"] <= 1.8, r["extension_atr"]
+    assert r["state"] == RE_ENTRY_READY, r["state"]
+    assert "extension_guard" not in r
+    print("  extension guard: 1.5-1.8x trending distance stays READY: OK")
+
+
+def test_extension_guard_healthy_reclaim_unaffected():
+    """Genuine near-SMA20 reclaim (well under 0.5xATR extension) stays
+    READY — the guard must not false-trip healthy entries."""
+    eng = _engine()
+    df = _bars([100.0] * 28 + [101.2, 101.4], spread=3.0)
+    r = eng.evaluate({}, "watching", df, TRENDING, UNMAPPED, WATCHING)
+    assert r["extension_atr"] < 0.5, r["extension_atr"]
+    assert r["state"] == RE_ENTRY_READY
+    assert "extension_guard" not in r
+    print("  extension guard: near-SMA20 reclaim stays READY: OK")
+
+
+def test_extension_guard_holdings_exempt():
+    """Holdings are NEVER touched by the guard — an extended held winner
+    is trailing-stop territory, not a forced exit."""
+    eng = _engine()
+    df = _bars(*EXTENDED_DF_ARGS)                   # same ~2.4xATR extension
+    for prev in (None, HELD, WATCHING):
+        r = eng.evaluate({}, "holding", df, TRENDING, UNMAPPED, prev)
+        assert r["state"] == HELD, (prev, r["state"])
+        assert "extension_guard" not in r
+    print("  extension guard: holdings exempt at any prev state: OK")
+
+
+def test_extension_guard_boundary_and_config():
+    """Threshold is configurable; comparison is strictly greater-than —
+    test both sides of the boundary."""
+    df = _bars(*EXTENDED_DF_ARGS)
+    probe = _engine().evaluate({}, "watching", df, TRENDING, UNMAPPED, WATCHING)
+    ext = probe["extension_atr"]
+
+    def eng_with(threshold):
+        cfg = copy.deepcopy(CONFIG)
+        cfg["positions"]["extension_guard_max"] = threshold
+        return PositionSignalEngine(cfg, lambda t, period="6mo": None)
+
+    # threshold just above the observed extension: no trip
+    r_hi = eng_with(ext + 0.05).evaluate({}, "watching", df, TRENDING,
+                                         UNMAPPED, WATCHING)
+    assert r_hi["state"] == RE_ENTRY_READY, r_hi["state"]
+    # threshold just below: trips
+    r_lo = eng_with(ext - 0.05).evaluate({}, "watching", df, TRENDING,
+                                         UNMAPPED, WATCHING)
+    assert r_lo["state"] == "EXTENDED_HOLD", r_lo["state"]
+    assert f"> {ext - 0.05}×" in r_lo["extension_guard"]
+    print("  extension guard: configurable threshold, strict > boundary: OK")
+
+
+def test_extension_guard_no_flapping_events():
+    """READY->EXTENDED_HOLD and EXTENDED_HOLD->READY emit ONE event each;
+    repeated runs at constant extension emit nothing."""
+    tmp = tempfile.mkdtemp(prefix="extguard_")
+    state_dir, data_dir, public_dir = (os.path.join(tmp, d)
+                                       for d in ("state", "data", "public"))
+    for d in (state_dir, data_dir, public_dir):
+        os.makedirs(d)
+    olds = (PositionSignalEngine.STATE_DIR, PositionSignalEngine.DATA_DIR,
+            PositionSignalEngine.PUBLIC_DIR)
+    PositionSignalEngine.STATE_DIR = state_dir
+    PositionSignalEngine.DATA_DIR = data_dir
+    PositionSignalEngine.PUBLIC_DIR = public_dir
+    try:
+        with open(os.path.join(state_dir, "positions.json"), "w") as f:
+            json.dump({"holdings": [],
+                       "watching": [{"ticker": "EXT", "theme": "X"}]}, f)
+        import earnings_calendar
+        old_gem = earnings_calendar.get_earnings_map
+        earnings_calendar.get_earnings_map = lambda ts: {t: None for t in ts}
+
+        extended = lambda t, period="6mo": _bars(*EXTENDED_DF_ARGS)
+        calm = lambda t, period="6mo": _bars([100.0] * 28 + [101.2, 101.4],
+                                             spread=3.0)
+        regime = {"regime": TRENDING}
+
+        def events():
+            with open(os.path.join(data_dir, "position_events.json")) as f:
+                return json.load(f)["changes"]
+
+        eng = PositionSignalEngine(copy.deepcopy(CONFIG), extended)
+        r1 = eng.compute(regime, None)
+        assert r1["tickers"]["EXT"]["state"] == "EXTENDED_HOLD"
+        assert len(r1["transitions"]) == 1          # untracked -> EXTENDED_HOLD
+        assert r1["transitions"][0]["detail"]["extension_guard"]
+        assert len(events()) == 1
+
+        r2 = eng.compute(regime, None)              # same extension: no re-emit
+        assert r2["transitions"] == []
+        assert len(events()) == 1, "flapping: event re-emitted at constant extension"
+
+        eng_calm = PositionSignalEngine(copy.deepcopy(CONFIG), calm)
+        r3 = eng_calm.compute(regime, None)         # extension fell back
+        assert r3["tickers"]["EXT"]["state"] == RE_ENTRY_READY
+        assert len(r3["transitions"]) == 1
+        assert r3["transitions"][0]["detail"]["from_state"] == "EXTENDED_HOLD"
+        assert r3["transitions"][0]["detail"]["to_state"] == RE_ENTRY_READY
+        assert len(events()) == 2
+        earnings_calendar.get_earnings_map = old_gem
+    finally:
+        (PositionSignalEngine.STATE_DIR, PositionSignalEngine.DATA_DIR,
+         PositionSignalEngine.PUBLIC_DIR) = olds
+        shutil.rmtree(tmp, ignore_errors=True)
+    print("  extension guard: one event per crossing, no flapping: OK")
 
 
 # ------------------------------------------------------------------
@@ -468,6 +617,12 @@ if __name__ == "__main__":
     test_full_cycle_holding_returns_to_held()
     test_ready_blocked_by_thesis()
     test_synthetic_last_bar_stripped()
+    test_extension_guard_suppresses_extended_ready()
+    test_extension_guard_permits_healthy_trending_distance()
+    test_extension_guard_healthy_reclaim_unaffected()
+    test_extension_guard_holdings_exempt()
+    test_extension_guard_boundary_and_config()
+    test_extension_guard_no_flapping_events()
     test_mrvl_june_replay()
     test_compute_persists_and_emits()
     print("\nAll position-signal tests passed.\n")

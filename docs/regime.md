@@ -189,9 +189,29 @@ Earnings proximity (PER-510, display-only): `next_earnings_date` +
 with an `earnings_note` ("R8: binary catalyst window") emitted only on
 HELD / RE_ENTRY_READY names within 7 days of earnings.
 
+**Extension guard** (PER-508 item 20): a WATCHLIST name whose
+`extension_atr` exceeds `positions.extension_guard_max` (default 1.8×)
+cannot print RE_ENTRY_READY even with all five conditions met — it
+emits **EXTENDED_HOLD** with an `extension_guard` note ("extension
+2.03×ATR > 1.8× — re-entry suppressed"). The threshold is calibrated
+above normal trending distance and below blowoff: Monday 2026-07-06's
+actual fills came in at 1.06–1.64×ATR extension (ARWR at 1.64× the
+week's best entry) — a 1.5 guard would suppress exactly that entry
+class in watchers; 1.8 permits it while still catching MRNA at 2.03×. Conditions 1–2 confirm a
+reclaim *near* the mean; a name that ran vertically away from it passes
+them trivially (MRNA printed READY at 2.8×ATR — the exact FOMO chase
+the system exists to prevent). The five conditions still evaluate and
+emit (pips stay honest); the guard sits after them as a final gate on
+READY only. It reverts to READY naturally when extension falls back
+within the ceiling; READY↔EXTENDED_HOLD each emit one transition event
+(no flapping at constant extension). **Holdings are exempt** — an
+extended HELD winner is trailing-stop territory, never force-exited by
+this guard.
+
 States: `HELD → EXIT_FIRED (close below SMA20 — the exit signal, stop
 shown) → WATCHING (distance to SMA20 shown) → RE_ENTRY_ARMING (reclaim,
-conditions itemized) → RE_ENTRY_READY (all five)`. positions.json is
+conditions itemized) → RE_ENTRY_READY (all five) | EXTENDED_HOLD (all
+five but blocked by the extension guard)`. positions.json is
 authoritative for what is held: a HOLDING whose five conditions complete
 returns to HELD (stop resumes); pure watch-entries top out at READY. The
 machine is strictly close-basis (R11): the fetcher's intraday live-quote

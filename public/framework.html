@@ -125,6 +125,7 @@
   .ps-watching{background:rgba(110,118,129,.15);color:var(--dim);}
   .ps-arming{background:rgba(210,153,34,.15);color:var(--yellow);}
   .ps-ready{background:rgba(63,185,80,.15);color:var(--green);}
+  .ps-extended{background:rgba(240,136,62,.2);color:var(--orange);border:1px solid rgba(240,136,62,.5);}
   @keyframes psPulse{0%,100%{opacity:1;}50%{opacity:.45;}}
   .ps-num{font-family:'SF Mono',monospace;color:var(--dim);}
   .ps-num b{color:var(--text);font-weight:600;}
@@ -286,7 +287,8 @@ async function pollStatus(){
 /* ===== Position Signals panel (1B engine) ===== */
 function psBadge(state){
   const map={HELD:'ps-held',EXIT_FIRED:'ps-exit-fired',WATCHING:'ps-watching',
-             RE_ENTRY_ARMING:'ps-arming',RE_ENTRY_READY:'ps-ready'};
+             RE_ENTRY_ARMING:'ps-arming',RE_ENTRY_READY:'ps-ready',
+             EXTENDED_HOLD:'ps-extended'};   // blocked, not "go" (PER-508 #20)
   return `<span class="ps-badge ${map[state]||'ps-watching'}">${(state||'?').replace(/_/g,' ')}</span>`;
 }
 function psPips(conds){
@@ -308,9 +310,11 @@ function psEr(d){
 function psExt(x){
   const pct=x.extension_pct, atr=x.extension_atr;
   if(pct==null) return '';
-  const hot=atr!=null&&atr>1.5;
+  const guard=x.extension_guard;                 // engine-enforced (PER-508 #20)
+  const hot=!!guard||(atr!=null&&atr>1.5);
   const body=`${pct>0?'+':''}${pct}%${atr!=null?` (${atr}×ATR)`:''}`;
-  return `<span class="ps-ext${hot?' hot':''}" title="Extension: close vs SMA20">${body}${hot?' — extended, chase guard':''}</span>`;
+  const suffix=guard?` — ${guard}`:(hot?' — extended, chase guard':'');
+  return `<span class="ps-ext${hot?' hot':''}" title="Extension: close vs SMA20">${body}${suffix}</span>`;
 }
 function renderPositionsPanel(){
   let html=`<div class="section"><div class="section-title">Layer 1.5: Position Signals

@@ -26,6 +26,11 @@ State machine (close basis, evaluated daily):
        -> RE_ENTRY_ARMING (reclaim above SMA20, not all 5 yet)
        -> RE_ENTRY_READY (all 5 true; carries "A+ only" flag under Choppy)
   A close back below SMA20 from ARMING/READY returns to WATCHING.
+  EXTENDED_HOLD (PER-508 item 20): a WATCHLIST name with all 5 met but
+  extension_atr above positions.extension_guard_max (default 1.8) is
+  blocked from READY — too far above the mean to be an entry. Reverts
+  to READY naturally when extension falls back within the ceiling.
+  Holdings are exempt (never force-exited by the guard).
 
 Every state transition is emitted as a history event
 (type "position_state_change") through the existing history.json pattern.
@@ -48,12 +53,14 @@ EXIT_FIRED = "EXIT_FIRED"
 WATCHING = "WATCHING"
 RE_ENTRY_ARMING = "RE_ENTRY_ARMING"
 RE_ENTRY_READY = "RE_ENTRY_READY"
+EXTENDED_HOLD = "EXTENDED_HOLD"   # all 5 met but too extended to enter
 
 _SEVERITY = {
     EXIT_FIRED: "critical",
     RE_ENTRY_READY: "high",
     HELD: "medium",
     RE_ENTRY_ARMING: "medium",
+    EXTENDED_HOLD: "medium",
     WATCHING: "low",
 }
 
@@ -73,6 +80,7 @@ class PositionSignalEngine:
         self.atr_period = cfg.get("atr_period", 14)
         self.atr_mult = cfg.get("atr_mult", 0.5)
         self.slope_lookback = cfg.get("slope_lookback_days", 5)
+        self.extension_guard_max = cfg.get("extension_guard_max", 1.8)
         self.themes_cfg = config.get("themes", {}) or {}
         self.fetcher = fetcher
         os.makedirs(self.STATE_DIR, exist_ok=True)
@@ -182,11 +190,24 @@ class PositionSignalEngine:
 
         state = self._next_state(prev_state, kind, above_now, all_five)
 
-        # Informational extension readings (no gating — the discretion
-        # layer decides what "too extended to chase" means, e.g. MRNA 33%
-        # above its SMA20 printing READY)
         ext_pct = (last_close - sma_now) / sma_now * 100
         ext_atr = None if not atr else (last_close - sma_now) / atr
+
+        # Extension guard (PER-508 item 20): a WATCHLIST name cannot go
+        # RE_ENTRY_READY while extended beyond the ceiling. Conditions 1-2
+        # confirm a reclaim NEAR the mean; a name that ran vertically away
+        # from it passes them trivially (MRNA printed READY at 2.8xATR).
+        # The 5 conditions still evaluate and emit — the guard sits after
+        # them as a final gate on the READY state only. Holdings exempt:
+        # an extended HELD winner is trailing-stop territory, never
+        # force-exited here.
+        extension_guard = None
+        if (kind == "watching" and state == RE_ENTRY_READY
+                and ext_atr is not None
+                and ext_atr > self.extension_guard_max):
+            state = EXTENDED_HOLD
+            extension_guard = (f"extension {round(ext_atr, 2)}×ATR > "
+                               f"{self.extension_guard_max}× — re-entry suppressed")
 
         result = {
             "state": state,
@@ -205,6 +226,8 @@ class PositionSignalEngine:
         }
         if state == RE_ENTRY_READY and c3.get("mode") == "conditional":
             result["a_plus_only"] = True
+        if extension_guard:
+            result["extension_guard"] = extension_guard
         if not above_now:
             result["distance_to_sma20_pct"] = round(
                 (last_close - sma_now) / sma_now * 100, 2)
@@ -410,6 +433,8 @@ class PositionSignalEngine:
         }
         if result.get("a_plus_only"):
             detail["a_plus_only"] = True
+        if result.get("extension_guard"):
+            detail["extension_guard"] = result["extension_guard"]
         stop = result.get("stop")
         if state == EXIT_FIRED and stop:
             detail["stop"] = stop.get("detail")
