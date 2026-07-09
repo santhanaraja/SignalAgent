@@ -989,6 +989,266 @@ def framework_signals_json():
         )
 
 
+# ------------------------------------------------------------------
+# Consolidated daily assessment (PER-508 item 21): one endpoint, the
+# whole daily read. Read-only AGGREGATION of already-computed artifacts
+# (framework.json, signals.json, regime_history.json,
+# position_events.json) — never refetches from Yahoo. Sections degrade
+# independently to {"error": ...}; the regime section rides
+# _load_framework_payload, so the shape sentinel's 503-until-valid
+# applies to the whole endpoint.
+# ------------------------------------------------------------------
+
+_ASSESSMENT_VOTERS = ("vix_5d_avg", "hy_spread", "breadth")
+
+
+def _assessment_regime(data):
+    regime = data.get("regime") or {}
+    out = {
+        "regime": regime.get("regime"),
+        "action": regime.get("action"),
+        "risk_on_count": regime.get("risk_on_count"),
+        "caution_count": regime.get("caution_count"),
+        "risk_off_count": regime.get("risk_off_count"),
+        "gauges": regime.get("gauges", {}),
+        "backdrop_gate": regime.get("backdrop_gate"),
+        "macro_inputs": regime.get("macro_inputs"),
+        "consecutive_degraded_weeks": regime.get("consecutive_degraded_weeks"),
+        "intra_week_override": regime.get("intra_week_override"),
+    }
+    if "stale_hours" in data:
+        out["stale_hours"] = data["stale_hours"]
+    return out
+
+
+def _assessment_positions(data):
+    ps = data.get("position_signals") or {}
+    if ps.get("error"):
+        return {"error": ps["error"]}
+    out = {}
+    for t, x in (ps.get("tickers") or {}).items():
+        row = {
+            "state": x.get("state"),
+            "kind": x.get("kind"),
+            "theme": x.get("theme"),
+            "close": x.get("close"),
+            "sma20": x.get("sma20"),
+            "stop": x.get("stop"),
+            "extension_pct": x.get("extension_pct"),
+            "extension_atr": x.get("extension_atr"),
+            "next_earnings_date": x.get("next_earnings_date"),
+            "days_to_earnings": x.get("days_to_earnings"),
+        }
+        for opt in ("earnings_note", "distance_to_sma20_pct", "a_plus_only",
+                    "conditions_met", "insufficient_data"):
+            if x.get(opt) is not None:
+                row[opt] = x[opt]
+        # conditions itemized only for non-HELD names (the re-entry ladder);
+        # a HELD name's read is the stop, not the entry conditions
+        if x.get("state") != "HELD":
+            row["conditions"] = x.get("conditions")
+        out[t] = row
+    return out
+
+
+def _assessment_technicals(data):
+    """Full technicals per HOLDING, merged from the hourly engine's
+    signals.json stock block + the position engine's own values. SMA5/
+    SMA10 are computed by no existing artifact — emitted as null with a
+    note rather than fetched (no-refetch constraint)."""
+    ps = data.get("position_signals") or {}
+    holdings = {t: x for t, x in (ps.get("tickers") or {}).items()
+                if x.get("kind") == "holding"}
+    if not holdings:
+        return {"note": "no holdings"}
+
+    stock_by_ticker = {}
+    try:
+        with open(os.path.join(PUBLIC_DIR, "signals.json"), "r") as f:
+            for g in json.load(f).get("groups", []):
+                for s in g.get("stocks", []):
+                    stock_by_ticker[s.get("ticker")] = s
+    except Exception:
+        pass  # degrade to position-engine values only
+
+    out = {}
+    for t, pos in holdings.items():
+        stock = stock_by_ticker.get(t)
+        atr = ((pos.get("conditions") or {}).get("2_confirmation") or {}).get("atr14")
+        stop = pos.get("stop") or {}
+        close = pos.get("close")
+        cushion = None
+        if close is not None and stop.get("level") is not None:
+            cushion = round(close - stop["level"], 2)
+        tech = {
+            "close": close,
+            "price_hourly_engine": stock.get("price") if stock else None,
+            "sma5": None,
+            "sma10": None,
+            "sma20": pos.get("sma20"),
+            "sma50": stock.get("ma50") if stock else None,
+            "sma200": stock.get("ma200") if stock else None,
+            "atr14": atr,
+            "rsi": stock.get("rsi") if stock else None,
+            "macd": {
+                "macd": stock.get("macd"),
+                "signal": stock.get("macd_signal"),
+                "histogram": stock.get("macd_histogram"),
+            } if stock else None,
+            "volume_ratio": stock.get("volume_ratio") if stock else None,
+            "trend_strength": stock.get("trend_strength") if stock else None,
+            "stop": stop or None,
+            "cushion_to_stop": {
+                "dollars": cushion,
+                "atr_multiple": round(cushion / atr, 2)
+                                if cushion is not None and atr else None,
+            },
+            "extension_pct": pos.get("extension_pct"),
+            "extension_atr": pos.get("extension_atr"),
+            "notes": [],
+        }
+        tech["notes"].append(
+            "sma5/sma10 not computed by any existing artifact "
+            "(no-refetch constraint)")
+        if not stock:
+            tech["notes"].append(
+                "not in active universe — position-engine values only "
+                "(no rsi/macd/sma50/sma200 from the hourly engine)")
+        out[t] = tech
+    return out
+
+
+def _assessment_vol(data):
+    """VIX complex. Spot + 5d avg for VIX come from the regime voter;
+    ^VIX9D/^VIX3M are fetched by no producer, so they report an error
+    until one computes them. term_structure computes when both ends
+    exist (future-proofed)."""
+    gauges = (data.get("regime") or {}).get("gauges") or {}
+    vg = gauges.get("vix_5d_avg") or {}
+    vix = {"spot": vg.get("spot"), "avg_5d": vg.get("value"),
+           "signal": vg.get("signal")}
+    missing = ("not computed by any existing artifact — no producer "
+               "fetches this ticker (no-refetch constraint)")
+    vix9d = {"spot": None, "avg_5d": None, "error": missing}
+    vix3m = {"spot": None, "avg_5d": None, "error": missing}
+    if vix3m.get("spot") is not None and vix.get("spot") is not None:
+        term = "contango" if vix3m["spot"] > vix["spot"] else "inverted"
+    else:
+        term = "unavailable — requires VIX3M spot"
+    return {"vix": vix, "vix9d": vix9d, "vix3m": vix3m,
+            "term_structure": term}
+
+
+def _assessment_themes(data):
+    themes = data.get("themes") or {}
+    active = set(themes.get("active_themes") or [])
+    rows = []
+    for t in themes.get("ranked_themes") or []:
+        if t.get("rank") is None:
+            continue
+        status = ("active" if t.get("name") in active
+                  else "qualified" if t["rank"] <= 2 else "ranked")
+        rows.append({"rank": t["rank"], "theme": t.get("name"),
+                     "composite": t.get("composite"), "status": status})
+    rows.sort(key=lambda r: r["rank"])
+    return rows
+
+
+def _assessment_changes(data):
+    """What changed vs the prior dated framework run: regime shift, voter
+    flips, gate open/shut, and today's position-state transitions."""
+    hist_path = os.path.join(FRAMEWORK_STATE_DIR, "regime_history.json")
+    with open(hist_path, "r") as f:
+        entries = [e for e in json.load(f) if e.get("gauges")]
+    if len(entries) < 2:
+        return {"error": "fewer than two dated runs in regime history"}
+    prior, curr = entries[-2], entries[-1]
+
+    regime_shift = None
+    if prior.get("regime") != curr.get("regime"):
+        regime_shift = {"from": prior.get("regime"), "to": curr.get("regime")}
+
+    voters_flipped = []
+    for v in _ASSESSMENT_VOTERS:
+        p = (prior["gauges"].get(v) or {}).get("signal")
+        c = (curr["gauges"].get(v) or {}).get("signal")
+        if p != c:
+            voters_flipped.append({"gauge": v, "from": p, "to": c})
+
+    gate_changed = None
+    pg, cg = prior.get("backdrop_gate"), curr.get("backdrop_gate")
+    if pg and cg and pg.get("open") != cg.get("open"):
+        gate_changed = {"from_open": pg.get("open"), "to_open": cg.get("open")}
+
+    transitions = []
+    try:
+        with open(os.path.join(DATA_DIR, "position_events.json"), "r") as f:
+            for ev in json.load(f).get("changes", []):
+                if str(ev.get("timestamp", "")).startswith(curr.get("date", "")):
+                    d = ev.get("detail") or {}
+                    transitions.append({
+                        "ticker": ev.get("ticker"),
+                        "from_state": d.get("from_state"),
+                        "to_state": d.get("to_state"),
+                        "timestamp": ev.get("timestamp"),
+                    })
+    except Exception:
+        transitions = [{"error": "position_events.json unavailable"}]
+
+    return {
+        "prior_run_date": prior.get("date"),
+        "current_run_date": curr.get("date"),
+        "regime_shift": regime_shift,
+        "voters_flipped": voters_flipped,
+        "gate_changed": gate_changed,
+        "position_transitions": transitions,
+    }
+
+
+@app.route("/api/assessment.json")
+def assessment_json():
+    """
+    Public JSON API — the single consolidated daily read (PER-508 #21).
+    Aggregates the regime gauges, position-engine states, holding
+    technicals, VIX complex, theme leaderboard, and a what-changed diff
+    vs the prior run. Read-only over cached artifacts; inherits the
+    shape sentinel (503 while a schema-stale artifact regenerates).
+    Sections degrade independently to {"error": ...}.
+    """
+    data, err = _load_framework_payload()
+    if err is not None:
+        return err
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    try:
+        from zoneinfo import ZoneInfo
+        generated_at_et = now_utc.astimezone(
+            ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p %Z")
+    except Exception:
+        generated_at_et = None
+
+    out = {"generated_at": now_utc.isoformat(),
+           "generated_at_et": generated_at_et,
+           "framework_generated_at": data.get("generated_at")}
+    for key, fn in (("regime", _assessment_regime),
+                    ("positions", _assessment_positions),
+                    ("technicals", _assessment_technicals),
+                    ("vol_complex", _assessment_vol),
+                    ("themes", _assessment_themes),
+                    ("changes_since_prior", _assessment_changes)):
+        try:
+            out[key] = fn(data)
+        except Exception as e:
+            out[key] = {"error": str(e)}
+    if "stale_hours" in data:
+        out["stale_hours"] = data["stale_hours"]
+
+    return app.response_class(
+        response=json.dumps(out, cls=NumpyEncoder),
+        mimetype="application/json",
+    )
+
+
 @app.route("/api/framework/leaders.json")
 def framework_leaders_json():
     """
