@@ -191,6 +191,11 @@ class PositionSignalEngine:
         result = {
             "state": state,
             "close": round(last_close, 2),
+            # short MAs (PER-508 producer amendment): display-only inputs
+            # for the assessment technicals; finite whenever sma20 is
+            # (their windows are subsets of sma20's)
+            "sma5": round(float(close.rolling(5).mean().iloc[-1]), 2),
+            "sma10": round(float(close.rolling(10).mean().iloc[-1]), 2),
             "sma20": round(sma_now, 2),
             "extension_pct": round(ext_pct, 2),
             "extension_atr": None if ext_atr is None else round(ext_atr, 2),

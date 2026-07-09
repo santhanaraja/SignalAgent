@@ -1053,9 +1053,9 @@ def _assessment_positions(data):
 
 def _assessment_technicals(data):
     """Full technicals per HOLDING, merged from the hourly engine's
-    signals.json stock block + the position engine's own values. SMA5/
-    SMA10 are computed by no existing artifact — emitted as null with a
-    note rather than fetched (no-refetch constraint)."""
+    signals.json stock block + the position engine's own values
+    (close/sma5/sma10/sma20/atr14/stop/extensions). Artifacts predating
+    the sma5/sma10 producer amendment degrade to null + note."""
     ps = data.get("position_signals") or {}
     holdings = {t: x for t, x in (ps.get("tickers") or {}).items()
                 if x.get("kind") == "holding"}
@@ -1083,8 +1083,8 @@ def _assessment_technicals(data):
         tech = {
             "close": close,
             "price_hourly_engine": stock.get("price") if stock else None,
-            "sma5": None,
-            "sma10": None,
+            "sma5": pos.get("sma5"),
+            "sma10": pos.get("sma10"),
             "sma20": pos.get("sma20"),
             "sma50": stock.get("ma50") if stock else None,
             "sma200": stock.get("ma200") if stock else None,
@@ -1107,9 +1107,10 @@ def _assessment_technicals(data):
             "extension_atr": pos.get("extension_atr"),
             "notes": [],
         }
-        tech["notes"].append(
-            "sma5/sma10 not computed by any existing artifact "
-            "(no-refetch constraint)")
+        if pos.get("sma5") is None:
+            tech["notes"].append(
+                "sma5/sma10 absent — artifact predates the producer "
+                "amendment (populates on the next framework run)")
         if not stock:
             tech["notes"].append(
                 "not in active universe — position-engine values only "
@@ -1119,18 +1120,38 @@ def _assessment_technicals(data):
 
 
 def _assessment_vol(data):
-    """VIX complex. Spot + 5d avg for VIX come from the regime voter;
-    ^VIX9D/^VIX3M are fetched by no producer, so they report an error
-    until one computes them. term_structure computes when both ends
-    exist (future-proofed)."""
+    """VIX complex. VIX spot + 5d avg come from the regime voter (which
+    also carries the signal); ^VIX9D/^VIX3M come from the hourly
+    engine's indexes block (producer amendment). A missing/flaky symbol
+    degrades to null + note. term_structure = VIX3M vs VIX spot."""
     gauges = (data.get("regime") or {}).get("gauges") or {}
     vg = gauges.get("vix_5d_avg") or {}
+    idx = {}
+    try:
+        with open(os.path.join(PUBLIC_DIR, "signals.json"), "r") as f:
+            idx = json.load(f).get("indexes") or {}
+    except Exception:
+        pass
+
+    missing = ("unavailable — not in the latest hourly-engine artifact "
+               "(fetch failed or artifact predates the producer amendment)")
+
+    def vol_row(tkr):
+        row = idx.get(tkr) or {}
+        if row.get("level") is None:
+            return {"spot": None, "avg_5d": None, "error": missing}
+        return {"spot": row["level"], "avg_5d": row.get("avg_5d")}
+
     vix = {"spot": vg.get("spot"), "avg_5d": vg.get("value"),
            "signal": vg.get("signal")}
-    missing = ("not computed by any existing artifact — no producer "
-               "fetches this ticker (no-refetch constraint)")
-    vix9d = {"spot": None, "avg_5d": None, "error": missing}
-    vix3m = {"spot": None, "avg_5d": None, "error": missing}
+    if vix["spot"] is None:            # gauge unavailable → indexes fallback
+        fb = vol_row("^VIX")
+        vix = {"spot": fb.get("spot"), "avg_5d": fb.get("avg_5d"),
+               "signal": None}
+        if "error" in fb:
+            vix["error"] = fb["error"]
+    vix9d = vol_row("^VIX9D")
+    vix3m = vol_row("^VIX3M")
     if vix3m.get("spot") is not None and vix.get("spot") is not None:
         term = "contango" if vix3m["spot"] > vix["spot"] else "inverted"
     else:

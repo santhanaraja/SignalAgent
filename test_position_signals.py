@@ -152,6 +152,8 @@ def test_stop_display():
     assert r["state"] == HELD
     assert r["stop"]["type"] == "sma20_close"
     assert abs(r["stop"]["level"] - r["sma20"]) < 1e-9
+    # short MAs (producer amendment): on a rising series sma5 > sma10 > sma20
+    assert r["sma5"] > r["sma10"] > r["sma20"], (r["sma5"], r["sma10"], r["sma20"])
     r2 = eng.evaluate({}, "holding", df, TRENDING, UNMAPPED, None)
     assert r2["stop"]["type"] is None
     print("  effective stop for HELD (sma20_close + none defined): OK")

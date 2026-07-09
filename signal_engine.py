@@ -1795,6 +1795,11 @@ INDEX_TICKERS = {
     "^DJI": "DOW 30",
     "^RUT": "Russell 2000",
     "^VIX": "VIX",
+    # VIX term structure (PER-508 producer amendment): consumed by
+    # /api/assessment.json vol_complex. A flaky fetch degrades to the
+    # endpoint's null+note — never blocks the run (SKIP branch below).
+    "^VIX9D": "VIX 9-Day",
+    "^VIX3M": "VIX 3-Month",
 }
 
 
@@ -1817,6 +1822,9 @@ def get_index_data():
                 "ytd": ytd,
                 "day_change": day_change,
                 "day_change_pct": day_change_pct,
+                # 5-day average — the vol_complex read for the VIX family,
+                # uniform across all indexes
+                "avg_5d": round(float(df["Close"].iloc[-5:].mean()), 2),
             }
             print(f"OK — {level:,.2f} (YTD {ytd}%)")
         else:

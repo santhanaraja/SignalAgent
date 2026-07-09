@@ -62,7 +62,8 @@ def _framework_payload(run_date="2026-07-09"):
             "tickers": {
                 "ARWR": {
                     "ticker": "ARWR", "kind": "holding", "theme": "Biotech",
-                    "state": "HELD", "close": 84.11, "sma20": 80.29,
+                    "state": "HELD", "close": 84.11,
+                    "sma5": 83.1, "sma10": 82.0, "sma20": 80.29,
                     "extension_pct": 4.76, "extension_atr": 0.99,
                     "stop": {"type": "sma20_close", "level": 80.29},
                     "conditions": {"2_confirmation": {"atr14": 3.86}},
@@ -93,13 +94,21 @@ def _pre_1a_payload():
                                    "breadth", "yield_curve")}}}
 
 
-def _signals_json():
-    return {"groups": [{"name": "Biotechnology", "stocks": [{
-        "ticker": "ARWR", "price": 84.11, "rsi": 61.2,
-        "macd": 1.1, "macd_signal": 0.9, "macd_histogram": 0.2,
-        "ma20": 80.1, "ma50": 76.4, "ma200": 55.2,
-        "volume_ratio": 1.1, "trend_strength": 15,
-    }]}]}
+def _signals_json(vix3m_level=18.9):
+    return {
+        "indexes": {
+            "^VIX": {"name": "VIX", "level": 16.8, "avg_5d": 17.2},
+            "^VIX9D": {"name": "VIX 9-Day", "level": 15.5, "avg_5d": 16.0},
+            "^VIX3M": {"name": "VIX 3-Month", "level": vix3m_level,
+                       "avg_5d": 19.1},
+        },
+        "groups": [{"name": "Biotechnology", "stocks": [{
+            "ticker": "ARWR", "price": 84.11, "rsi": 61.2,
+            "macd": 1.1, "macd_signal": 0.9, "macd_histogram": 0.2,
+            "ma20": 80.1, "ma50": 76.4, "ma200": 55.2,
+            "volume_ratio": 1.1, "trend_strength": 15,
+        }]}],
+    }
 
 
 def _regime_history():
@@ -192,12 +201,14 @@ def test_response_shape():
         assert t["cushion_to_stop"]["dollars"] == round(84.11 - 80.29, 2)
         assert t["cushion_to_stop"]["atr_multiple"] == round((84.11 - 80.29) / 3.86, 2)
         assert t["rsi"] == 61.2 and t["sma50"] == 76.4    # merged from signals.json
-        assert t["sma5"] is None and t["sma10"] is None   # honest nulls
-        # vol: VIX from the regime voter; 9D/3M report unavailability
+        assert t["sma5"] == 83.1 and t["sma10"] == 82.0   # producer amendment
+        assert not any("sma5" in n for n in t["notes"])
+        # vol: VIX from the regime voter; 9D/3M from the indexes block
         v = b["vol_complex"]
         assert v["vix"] == {"spot": 16.8, "avg_5d": 17.2, "signal": "risk_on"}
-        assert "error" in v["vix9d"] and "error" in v["vix3m"]
-        assert v["term_structure"].startswith("unavailable")
+        assert v["vix9d"] == {"spot": 15.5, "avg_5d": 16.0}
+        assert v["vix3m"] == {"spot": 18.9, "avg_5d": 19.1}
+        assert v["term_structure"] == "contango"          # 18.9 > 16.8
         # themes: top-line with status, unranked dropped
         assert b["themes"][0] == {"rank": 1, "theme": "Semis",
                                   "composite": 1.5, "status": "active"}
@@ -248,18 +259,26 @@ def test_et_timestamp_format():
 def test_sections_degrade_independently():
     env = _Env(with_signals=False, with_history=False, with_events=False)
     try:
-        env.write_framework(_framework_payload())
+        # artifact predating the sma5/sma10 producer amendment
+        payload = _framework_payload()
+        for k in ("sma5", "sma10"):
+            payload["position_signals"]["tickers"]["ARWR"].pop(k)
+        env.write_framework(payload)
         r = env.client.get("/api/assessment.json")
         assert r.status_code == 200, "missing sources must not fail the response"
         b = r.get_json()
         # changes needs regime history -> section error
         assert "error" in b["changes_since_prior"]
-        # technicals degrade to position-engine values with a note
+        # technicals degrade to position-engine values with notes
         t = b["technicals"]["ARWR"]
         assert t["rsi"] is None and t["sma20"] == 80.29
+        assert t["sma5"] is None
         assert any("position-engine values only" in n for n in t["notes"])
-        # vol still works (VIX comes from the regime gauges)
+        assert any("predates the producer amendment" in n for n in t["notes"])
+        # vol: VIX still works (regime gauge); 9D/3M degrade to error
         assert b["vol_complex"]["vix"]["spot"] == 16.8
+        assert "error" in b["vol_complex"]["vix9d"]
+        assert b["vol_complex"]["term_structure"].startswith("unavailable")
         # regime + positions + themes unaffected
         assert b["regime"]["regime"] == "Risk-on / Choppy"
         assert b["positions"]["ARWR"]["state"] == "HELD"
@@ -269,10 +288,23 @@ def test_sections_degrade_independently():
     print("  per-section degradation (no whole-response failure): OK")
 
 
+def test_term_structure_inverted():
+    env = _Env()
+    try:
+        env._w(env.pub, "signals.json", _signals_json(vix3m_level=14.2))
+        env.write_framework(_framework_payload())
+        v = env.client.get("/api/assessment.json").get_json()["vol_complex"]
+        assert v["term_structure"] == "inverted"          # 14.2 < 16.8
+    finally:
+        env.close()
+    print("  term structure flips to inverted when VIX3M < VIX: OK")
+
+
 if __name__ == "__main__":
     print("\n=== Assessment endpoint tests (PER-508 #21) ===")
     test_response_shape()
     test_sentinel_inheritance()
     test_et_timestamp_format()
     test_sections_degrade_independently()
+    test_term_structure_inverted()
     print("\nAll assessment tests passed.\n")
