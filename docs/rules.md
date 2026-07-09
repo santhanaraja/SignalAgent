@@ -55,20 +55,17 @@ is the single most important fact for interpreting what fires.
 ## R2 — Risk-off → no new aggressive positions
 
 - **Text:** "Risk-off regime -> no new aggressive positions."
-- **Code (`_eval_r2`, lines 140–161):**
-  - `regime == "Risk-off"` **and** any `entry_signals` action
-    `startswith("ENTRY")` → `violation`.
-  - `regime == "Risk-off"` (no entry signals) → `elevated`.
+- **Code (`_eval_r2`):**
+  - `regime == "Risk-off"` → `elevated`.
   - otherwise → `compliant`.
 - **Enforcement:** ADVISORY (report only — it does not block an entry).
-- **Reads:** regime string, `entry_signals`. **Emits:** status + message.
-- **Dead branch:** the `violation` path is **unreachable in practice.**
-  `entry_signals` is produced by theme_ranker, which only emits an
-  `"ENTRY SIGNAL — …"` when `regime_ok` (regime in Trending/Choppy;
-  theme_ranker line ~165). In Risk-off, `regime_ok` is False, so no
-  ENTRY-prefixed signal ever exists — R2 in Risk-off can only reach
-  `elevated`. The block-the-entry intent is actually enforced upstream
-  in theme_ranker's entry gate, not here.
+- **Reads:** regime string. **Emits:** status + message.
+- **Resolved 2026-07-09:** the former `violation` branch (Risk-off + an
+  ENTRY-prefixed signal) was **unreachable in the pipeline** — theme_ranker
+  only emits `"ENTRY SIGNAL — …"` when `regime_ok` (regime in Trending/
+  Choppy), so a risk-off ENTRY signal can never exist. The branch was
+  removed; R2 degrades to `elevated` in Risk-off. The block-the-entry
+  intent is enforced upstream in theme_ranker's entry gate.
 
 ## R3 — New theme entry requirements
 
@@ -87,9 +84,10 @@ is the single most important fact for interpreting what fires.
   (see regime.md). R3 only re-reports theme_ranker's verdict.
 - **Enforcement:** ADVISORY (the discretionary catalyst review is a human
   gate; code never confirms it happened).
-- **Unused input:** `regime` is a parameter of `_eval_r3` but is never
-  referenced in the body. The "risk-on regime" clause of the rule text
-  is checked only in theme_ranker, never in R3.
+- **Resolved 2026-07-09:** `_eval_r3` formerly took a `regime` parameter
+  it never read (the "risk-on regime" clause is checked only in
+  theme_ranker). The unused parameter and its call-site argument were
+  removed; signature is now `_eval_r3(entry_signals)`.
 
 ## R4 — Theme exit conditions
 
@@ -126,15 +124,14 @@ Each returns either `elevated` (with `message = "{reason} {text}"`) or
 — elevation is driven purely by two conditions:
 
 ```
-elevated_in_risk_off = {R10, R13, R15, R16, R17, R18, R26}
-    → elevated when regime in ("Risk-off", "Caution")   # note: Caution too
-elevated_when_active = {R6, R7, R8, R10, R11, R12, R13, R15,
-                        R19, R21, R23, R24, R25}
+elevated_in_defensive = {R10, R13, R15, R16, R17, R18, R26}
+    → elevated when regime in ("Risk-off", "Caution")   # both defensive regimes
+elevated_when_active  = {R6, R7, R8, R10, R11, R12, R13, R15,
+                         R19, R21, R23, R24, R25}
     → elevated when len(active_themes) > 0
-elevated_on_entry    = {R6, R7, R8, R9, R15}            # DEAD — see below
 ```
 
-Order: the risk-off branch is checked first (`if`), the active-themes
+Order: the defensive branch is checked first (`if`), the active-themes
 branch second (`elif`). So a rule in both sets, in Risk-off/Caution with
 active themes, reports the "Elevated — regime is X" reason, not the
 active-themes reason (affects R10, R13, R15).
@@ -143,17 +140,18 @@ active-themes reason (affects R10, R13, R15).
 several** (see per-rule table). Every one of these is a reminder string;
 no code enforces the described discipline against actual trades.
 
-### Two cross-cutting defects
+### Two cross-cutting defects — both resolved 2026-07-09
 
-1. **`elevated_on_entry` is dead code.** The set `{R6, R7, R8, R9, R15}`
-   is constructed on every call but **never referenced** in the
-   elevation logic (only `elevated_in_risk_off` and `elevated_when_active`
-   are consulted). Its intended "elevate these on a fresh entry signal"
-   behavior does not exist. The one rule that lives *only* in this set —
-   **R9** — therefore can never elevate under any condition.
+1. **`elevated_on_entry` dead set removed.** The set `{R6, R7, R8, R9,
+   R15}` was constructed on every call but never referenced (only the
+   defensive and active sets are consulted), so its "elevate on a fresh
+   entry signal" intent never existed. It was deleted. **R9**, whose only
+   membership was this dead set, correctly remains never-elevated
+   (DISPLAY-ONLY) — behavior unchanged.
 
-2. **Naming vs behavior:** `elevated_in_risk_off` also fires in
-   **Caution**, not just Risk-off. R16/R17/R18/R26 elevate in Caution.
+2. **`elevated_in_risk_off` renamed `elevated_in_defensive`.** The set
+   also fires in **Caution**, not just Risk-off (R16/R17/R18/R26 elevate
+   in both). The name now matches the behavior; no logic change.
 
 ### Per-rule detail (R6–R27)
 
@@ -167,7 +165,7 @@ message). "Elevates" = the condition under which status becomes
 | **R6** | Define invalidation before entry. Written down. Close-based. | invalidation | active themes > 0 | ADVISORY |
 | **R7** | Size from risk-to-stop, not gut, not conviction, not max premium. | sizing | active themes > 0 | ADVISORY |
 | **R8** | No naked momentum exposure through binary catalysts. | binary_catalyst | active themes > 0 | ADVISORY¹ |
-| **R9** | Verify compliance scope before entering any new instrument class. | compliance | **never** (dead set only) | DISPLAY-ONLY |
+| **R9** | Verify compliance scope before entering any new instrument class. | compliance | **never** (in no set) | DISPLAY-ONLY |
 | **R10** | Stop moves UP only. Never lower a stop in adversity. | stop_management | Risk-off/Caution **or** active themes | ADVISORY |
 | **R11** | Decisions on the exit-timeframe CLOSE, never on intraday wicks. | close_based | active themes > 0 | ADVISORY² |
 | **R12** | Exit timeframe must be slower than entry timeframe. | timeframe | active themes > 0 | ADVISORY |
@@ -207,9 +205,11 @@ comparison. R15/R18 exist only as reminder text. No code reads
 
 ### Rules that never leave `compliant`
 
-R9, R14, R20, R22, R27 are in no live elevation set (R9's only set is
-dead), so they are effectively **DISPLAY-ONLY** — they always render
-`compliant` and exist purely as the reference list.
+R9, R14, R20, R22, R27 are in no elevation set, so they are effectively
+**DISPLAY-ONLY** — they always render `compliant` and exist purely as the
+reference list. (Before the 2026-07-09 cleanup R9 sat only in the dead
+`elevated_on_entry` set; removing it left R9's never-elevate behavior
+unchanged.)
 
 ---
 
@@ -259,7 +259,7 @@ Current tally: **14 compliant · 13 action_needed · 0 violations.**
 | Rule | Status | Why |
 |---|---|---|
 | **R6, R7, R8, R11, R12, R19, R21, R23, R24, R25** | elevated | `elevated_when_active` and 2 themes are active. Pure reminders — invalidation written down, size-from-stop, catalyst caution, close-based decisions, exit-timeframe, cost-basis cap, no same-day re-entry, conviction-via-stop, target=sell, add-only-on-pullbacks. |
-| **R10, R13, R15** | elevated | In both `elevated_when_active` and `elevated_in_risk_off`; here the active-themes branch fires (regime is Trending, not Risk-off/Caution). Stop-up-only, never-override-stop, single-position-size reminders. |
+| **R10, R13, R15** | elevated | In both `elevated_when_active` and `elevated_in_defensive`; here the active-themes branch fires (regime is Trending, not Risk-off/Caution). Stop-up-only, never-override-stop, single-position-size reminders. |
 | **R1** | compliant | Monday, not Sunday. Flips to `action_needed` this coming Sunday (Jul 12) — which is also the first live weekly-review mutation under the R4 fix. |
 | **R2, R3, R4, R5** | compliant | Trending (R2 not triggered); no entry/exit signals this run (R3/R4); 2/2 themes (R5 at the cap but not over). |
 | **R9, R14, R16, R17, R18, R20, R22, R26, R27** | compliant | Not in any live elevation set for the current Trending regime. R16/R17/R18/R26 would elevate if regime degrades to Caution/Risk-off; R9/R14/R20/R22/R27 never elevate at all. |
@@ -269,8 +269,8 @@ Current tally: **14 compliant · 13 action_needed · 0 violations.**
   set (+ re-labels R10/R13/R15 to the regime reason) → 17 action_needed.
 - A Sunday run flips **R1** to action_needed.
 - None of these is a violation; the only way to reach a `violation` is
-  R5 with a hand-edited 3-theme state file (R2's violation branch is
-  dead).
+  R5 with a hand-edited 3-theme state file (R2 no longer has a violation
+  branch as of the 2026-07-09 cleanup).
 
 **Bottom line for tonight's read:** nothing is blocking or forcing
 anything. All 13 firing items are advisory reminders triggered by having

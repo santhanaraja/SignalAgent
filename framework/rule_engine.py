@@ -49,7 +49,7 @@ class RuleEngine:
             violations.append(r2)
 
         # --- R3: New theme entry requirements ---
-        r3 = self._eval_r3(entry_signals, regime)
+        r3 = self._eval_r3(entry_signals)
         evaluations.append(r3)
         if r3["status"] == "action_needed":
             action_items.append(r3)
@@ -138,14 +138,14 @@ class RuleEngine:
         }
 
     def _eval_r2(self, regime: str, entry_signals: list) -> dict:
-        """R2: Risk-off → no new aggressive positions."""
-        if regime == "Risk-off" and any(s.get("action", "").startswith("ENTRY") for s in entry_signals):
-            return {
-                "rule": "R2",
-                "text": self.rules.get("R2", ""),
-                "status": "violation",
-                "message": f"VIOLATION: Regime is {regime} but entry signals exist. Block all new aggressive positions.",
-            }
+        """R2: Risk-off → no new aggressive positions.
+
+        No violation branch: theme_ranker only emits ENTRY signals when the
+        regime is risk-on (its entry gate requires regime in Trending/
+        Choppy), so a risk-off ENTRY signal can never reach here. R2
+        degrades to an elevated reminder in Risk-off; the actual block is
+        enforced upstream in theme_ranker.
+        """
         if regime == "Risk-off":
             return {
                 "rule": "R2",
@@ -160,8 +160,13 @@ class RuleEngine:
             "message": f"Regime is {regime}. Rule not triggered.",
         }
 
-    def _eval_r3(self, entry_signals: list, regime: str) -> dict:
-        """R3: New theme entry requirements."""
+    def _eval_r3(self, entry_signals: list) -> dict:
+        """R3: New theme entry requirements.
+
+        The "risk-on regime" clause of the rule is enforced upstream in
+        theme_ranker (which only produces ENTRY signals in risk-on), so
+        this reads only the entry signals it is given.
+        """
         qualified = [s for s in entry_signals if "ENTRY SIGNAL" in s.get("action", "")]
         building = [s for s in entry_signals if "Building" in s.get("action", "")]
 
@@ -248,22 +253,21 @@ class RuleEngine:
         """
         text = self.rules.get(rule_id, "")
 
-        # Certain rules become elevated based on regime or active state
-        elevated_in_risk_off = {
+        # Certain rules become elevated based on regime or active state.
+        # "Defensive" = the risk-reducing regimes Risk-off AND Caution
+        # (both trigger this set — the name reflects the actual behavior).
+        elevated_in_defensive = {
             "R10", "R13", "R15", "R16", "R17", "R18", "R26",
         }
         elevated_when_active = {
             "R6", "R7", "R8", "R10", "R11", "R12", "R13", "R15",
             "R19", "R21", "R23", "R24", "R25",
         }
-        elevated_on_entry = {
-            "R6", "R7", "R8", "R9", "R15",
-        }
 
         is_elevated = False
         reason = ""
 
-        if rule_id in elevated_in_risk_off and regime in ("Risk-off", "Caution"):
+        if rule_id in elevated_in_defensive and regime in ("Risk-off", "Caution"):
             is_elevated = True
             reason = f"Elevated — regime is {regime}."
         elif rule_id in elevated_when_active and len(active_themes) > 0:
