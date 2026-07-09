@@ -25,6 +25,35 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from signal_engine import compute_rsi, compute_macd, compute_moving_averages, score_stock, compute_ytd_return, DATA_DIR, PUBLIC_DIR
 from history_manager import detect_changes, save_snapshot, run_history_manager
 
+def _sandbox():
+    """
+    Redirect EVERY file write into a tempdir. Without this, test_full_pipeline
+    overwrote the real data/signals.json + public/signals.json with synthetic
+    data and test_history polluted the real history.json/snapshots — requiring
+    manual `git restore` after every sweep (bit on 07-05 twice and 07-09).
+    Patches the module globals both engines read at call time, plus this
+    module's own imported DATA_DIR/PUBLIC_DIR bindings. Test harness only —
+    production path resolution in signal_engine/history_manager is untouched.
+    """
+    import tempfile
+    import history_manager as hm
+    import signal_engine as se
+    tmp = tempfile.mkdtemp(prefix="pipeline_test_")
+    data = os.path.join(tmp, "data")
+    public = os.path.join(tmp, "public")
+    os.makedirs(data)
+    os.makedirs(public)
+    se.DATA_DIR = data
+    se.PUBLIC_DIR = public
+    hm.DATA_DIR = data
+    hm.SNAPSHOTS_DIR = os.path.join(data, "snapshots")
+    hm.PUBLIC_DIR = public
+    globals()["DATA_DIR"] = data
+    globals()["PUBLIC_DIR"] = public
+    print(f"  [sandbox] all test writes -> {tmp}\n")
+    return tmp
+
+
 def generate_synthetic_price_data(ticker, trend="up", volatility=0.02, days=130):
     """Generate realistic-looking price data for testing."""
     np.random.seed(hash(ticker) % 2**31)
@@ -347,16 +376,17 @@ def test_history():
 
 
 if __name__ == "__main__":
-    test_indicators()
-    test_scoring()
-    test_full_pipeline()
-    test_history()
+    import shutil
+    _tmp = _sandbox()
+    try:
+        test_indicators()
+        test_scoring()
+        test_full_pipeline()
+        test_history()
+    finally:
+        shutil.rmtree(_tmp, ignore_errors=True)
 
     print("=" * 60)
     print("  ALL TESTS PASSED ✅")
     print("=" * 60)
-    print(f"\n  Dashboard:  public/index.html")
-    print(f"  History:    public/history.html")
-    print(f"  Data:       data/signals.json")
-    print(f"  Changes:    data/history.json")
-    print(f"  Snapshots:  data/snapshots/\n")
+    print("  (all writes sandboxed — production data/ and public/ untouched)\n")
