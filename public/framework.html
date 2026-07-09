@@ -112,6 +112,33 @@
   .empty-state h2{font-size:18px;margin-bottom:8px;}
   .empty-state p{color:var(--dim);font-size:14px;margin-bottom:16px;}
 
+  /* Position Signals panel (1B engine) */
+  .ps-changes{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+  .ps-change{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;background:rgba(88,166,255,.12);color:var(--blue);}
+  .ps-change.none{background:var(--surface2);color:var(--dim);font-weight:400;}
+  .ps-group{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);margin:10px 0 6px;}
+  .ps-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:9px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:12px;}
+  .ps-ticker{font-family:'SF Mono',monospace;font-weight:700;font-size:13px;min-width:52px;}
+  .ps-badge{padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.3px;}
+  .ps-held{background:rgba(63,185,80,.15);color:var(--green);}
+  .ps-exit-fired{background:rgba(248,81,73,.2);color:var(--red);animation:psPulse 1.2s ease-in-out infinite;}
+  .ps-watching{background:rgba(110,118,129,.15);color:var(--dim);}
+  .ps-arming{background:rgba(210,153,34,.15);color:var(--yellow);}
+  .ps-ready{background:rgba(63,185,80,.15);color:var(--green);}
+  @keyframes psPulse{0%,100%{opacity:1;}50%{opacity:.45;}}
+  .ps-num{font-family:'SF Mono',monospace;color:var(--dim);}
+  .ps-num b{color:var(--text);font-weight:600;}
+  .ps-cushion{font-family:'SF Mono',monospace;color:var(--green);font-weight:600;}
+  .ps-cushion.warn{color:var(--yellow);background:rgba(210,153,34,.12);padding:1px 6px;border-radius:4px;}
+  .ps-ext{font-family:'SF Mono',monospace;color:var(--dim);}
+  .ps-ext.hot{color:var(--red);background:rgba(248,81,73,.1);padding:1px 6px;border-radius:4px;font-weight:600;}
+  .pip{display:inline-block;width:17px;height:17px;line-height:17px;text-align:center;border-radius:50%;font-size:10px;font-weight:700;margin-right:2px;cursor:default;}
+  .pip.ok{background:rgba(63,185,80,.15);color:var(--green);}
+  .pip.no{background:rgba(248,81,73,.15);color:var(--red);}
+  .ps-flag{padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(210,153,34,.15);color:var(--yellow);}
+  .ps-er{padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;}
+  .ps-note{color:var(--dim);font-size:12px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;}
+
   /* Responsive */
   @media(max-width:768px){
     .content{padding:12px 16px;}
@@ -119,6 +146,7 @@
     .actions-grid{grid-template-columns:1fr;}
     .regime-banner{flex-direction:column;text-align:center;}
     .regime-meta{margin-left:0;text-align:center;}
+    .ps-row{gap:7px;padding:8px 10px;}
   }
 
   .loading-spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;}
@@ -168,6 +196,7 @@ function fmtEST(iso){
 }
 
 let DATA = null;
+let ASSESS = null;   // /api/assessment.json — Position Signals panel data
 let fwRunning = false;
 
 // Boot-window grace (mirrors history.html's retry/backoff): a 503 from
@@ -201,6 +230,13 @@ async function loadData(){
     if(j.status==='success'){
       fwRetryDelay=2000;
       DATA=j;
+      // Position Signals panel data: same artifact, same sentinel — if we
+      // got here, assessment should succeed too; degrade the panel alone
+      // if it doesn't.
+      try{
+        const ar=await fetch('/api/assessment.json');
+        ASSESS=ar.ok?await ar.json():null;
+      }catch(e){ASSESS=null;}
       render();
     } else {
       document.getElementById('emptyState').style.display='block';
@@ -245,6 +281,96 @@ async function pollStatus(){
   }catch(e){
     setTimeout(pollStatus,5000);
   }
+}
+
+/* ===== Position Signals panel (1B engine) ===== */
+function psBadge(state){
+  const map={HELD:'ps-held',EXIT_FIRED:'ps-exit-fired',WATCHING:'ps-watching',
+             RE_ENTRY_ARMING:'ps-arming',RE_ENTRY_READY:'ps-ready'};
+  return `<span class="ps-badge ${map[state]||'ps-watching'}">${(state||'?').replace(/_/g,' ')}</span>`;
+}
+function psPips(conds){
+  if(!conds) return '';
+  const order=[['1_trigger','Trigger'],['2_confirmation','Confirm'],
+               ['3_regime_gate','Regime'],['4_slope','Slope'],['5_thesis','Thesis']];
+  return order.map(([k,label])=>{
+    const c=conds[k];
+    if(!c) return '';
+    const tip=`${label}: ${(c.detail||'').replace(/"/g,'&quot;')}`;
+    return `<span class="pip ${c.met?'ok':'no'}" title="${tip}">${c.met?'✓':'✗'}</span>`;
+  }).join('');
+}
+function psEr(d){
+  if(d==null||d>7) return '';
+  const hot=d<=2;
+  return `<span class="ps-er" style="background:${hot?'rgba(248,81,73,.18)':'rgba(210,153,34,.18)'};color:${hot?'var(--red)':'var(--yellow)'};" title="Earnings in ${d} day${d===1?'':'s'} — R8: binary catalyst window">ER in ${d}d</span>`;
+}
+function psExt(x){
+  const pct=x.extension_pct, atr=x.extension_atr;
+  if(pct==null) return '';
+  const hot=atr!=null&&atr>1.5;
+  const body=`${pct>0?'+':''}${pct}%${atr!=null?` (${atr}×ATR)`:''}`;
+  return `<span class="ps-ext${hot?' hot':''}" title="Extension: close vs SMA20">${body}${hot?' — extended, chase guard':''}</span>`;
+}
+function renderPositionsPanel(){
+  let html=`<div class="section"><div class="section-title">Layer 1.5: Position Signals
+    <span style="font-size:11px;color:var(--dim);">exit / re-entry state machine — signals only</span></div>`;
+  if(!ASSESS||!ASSESS.positions||ASSESS.positions.error){
+    html+=`<div class="ps-note">Position signals unavailable${ASSESS&&ASSESS.positions&&ASSESS.positions.error?` — ${ASSESS.positions.error}`:' — /api/assessment.json did not load'}.</div></div>`;
+    return html;
+  }
+  // Changes-since-prior strip
+  const ch=ASSESS.changes_since_prior||{};
+  const bits=[];
+  if(ch.regime_shift) bits.push(`Regime: ${ch.regime_shift.from} → ${ch.regime_shift.to}`);
+  (ch.voters_flipped||[]).forEach(v=>bits.push(`${v.gauge}: ${v.from} → ${v.to}`));
+  (ch.position_transitions||[]).forEach(t=>{if(t.ticker)bits.push(`${t.ticker}: ${t.from_state||'—'} → ${t.to_state}`);});
+  html+=`<div class="ps-changes">`+(ch.error
+    ?`<span class="ps-change none">Change history unavailable</span>`
+    :bits.length?bits.map(b=>`<span class="ps-change">${b}</span>`).join('')
+    :`<span class="ps-change none">No changes since prior run (${ch.prior_run_date||'—'})</span>`)+`</div>`;
+
+  const entries=Object.entries(ASSESS.positions);
+  const holdings=entries.filter(([,x])=>x.kind==='holding');
+  const watchers=entries.filter(([,x])=>x.kind==='watching');
+  const tech=ASSESS.technicals||{};
+
+  // Holdings: the read is the stop
+  html+=`<div class="ps-group">Holdings</div>`;
+  if(!holdings.length){
+    html+=`<div class="ps-note">No holdings — cash.</div>`;
+  }
+  for(const [t,x] of holdings){
+    const cu=(tech[t]||{}).cushion_to_stop||{};
+    const cuWarn=cu.atr_multiple!=null&&cu.atr_multiple<0.5;
+    const stopTxt=x.stop&&x.stop.level!=null
+      ?`<span class="ps-num"><b>$${x.close}</b> vs stop <b>$${x.stop.level}</b></span>`
+      :`<span class="ps-num"><b>$${x.close}</b> vs SMA20 $${x.sma20} — no stop (state ${x.state})</span>`;
+    const cuTxt=cu.dollars!=null
+      ?`<span class="ps-cushion${cuWarn?' warn':''}" title="Cushion to stop${cuWarn?' — under 0.5×ATR, one normal day can take it out':''}">cushion $${cu.dollars} (${cu.atr_multiple}×ATR)${cuWarn?' ⚠':''}</span>`
+      :'';
+    html+=`<div class="ps-row" data-ps="${t}">
+      <span class="ps-ticker">${t}</span>${psBadge(x.state)}
+      ${stopTxt}${cuTxt}${psExt(x)}${psEr(x.days_to_earnings)}
+    </div>`;
+  }
+
+  // Watchlist: the read is the 5-condition ladder
+  html+=`<div class="ps-group">Watchlist</div>`;
+  if(!watchers.length){
+    html+=`<div class="ps-note">No watch-entries.</div>`;
+  }
+  for(const [t,x] of watchers){
+    html+=`<div class="ps-row" data-ps="${t}">
+      <span class="ps-ticker">${t}</span>${psBadge(x.state)}
+      ${x.a_plus_only?`<span class="ps-flag" title="Regime is Risk-on / Choppy — conditional clearance">A+ ONLY</span>`:''}
+      <span title="The 5 re-entry conditions">${psPips(x.conditions)}</span>
+      <span class="ps-num"><b>$${x.close}</b> / SMA20 $${x.sma20}</span>
+      ${psExt(x)}${psEr(x.days_to_earnings)}
+    </div>`;
+  }
+  html+=`</div>`;
+  return html;
 }
 
 function render(){
@@ -345,6 +471,9 @@ function render(){
     </div>`;
   }
   html+=`</div></div>`;
+
+  // ===== LAYER 1.5: POSITION SIGNALS (1B engine, PER-508 backlog) =====
+  html+=renderPositionsPanel();
 
   // ===== THEME SECTION =====
   const themes=DATA.themes||{};

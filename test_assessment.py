@@ -72,7 +72,8 @@ def _framework_payload(run_date="2026-07-09"):
                 },
                 "MRNA": {
                     "ticker": "MRNA", "kind": "watching", "theme": "Biotech",
-                    "state": "RE_ENTRY_READY", "close": 79.0, "sma20": 65.0,
+                    "state": "RE_ENTRY_READY", "a_plus_only": True,
+                    "close": 79.0, "sma20": 65.0,
                     "extension_pct": 21.5, "extension_atr": 3.4,
                     "conditions": {"1_trigger": {"met": True},
                                    "2_confirmation": {"atr14": 4.1}},
@@ -195,6 +196,9 @@ def test_response_shape():
         assert "conditions" not in b["positions"]["ARWR"]
         assert b["positions"]["ARWR"]["stop"]["level"] == 80.29
         assert "conditions" in b["positions"]["MRNA"]
+        # the Position Signals panel binds these two watcher fields
+        assert b["positions"]["MRNA"]["a_plus_only"] is True
+        assert b["positions"]["MRNA"]["extension_atr"] == 3.4
         # technicals: holdings only, cushion math from close/stop/atr
         assert list(b["technicals"].keys()) == ["ARWR"]
         t = b["technicals"]["ARWR"]
