@@ -8,7 +8,9 @@ on:
     # is reviewable over the weekend and Monday's signal runs see a current
     # cache. If this run fails, Monday's first signal run rebuilds via
     # get_industry_groups() (self-healing).
-    - cron: '0 1 * * 6'
+    # :07 offset — GitHub heavily throttles the :00 top-of-hour pile; an
+    # off-peak minute makes the Saturday slot actually fire near-schedule.
+    - cron: '7 1 * * 6'
 
   # Manual trigger from the GitHub UI — identical to the cron run (same job,
   # same artifacts, same week_key labeling; the key depends only on WHEN it
