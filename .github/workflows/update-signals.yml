@@ -55,6 +55,22 @@ jobs:
           PYTHONUNBUFFERED: '1'
         continue-on-error: true
 
+      # PER-508 item 22: post-close Slack push. Gating (ET hour >= 16,
+      # weekday, once per trading day) is computed INSIDE the script —
+      # GitHub throttles this cron, so slot timing is unreliable. Placed
+      # BEFORE the commit step so the data/last_notified marker rides the
+      # data commit (fresh clone every run; an uncommitted marker would
+      # double-post on the next throttled run). A Slack outage must never
+      # block the data pipeline: continue-on-error here AND the script
+      # itself never exits non-zero.
+      - name: Post-close assessment notification
+        continue-on-error: true
+        env:
+          ASSESSMENT_WEBHOOK_URL: ${{ secrets.ASSESSMENT_WEBHOOK_URL }}
+          DASHBOARD_URL: ${{ vars.DASHBOARD_URL }}
+          PYTHONUNBUFFERED: '1'
+        run: python notify_assessment.py
+
       - name: Check for changes
         id: check
         run: |
