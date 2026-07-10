@@ -1,0 +1,64 @@
+name: Pre-market Briefing
+
+on:
+  schedule:
+    # ~7:00 AM ET (11:00 UTC in EDT; 12:00 UTC slot covers EST winter).
+    # GitHub throttles busy schedules — the briefing may land 7:15-8:00,
+    # acceptable. The real gate (weekday, 6:30 <= ET < 9:30, once per
+    # day) is computed INSIDE the script from the ET clock.
+    - cron: '0 11 * * 1-5'
+    - cron: '0 12 * * 1-5'
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Serialize with the data-committing workflows — this one commits the
+# once-per-day marker.
+concurrency:
+  group: signal-data-commits
+  cancel-in-progress: false
+
+jobs:
+  premarket-briefing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # The script never exits non-zero (a Slack or quote outage must not
+      # mark the workflow red), but belt-and-braces per the item-22 pattern.
+      - name: Send pre-market briefing
+        continue-on-error: true
+        env:
+          ASSESSMENT_WEBHOOK_URL: ${{ secrets.ASSESSMENT_WEBHOOK_URL }}
+          DASHBOARD_URL: ${{ vars.DASHBOARD_URL }}
+          PYTHONUNBUFFERED: '1'
+        run: python notify_premarket.py
+
+      # Fresh clone every run: the once-per-day marker only works if it is
+      # committed. Marker-only commit, explicit pathspec.
+      - name: Persist once-per-day marker
+        run: |
+          if [ -n "$(git status --porcelain data/last_notified_am)" ]; then
+            git config user.name "SignalAgent Bot"
+            git config user.email "signal-bot@users.noreply.github.com"
+            git add data/last_notified_am
+            git commit -m "data: pre-market briefing marker $(date -u +'%Y-%m-%d')"
+            git pull --rebase origin main
+            git push
+          else
+            echo "marker unchanged — nothing to commit"
+          fi
