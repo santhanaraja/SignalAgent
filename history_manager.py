@@ -10,9 +10,18 @@ Detects:
 - New industry groups added
 - Industry groups removed
 - Score changes > threshold
+- Breaker status changes per group (clear/watch/warning/critical)
+- Swing regime transitions (read from public/framework.json)
+- Trade signal transitions in/out of the actionable poles (BUY NOW, AVOID)
+- Score crossings of the >=50 qualifier line
+
+Single-writer constraint: history.json (and its public mirror) is written
+ONLY here. Other event producers get their own file (see
+position_signals.emit_history_events / position_events.json).
 """
 
 import json
+import math
 import os
 import shutil
 import datetime
@@ -20,8 +29,20 @@ import datetime
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 SNAPSHOTS_DIR = os.path.join(DATA_DIR, "snapshots")
 PUBLIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
+FRAMEWORK_JSON = os.path.join(PUBLIC_DIR, "framework.json")
 
 SCORE_CHANGE_THRESHOLD = 10  # Log score changes > this amount
+QUALIFIER_SCORE = 50         # gate line a universe ticker must clear to qualify
+
+# The actionable poles of the trade-signal ladder. Transitions in or out of
+# these are logged; churn among the middle states (HOLD POSITION,
+# ACCUMULATE ON DIP, WAIT FOR PULLBACK, REDUCE/EXIT) is noise.
+TRADE_SIGNAL_POLES = {"BUY NOW", "AVOID"}
+
+# Events are effectively permanent (the backfill reaches to 2026-02); the cap
+# is a runaway-growth backstop, not a retention policy. ~50 events/day at the
+# current cadence -> this holds roughly a year beyond the backfill.
+HISTORY_MAX_CHANGES = 25000
 
 
 def load_json(path):
@@ -37,6 +58,204 @@ def save_json(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
+
+
+def _num(v):
+    """A numeric value, or None if missing/NaN. Snapshots that predate the
+    pipeline sanitizer carry bare NaN — treat it as absent, never emit it."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v)):
+        return v
+    return None
+
+
+def _breaker_reason(group):
+    """Human-readable reason for a group's current breaker status, from the
+    triggered checks. Falls back gracefully on old snapshot schemas."""
+    triggered = [a for a in (group.get("breaker_alerts") or [])
+                 if isinstance(a, dict) and a.get("triggered")]
+    parts = []
+    for a in triggered:
+        msg = a.get("message")
+        if not msg or msg == "Not triggered":
+            msg = a.get("description") or a.get("check")
+        if msg:
+            parts.append(str(msg))
+    if parts:
+        return "; ".join(parts)
+    if (group.get("breaker_status") or "").lower() == "clear":
+        return "all breaker checks clear"
+    return "no triggered checks recorded"
+
+
+def detect_coverage_events(previous, current):
+    """PER-508 item 18: breaker_change, trade_signal_change, gate_crossing.
+
+    Kept separate from detect_changes' hard-indexed walk so the backfill can
+    replay the full snapshot archive through the EXACT same logic — every
+    field is .get()ed and NaN-tolerant because old snapshots predate several
+    schema additions (breaker/trade_signal exist from 2026-02-17).
+    """
+    events = []
+    if not previous or not current:
+        return events
+    timestamp = current.get("timestamp", datetime.datetime.now().isoformat())
+
+    prev_groups = {g.get("name"): g for g in previous.get("groups", [])
+                   if isinstance(g, dict) and g.get("name")}
+    curr_groups = {g.get("name"): g for g in current.get("groups", [])
+                   if isinstance(g, dict) and g.get("name")}
+
+    # --- breaker_change: any change of a group's breaker status ---
+    for name in curr_groups.keys() & prev_groups.keys():
+        prev_bs = (prev_groups[name].get("breaker_status") or "").lower() or None
+        curr_bs = (curr_groups[name].get("breaker_status") or "").lower() or None
+        if not prev_bs or not curr_bs or prev_bs == curr_bs:
+            continue
+        severity = {"critical": "critical", "warning": "high"}.get(curr_bs, "medium")
+        events.append({
+            "timestamp": timestamp,
+            "type": "breaker_change",
+            "severity": severity,
+            "group": name,
+            "ticker": None,
+            "description": f"{name}: Breaker {prev_bs.upper()} → {curr_bs.upper()}",
+            "detail": {
+                "from_status": prev_bs,
+                "to_status": curr_bs,
+                "reason": _breaker_reason(curr_groups[name])
+            }
+        })
+
+    # Keyed by TICKER, not group|ticker: the spec defines trade-signal and
+    # gate events per ticker, and group renames/re-clustering (Feb 16-17
+    # re-clustering; Phase 2 dynamic-universe cutover pending) must not
+    # swallow a transition. First occurrence wins if a ticker somehow
+    # appears in two groups.
+    def _stocks(groups):
+        out = {}
+        for name, g in groups.items():
+            for s in g.get("stocks", []):
+                if isinstance(s, dict) and s.get("ticker") and s["ticker"] not in out:
+                    out[s["ticker"]] = (s, g, name)
+        return out
+
+    prev_stocks = _stocks(prev_groups)
+    curr_stocks = _stocks(curr_groups)
+
+    for ticker in curr_stocks.keys() & prev_stocks.keys():
+        prev_s, _, _ = prev_stocks[ticker]
+        curr_s, curr_g, group_name = curr_stocks[ticker]
+
+        # --- trade_signal_change: transitions in/out of {BUY NOW, AVOID} ---
+        pts, cts = prev_s.get("trade_signal"), curr_s.get("trade_signal")
+        if pts and cts and pts != cts and (
+                pts in TRADE_SIGNAL_POLES or cts in TRADE_SIGNAL_POLES):
+            if pts in TRADE_SIGNAL_POLES and cts in TRADE_SIGNAL_POLES:
+                severity = "critical"          # pole-to-pole flip
+            elif cts in TRADE_SIGNAL_POLES:
+                severity = "high"              # entering a pole
+            else:
+                severity = "medium"            # leaving a pole to neutral
+            events.append({
+                "timestamp": timestamp,
+                "type": "trade_signal_change",
+                "severity": severity,
+                "group": group_name,
+                "ticker": ticker,
+                "description": f"{ticker}: Trade signal {pts} → {cts}",
+                "detail": {
+                    "from_trade_signal": pts,
+                    "to_trade_signal": cts,
+                    "score": _num(curr_s.get("score")),
+                    "breaker_status": (curr_g.get("breaker_status") or None)
+                }
+            })
+
+        # --- gate_crossing: score crossing the >=50 qualifier line ---
+        ps, cs = _num(prev_s.get("score")), _num(curr_s.get("score"))
+        if ps is not None and cs is not None:
+            was_in, now_in = ps >= QUALIFIER_SCORE, cs >= QUALIFIER_SCORE
+            if was_in != now_in:
+                events.append({
+                    "timestamp": timestamp,
+                    "type": "gate_crossing",
+                    "severity": "medium",
+                    "group": group_name,
+                    "ticker": ticker,
+                    "description": (f"{ticker}: Score crossed "
+                                    f"{'above' if now_in else 'below'} "
+                                    f"{QUALIFIER_SCORE} ({ps} → {cs})"),
+                    "detail": {
+                        "from_score": ps,
+                        "to_score": cs,
+                        "direction": "up" if now_in else "down",
+                        "signal": curr_s.get("signal"),
+                        "trade_signal": curr_s.get("trade_signal")
+                    }
+                })
+
+    return events
+
+
+def detect_regime_change(prev_regime, curr_regime, timestamp):
+    """PER-508 item 18: swing regime transition, with voter counts.
+
+    prev/curr are {regime, risk_on_count, caution_count, risk_off_count}
+    dicts (prev is the last_states entry tracked in history.json; curr comes
+    from framework.json). Bootstrap (no previous) records silently — the
+    first observation of a regime is not a transition.
+    """
+    if not isinstance(curr_regime, dict) or not curr_regime.get("regime"):
+        return []
+    if not isinstance(prev_regime, dict) or not prev_regime.get("regime"):
+        return []
+    if prev_regime["regime"] == curr_regime["regime"]:
+        return []
+    to_r = curr_regime["regime"]
+    ro = _num(curr_regime.get("risk_on_count"))
+    ca = _num(curr_regime.get("caution_count"))
+    rf = _num(curr_regime.get("risk_off_count"))
+    counts = (f" ({ro}/{ca}/{rf})"
+              if ro is not None and ca is not None and rf is not None else "")
+    return [{
+        "timestamp": timestamp,
+        "type": "regime_change",
+        "severity": "critical" if to_r == "Risk-off" else "high",
+        "group": None,
+        "ticker": None,
+        "description": f"Swing regime: {prev_regime['regime']} → {to_r}{counts}",
+        "detail": {
+            "from_regime": prev_regime["regime"],
+            "to_regime": to_r,
+            "risk_on_count": ro,
+            "caution_count": ca,
+            "risk_off_count": rf
+        }
+    }]
+
+
+def _current_regime_state():
+    """The regime block of public/framework.json as a last_states entry, or
+    None if the artifact is missing/invalid/mid-write. Never raises — a bad
+    framework artifact must not take the signal pipeline down."""
+    try:
+        with open(FRAMEWORK_JSON, "r") as f:
+            fw = json.load(f)
+        regime = fw.get("regime")
+        if not isinstance(regime, dict) or not regime.get("regime"):
+            return None, None
+        state = {
+            "regime": regime.get("regime"),
+            "risk_on_count": regime.get("risk_on_count"),
+            "caution_count": regime.get("caution_count"),
+            "risk_off_count": regime.get("risk_off_count"),
+            "as_of": fw.get("generated_at") or regime.get("date")
+        }
+        return state, fw.get("generated_at")
+    except Exception:
+        return None, None
 
 
 def detect_changes(previous, current):
@@ -225,6 +444,9 @@ def detect_changes(previous, current):
                 }
             })
 
+    # PER-508 item 18: breaker / trade-signal-pole / gate-crossing events
+    changes.extend(detect_coverage_events(previous, current))
+
     # Sort by severity then timestamp
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     changes.sort(key=lambda x: (severity_order.get(x["severity"], 99), x["timestamp"]))
@@ -301,22 +523,36 @@ def run_history_manager():
     else:
         print("No previous snapshot — this is the first run.")
 
+    # Load existing history early — last_states (regime tracking) lives here
+    history_path = os.path.join(DATA_DIR, "history.json")
+    history = load_json(history_path) or {"changes": [], "snapshots": []}
+
     # Detect changes
     changes = detect_changes(previous, current)
+
+    # Swing regime transition (PER-508 item 18). The framework artifact is
+    # regenerated earlier in the same CI run; compare against the last state
+    # this manager recorded. If the artifact is unreadable, keep the old
+    # last_states so the transition is caught on the next healthy run.
+    curr_regime, fw_generated_at = _current_regime_state()
+    if curr_regime:
+        prev_regime = (history.get("last_states") or {}).get("regime")
+        regime_ts = fw_generated_at or current.get(
+            "timestamp", datetime.datetime.now().isoformat())
+        changes.extend(detect_regime_change(prev_regime, curr_regime, regime_ts))
+        history.setdefault("last_states", {})["regime"] = curr_regime
+
     print(f"\nDetected {len(changes)} changes:")
     for c in changes:
         icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "⚪"}.get(c["severity"], "⚪")
         print(f"  {icon} [{c['type']}] {c['description']}")
 
-    # Load existing history and append
-    history_path = os.path.join(DATA_DIR, "history.json")
-    history = load_json(history_path) or {"changes": [], "snapshots": []}
-
     if changes:
         history["changes"].extend(changes)
 
-    # Keep last 1000 changes max
-    history["changes"] = history["changes"][-1000:]
+    # Backstop cap only — see HISTORY_MAX_CHANGES. Events are permanent;
+    # snapshot pruning must never touch this list.
+    history["changes"] = history["changes"][-HISTORY_MAX_CHANGES:]
 
     # Save snapshot
     snapshot_path = save_snapshot(current)

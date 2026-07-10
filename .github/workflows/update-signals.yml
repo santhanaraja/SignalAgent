@@ -46,14 +46,19 @@ jobs:
         env:
           PYTHONUNBUFFERED: '1'
 
-      - name: Run History Manager
-        run: python history_manager.py
-
+      # Framework runs BEFORE the history manager: history_manager reads
+      # public/framework.json to log regime_change events (PER-508 item 18),
+      # which must reflect THIS run's regime, not the previous one's.
+      # continue-on-error: a framework failure leaves the previous artifact
+      # in place (no regime change seen) and must not block signal history.
       - name: Run Framework Engine
         run: python -m framework.framework_runner
         env:
           PYTHONUNBUFFERED: '1'
         continue-on-error: true
+
+      - name: Run History Manager
+        run: python history_manager.py
 
       # PER-508 item 22: post-close Slack push. Gating (ET hour >= 16,
       # weekday, once per trading day) is computed INSIDE the script —

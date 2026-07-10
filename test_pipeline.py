@@ -48,6 +48,10 @@ def _sandbox():
     hm.DATA_DIR = data
     hm.SNAPSHOTS_DIR = os.path.join(data, "snapshots")
     hm.PUBLIC_DIR = public
+    # Derived at import time from the real PUBLIC_DIR — without this repatch
+    # the sandboxed run reads production framework.json and leaks live regime
+    # state into the hermetic test (PER-508 item 18 review finding).
+    hm.FRAMEWORK_JSON = os.path.join(public, "framework.json")
     globals()["DATA_DIR"] = data
     globals()["PUBLIC_DIR"] = public
     print(f"  [sandbox] all test writes -> {tmp}\n")

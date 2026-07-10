@@ -50,6 +50,11 @@
   .type-score_change{background:rgba(210,153,34,.12);color:var(--yellow);}
   .type-group_rank_change{background:rgba(188,140,255,.12);color:var(--purple);}
   .type-position_state_change{background:rgba(88,166,255,.12);color:#58a6ff;}
+  .type-breaker_change{background:rgba(240,136,62,.18);color:var(--orange);}
+  .type-regime_change{background:rgba(57,210,192,.12);color:var(--cyan);}
+  .type-trade_signal_change{background:rgba(63,185,80,.15);color:var(--green);}
+  .type-gate_crossing{background:rgba(188,140,255,.15);color:var(--purple);}
+  .render-note{text-align:center;padding:14px;color:var(--dim);font-size:12px;border:1px dashed var(--border);border-radius:8px;margin-top:8px;}
   .event-time{font-size:11px;color:var(--dim);}
   .event-desc{font-size:13px;font-weight:500;}
   .event-detail{font-size:11px;color:var(--dim);margin-top:4px;}
@@ -120,6 +125,10 @@
   <button class="pill" onclick="filtType('ticker_added',this)">Added</button>
   <button class="pill" onclick="filtType('ticker_removed',this)">Removed</button>
   <button class="pill" onclick="filtType('position_state_change',this)">Position States</button>
+  <button class="pill" onclick="filtType('breaker_change',this)">Breakers</button>
+  <button class="pill" onclick="filtType('regime_change',this)">Regime</button>
+  <button class="pill" onclick="filtType('trade_signal_change',this)">Trade Signals</button>
+  <button class="pill" onclick="filtType('gate_crossing',this)">Gate &ge;50</button>
   <input class="search" type="text" placeholder="Search ticker or group..." oninput="searchH(this.value)">
 </div>
 
@@ -214,14 +223,20 @@ function renderChanges(){
   if(typeFilter!=='all') changes = changes.filter(c=>c.type===typeFilter);
   if(searchQ) changes = changes.filter(c=>(c.ticker||'').toLowerCase().includes(searchQ)||(c.group||'').toLowerCase().includes(searchQ)||c.description.toLowerCase().includes(searchQ));
 
-  document.getElementById('changeCount').textContent = `(${changes.length} events)`;
-
   if(!changes.length){
+    document.getElementById('changeCount').textContent = `(0 events)`;
     document.getElementById('timelineContent').innerHTML = `<div class="empty"><h2>No changes match filter</h2><p>${typeFilter==='all'&&!searchQ?'Run the signal engine multiple times to generate change history.':'Try a different filter or search term.'}</p></div>`;
     return;
   }
 
-  const sorted = [...changes].reverse();
+  // The backfilled archive holds thousands of events — rendering them all
+  // as DOM makes the page crawl. Cap the timeline at the newest MAX_RENDER;
+  // the full list stays in history.json and is reachable via filters/search.
+  const MAX_RENDER = 800;
+  const sorted = [...changes].reverse().slice(0, MAX_RENDER);
+  const capped = changes.length > MAX_RENDER;
+  document.getElementById('changeCount').textContent =
+    `(${changes.length} events${capped?`, showing latest ${MAX_RENDER}`:''})`;
 
   let html = '<div class="timeline">';
   sorted.forEach(c=>{
@@ -252,7 +267,23 @@ function renderChanges(){
         + (detail.conditions_met?` · Conditions: ${detail.conditions_met}`:'')
         + (detail.a_plus_only?' · A+ only (Choppy)':'')
         + (detail.stop?` · ${detail.stop}`:'');
+    } else if(c.type==='breaker_change'){
+      detailHtml = `${breakerIcon(detail.to_status)} ${detail.from_status} → ${detail.to_status}`
+        + (detail.reason?` · ${detail.reason}`:'');
+    } else if(c.type==='regime_change'){
+      detailHtml = (detail.risk_on_count!=null
+        ? `Voters: ${detail.risk_on_count} risk-on / ${detail.caution_count} caution / ${detail.risk_off_count} risk-off`
+        : `${detail.from_regime} → ${detail.to_regime}`);
+    } else if(c.type==='trade_signal_change'){
+      detailHtml = (detail.score!=null?`Score: ${detail.score}`:'')
+        + (detail.breaker_status?` · Breaker: ${detail.breaker_status}`:'');
+      detailHtml = detailHtml.replace(/^ · /,'');
+    } else if(c.type==='gate_crossing'){
+      detailHtml = (detail.direction==='up'?'Qualified (score ≥50)':'Dropped below qualifier')
+        + (detail.signal?` · Signal: ${detail.signal}`:'')
+        + (detail.trade_signal?` · Trade: ${detail.trade_signal}`:'');
     }
+    if(detail.backfilled) detailHtml += (detailHtml?' · ':'') + 'backfilled';
 
     html += `<div class="event ${c.severity}">
       <div class="event-head">
@@ -268,6 +299,7 @@ function renderChanges(){
     </div>`;
   });
   html += '</div>';
+  if(capped) html += `<div class="render-note">Showing the latest ${MAX_RENDER} of ${changes.length} matching events — narrow with the filter pills or search to reach older ones.</div>`;
   document.getElementById('timelineContent').innerHTML = html;
 }
 
