@@ -44,6 +44,12 @@ TRADE_SIGNAL_POLES = {"BUY NOW", "AVOID"}
 # current cadence -> this holds roughly a year beyond the backfill.
 HISTORY_MAX_CHANGES = 25000
 
+# PER-508 item 6: snapshot retention — keep this many days of full intraday
+# snapshots; older dates thin to the weekly archive (last snapshot of each
+# Friday). Raw snapshots are re-derivation material only; the EVENTS distilled
+# from them live permanently in history.json.
+RETENTION_FULL_DAYS = 30
+
 
 def load_json(path):
     """Load JSON file, return None if not found."""
@@ -464,6 +470,65 @@ def save_snapshot(current_signals):
     return snapshot_path
 
 
+def prune_snapshots(now=None):
+    """PER-508 item 6: enforce snapshot retention on both mirrors.
+
+    Keep every snapshot from the last RETENTION_FULL_DAYS days, plus a
+    weekly archive older than that: the LAST snapshot of each Friday (the
+    weekly close state — R4/theme review operate on weekly closes). If a
+    holiday week has no Friday snapshot, the week's last snapshot stands in
+    so no week goes dark. Applied identically to data/snapshots and
+    public/snapshots; public/ remains the canonical write-once copy —
+    retention only deletes, it never rewrites a surviving file.
+
+    Deletes RAW SNAPSHOT FILES ONLY. history.json events are permanent and
+    are never touched here; pruning removes re-derivation material, not the
+    derived record.
+
+    Returns (kept, deleted) counts summed across both dirs.
+    """
+    now = now or datetime.datetime.now()
+    cutoff = (now - datetime.timedelta(days=RETENTION_FULL_DAYS)).date()
+    public_snapshots = os.path.join(PUBLIC_DIR, "snapshots")
+    dirs = [d for d in (SNAPSHOTS_DIR, public_snapshots) if os.path.isdir(d)]
+
+    names = set()
+    for d in dirs:
+        names.update(f for f in os.listdir(d)
+                     if f.startswith("snapshot_") and f.endswith(".json"))
+
+    keep, dated, by_week = set(), {}, {}
+    for f in sorted(names):
+        try:
+            ts = datetime.datetime.strptime(f[9:24], "%Y%m%d_%H%M%S")
+        except ValueError:
+            keep.add(f)                    # unrecognized name: never delete
+            continue
+        day = ts.date()
+        if day >= cutoff:
+            keep.add(f)
+        else:
+            dated[f] = day
+            by_week.setdefault(day.isocalendar()[:2], []).append(f)
+
+    for files in by_week.values():
+        files.sort()                       # filename sort == timestamp sort
+        fridays = [f for f in files if dated[f].weekday() == 4]
+        keep.add(fridays[-1] if fridays else files[-1])
+
+    kept = deleted = 0
+    for d in dirs:
+        for f in os.listdir(d):
+            if not (f.startswith("snapshot_") and f.endswith(".json")):
+                continue
+            if f in keep:
+                kept += 1
+            else:
+                os.remove(os.path.join(d, f))
+                deleted += 1
+    return kept, deleted
+
+
 def get_snapshot_list():
     """Get list of all snapshots sorted by date."""
     os.makedirs(SNAPSHOTS_DIR, exist_ok=True)
@@ -556,6 +621,14 @@ def run_history_manager():
 
     # Save snapshot
     snapshot_path = save_snapshot(current)
+
+    # Enforce retention on every write (PER-508 item 6). Runs before the
+    # index rebuild so history["snapshots"] and the public copy loop only
+    # ever see survivors.
+    kept, deleted = prune_snapshots()
+    if deleted:
+        print(f"Snapshot retention: kept {kept}, pruned {deleted} "
+              f"(>{RETENTION_FULL_DAYS}d non-Friday)")
 
     # Update snapshot list in history
     history["snapshots"] = get_snapshot_list()
