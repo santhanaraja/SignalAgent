@@ -196,6 +196,22 @@ position engine, not here: the state machine strips the intraday
 live-quote bar and advances only on completed daily closes. The
 rule-engine surface is still just a reminder.
 
+   **Intraday stop-breach alerts (PER-510-B)** layer information on top of
+   R11 without changing it: `notify_intraday.py` checks each HOLDING's live
+   price against its SMA20 stop during market hours and pushes a Slack
+   alert on breach (with depth in ×ATR) or when within 0.25×ATR above the
+   stop (warn), once per ticker per tier per day. **Cadence reality: it
+   rides the throttled hourly update-signals runs (~5×/day), so detection
+   lag is up to ~an hour — an hourly check, not a tick watcher.** If that
+   is ever insufficient, faster detection is a separate infra decision.
+   The alert is information only — nothing is executed, and the close
+   still decides. Any change to exit timing itself stays gated on Build 5
+   evidence. Full market holidays are skipped (SPY-session check); on the
+   ~4 early-close half-days a year, a run between 13:00 and 16:00 ET can
+   still alert — stale by hours but truthful vs the stop (accepted
+   residual). EXIT_FIRED rows never re-alert: that exit already signaled
+   at a prior close and belongs to the post-close report.
+
 ³ **R15–R18 carry live numbers (5–8%, 15%, 25%, 30–40%) but nothing
 computes them.** The concentration limits emit static text in
 theme_ranker (`concentration_notes`: `"Max per theme: 15% of book"`,

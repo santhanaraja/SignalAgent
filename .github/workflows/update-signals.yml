@@ -60,6 +60,20 @@ jobs:
       - name: Run History Manager
         run: python history_manager.py
 
+      # PER-510-B: intraday stop-breach alerts, HOLDINGS only. Gated
+      # in-script to market hours (9:30 <= ET < 16:00), once per ticker per
+      # tier per day (data/last_intraday_alerts rides the data commit).
+      # CADENCE REALITY: this fires on the throttled hourly runs (~5x/day),
+      # so detection lag is up to ~an hour — an hourly check, not a tick
+      # watcher. Information only; the close still decides (R11). Same
+      # never-fail/never-leak contract as items 22/23.
+      - name: Intraday stop-breach alerts
+        continue-on-error: true
+        env:
+          ASSESSMENT_WEBHOOK_URL: ${{ secrets.ASSESSMENT_WEBHOOK_URL }}
+          PYTHONUNBUFFERED: '1'
+        run: python notify_intraday.py
+
       # PER-508 item 22: post-close Slack push. Gating (ET hour >= 16,
       # weekday, once per trading day) is computed INSIDE the script —
       # GitHub throttles this cron, so slot timing is unreliable. Placed
