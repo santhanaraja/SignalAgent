@@ -23,6 +23,139 @@ def _today():
     return datetime.date.today()
 
 
+# ---------------------------------------------------------------------------
+# The regime decision as pure functions (Build 4 step 0)
+#
+# The ONLY implementation of the vote thresholds and the state ladder.
+# Production (RegimeCalculator below) delegates every decision here; the
+# walk-forward backtest and the Gauge Lab import these same functions —
+# a second copy of the ladder must be structurally impossible (Score Lab
+# precedent). Threshold defaults mirror framework/config.yaml; production
+# passes its config values explicitly, and so does the backtest CLI.
+# ---------------------------------------------------------------------------
+
+def _finite(v):
+    return isinstance(v, (int, float)) and np.isfinite(v)
+
+
+def vix_vote(vix_5d, risk_on_max=18.0, caution_max=22.0):
+    """VIX 5-day-average voter (lower = calmer = risk-on)."""
+    if not _finite(vix_5d):
+        return "unavailable"
+    if vix_5d <= risk_on_max:
+        return "risk_on"
+    if vix_5d <= caution_max:
+        return "caution"
+    return "risk_off"
+
+
+def hy_oas_vote(oas_pct, risk_on_max=3.0, caution_max=4.0):
+    """HY credit voter, primary basis: FRED BAMLH0A0HYM2 OAS in pct."""
+    if not _finite(oas_pct):
+        return "unavailable"
+    if oas_pct <= risk_on_max:
+        return "risk_on"
+    if oas_pct <= caution_max:
+        return "caution"
+    return "risk_off"
+
+
+def hy_percentile_vote(pctile, risk_on_min=60.0, caution_min=40.0):
+    """HY credit voter, fallback basis: HYG/IEF ratio 60d percentile."""
+    if not _finite(pctile):
+        return "unavailable"
+    if pctile >= risk_on_min:
+        return "risk_on"
+    if pctile >= caution_min:
+        return "caution"
+    return "risk_off"
+
+
+def breadth_ratio_vote(breadth_20d_pct, band=0.5):
+    """Breadth voter, RSP/SPY basis: current equal/cap-weight ratio vs the
+    ratio of the 20d means, as a % change. Production reality: this
+    'fallback' is the live path (the S5FI index is not fetchable)."""
+    if not _finite(breadth_20d_pct):
+        return "unavailable"
+    if breadth_20d_pct > band:
+        return "risk_on"
+    if breadth_20d_pct > -band:
+        return "caution"
+    return "risk_off"
+
+
+def gate_from_pct(spy_vs_200dma_pct):
+    """Backdrop gate from SPY's raw % distance to its 200DMA.
+    (open, reason) — fails CLOSED on missing/non-finite data."""
+    if not _finite(spy_vs_200dma_pct):
+        return False, "data_unavailable"
+    if spy_vs_200dma_pct < 0:
+        return False, "below_200dma"
+    return True, None
+
+
+def ladder_state(risk_on, risk_off, unavailable=0):
+    """
+    Map the 3 voter signals to a regime state (before the backdrop gate).
+    Pure function of current voter signals — no history anchoring.
+
+    Ladder on the risk_on tally:
+      3 -> Risk-on / Trending, 2 -> Risk-on / Choppy,
+      1 -> Caution, 0 -> Risk-off.
+    Qualifiers:
+      - risk_off votes are heavier than caution: ANY risk_off vote caps
+        the state at Caution regardless of the tally (credit
+        deteriorating while vol is calm must never print risk-on).
+      - Risk-off requires 0 risk_on votes with all voters reporting,
+        OR 2+ risk_off votes.
+      - 2+ voters unavailable -> Caution: a one-voter tally is not
+        evidence, in either direction.
+    Order matters: 2 confirmed risk_off dominate missing data, and the
+    unavailable guard must precede the 0-risk_on floor so a data outage
+    can never print Risk-off.
+    """
+    if risk_off >= 2:
+        return "Risk-off"
+    if unavailable >= 2:
+        return "Caution"
+    if risk_on == 0 and unavailable == 0:
+        return "Risk-off"
+    if risk_off >= 1:
+        return "Caution"
+    if risk_on == 3:
+        return "Risk-on / Trending"
+    if risk_on == 2:
+        return "Risk-on / Choppy"
+    return "Caution"
+
+
+def compute_regime(vix_5d, hy_oas_pct, breadth_20d_pct, spy_vs_200dma_pct,
+                   *, vix_thresholds=(18.0, 22.0), oas_thresholds=(3.0, 4.0),
+                   breadth_band=0.5):
+    """The full regime decision on canonical primary-source inputs.
+
+    Returns {"state", "votes", "gate"} exactly as production would decide
+    for these gauge readings (primary HY basis: OAS absolute thresholds).
+    Threshold keywords exist for the backtest sensitivity grid — defaults
+    are the production config values.
+    """
+    votes = {
+        "vix_5d_avg": vix_vote(vix_5d, *vix_thresholds),
+        "hy_spread": hy_oas_vote(hy_oas_pct, *oas_thresholds),
+        "breadth": breadth_ratio_vote(breadth_20d_pct, breadth_band),
+    }
+    signals = list(votes.values())
+    base = ladder_state(signals.count("risk_on"), signals.count("risk_off"),
+                        signals.count("unavailable"))
+    gate_open, gate_reason = gate_from_pct(spy_vs_200dma_pct)
+    capped = (not gate_open) and base.startswith("Risk-on")
+    return {
+        "state": "Caution" if capped else base,
+        "votes": votes,
+        "gate": {"open": gate_open, "capped": capped, "reason": gate_reason},
+    }
+
+
 class RegimeCalculator:
     """Computes the 3-voter swing regime score and outputs current regime state."""
 
@@ -83,12 +216,7 @@ class RegimeCalculator:
         # hair below the MA must still shut the gate). Non-finite or
         # missing data fails CLOSED: unknown is not permitted.
         spy_pct = spy_gauge.get("pct_raw", spy_gauge.get("value"))
-        if spy_pct is None or not np.isfinite(spy_pct):
-            gate_open, gate_reason = False, "data_unavailable"
-        elif spy_pct < 0:
-            gate_open, gate_reason = False, "below_200dma"
-        else:
-            gate_open, gate_reason = True, None
+        gate_open, gate_reason = gate_from_pct(spy_pct)
 
         regime_state = base_state
         gate_capped = False
@@ -261,38 +389,9 @@ class RegimeCalculator:
         return incl_current, completed
 
     def _determine_state(self, risk_on, risk_off, unavailable=0):
-        """
-        Map the 3 voter signals to a regime state (before the backdrop gate).
-        Pure function of current voter signals — no history anchoring.
-
-        Ladder on the risk_on tally:
-          3 -> Risk-on / Trending, 2 -> Risk-on / Choppy,
-          1 -> Caution, 0 -> Risk-off.
-        Qualifiers:
-          - risk_off votes are heavier than caution: ANY risk_off vote caps
-            the state at Caution regardless of the tally (credit
-            deteriorating while vol is calm must never print risk-on).
-          - Risk-off requires 0 risk_on votes with all voters reporting,
-            OR 2+ risk_off votes.
-          - 2+ voters unavailable -> Caution: a one-voter tally is not
-            evidence, in either direction.
-        Order matters: 2 confirmed risk_off dominate missing data, and the
-        unavailable guard must precede the 0-risk_on floor so a data outage
-        can never print Risk-off.
-        """
-        if risk_off >= 2:
-            return "Risk-off"
-        if unavailable >= 2:
-            return "Caution"
-        if risk_on == 0 and unavailable == 0:
-            return "Risk-off"
-        if risk_off >= 1:
-            return "Caution"
-        if risk_on == 3:
-            return "Risk-on / Trending"
-        if risk_on == 2:
-            return "Risk-on / Choppy"
-        return "Caution"
+        """Delegates to the module-level pure ladder (Build 4 step 0) —
+        kept as a method for existing callers and tests."""
+        return ladder_state(risk_on, risk_off, unavailable)
 
     # ==============================================================
     # Individual gauge computations
@@ -348,12 +447,17 @@ class RegimeCalculator:
             vix_5d = float(close.iloc[-cfg["lookback_days"]:].mean())
             current_vix = float(close.iloc[-1])
 
-            if vix_5d <= cfg["risk_on_threshold"]:
-                signal = "risk_on"
-            elif vix_5d <= cfg["caution_threshold"]:
-                signal = "caution"
-            else:
-                signal = "risk_off"
+            # NaN closes in the window poison the mean. The old inline
+            # branches voted risk_off on NaN (every <= comparison False) —
+            # accidental, and with two NaN voters it printed Risk-off on a
+            # pure data outage, violating the ladder's own contract. Vote
+            # unavailable explicitly (mirrors the SPY gauge guard).
+            if not np.isfinite(vix_5d):
+                return {"value": None, "signal": "unavailable",
+                        "detail": "VIX 5d average computed non-finite value"}
+
+            signal = vix_vote(vix_5d, cfg["risk_on_threshold"],
+                              cfg["caution_threshold"])
 
             return {
                 "value": round(vix_5d, 2),
@@ -397,12 +501,7 @@ class RegimeCalculator:
             ratios = hyg_closes[-min_len:] / ief_closes[-min_len:]
             current_pctile = float(np.sum(ratios <= ratio) / len(ratios) * 100)
 
-            if current_pctile >= 60:
-                signal = "risk_on"
-            elif current_pctile >= 40:
-                signal = "caution"
-            else:
-                signal = "risk_off"
+            signal = hy_percentile_vote(current_pctile)
 
             return {
                 "value": round(ratio, 4),
@@ -446,12 +545,8 @@ class RegimeCalculator:
                 val = o.get("value", ".")
                 if val != ".":
                     spread = float(val)
-                    if spread <= cfg["risk_on_threshold"]:
-                        signal = "risk_on"
-                    elif spread <= cfg["caution_threshold"]:
-                        signal = "caution"
-                    else:
-                        signal = "risk_off"
+                    signal = hy_oas_vote(spread, cfg["risk_on_threshold"],
+                                         cfg["caution_threshold"])
 
                     return {
                         "value": round(spread, 2),
@@ -503,12 +598,13 @@ class RegimeCalculator:
             ratio_20d = rsp_20d / spy_20d
             ratio_change = ((ratio - ratio_20d) / ratio_20d) * 100
 
-            if ratio_change > 0.5:
-                signal = "risk_on"
-            elif ratio_change > -0.5:
-                signal = "caution"
-            else:
-                signal = "risk_off"
+            # same NaN discipline as the VIX gauge: unavailable, never a
+            # silent risk_off from failed comparisons
+            if not np.isfinite(ratio_change):
+                return {"value": None, "signal": "unavailable",
+                        "detail": "Breadth ratio computed non-finite value"}
+
+            signal = breadth_ratio_vote(ratio_change)
 
             return {
                 "value": round(ratio_change, 2),
