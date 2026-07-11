@@ -281,6 +281,165 @@ def score_simulate():
     })
 
 
+_REGIME_CFG = None
+
+
+def _regime_cfg():
+    """Action lines + voter thresholds from framework config — the same
+    values production passes to the shared functions, so a config change
+    can never silently diverge the lab from the live gauge."""
+    global _REGIME_CFG
+    if _REGIME_CFG is None:
+        import yaml
+        cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "framework", "config.yaml")
+        with open(cfg_path) as f:
+            cfg = yaml.safe_load(f)
+        gauges = cfg["regime"]["gauges"]
+        _REGIME_CFG = {
+            "actions": {s["name"]: s.get("action", "")
+                        for s in cfg["regime"]["states"]},
+            "vix": (gauges["vix_5d_avg"]["risk_on_threshold"],
+                    gauges["vix_5d_avg"]["caution_threshold"]),
+            "hy": (gauges["hy_spread"]["risk_on_threshold"],
+                   gauges["hy_spread"]["caution_threshold"]),
+        }
+    return _REGIME_CFG
+
+
+def _regime_actions():
+    return _regime_cfg()["actions"]
+
+
+# Gauge Lab probing domains — SEARCH bounds only (where to look for a vote
+# flip), not thresholds. Every vote decision inside comes from the real
+# compute_regime; no threshold lives here (Score Lab law 1).
+_GAUGE_LAB_DOMAINS = {
+    "vix_5d": (0.0, 100.0),
+    "hy_oas": (0.0, 30.0),
+    "breadth_20d": (-20.0, 20.0),
+    "spy_vs_200dma_pct": (-50.0, 50.0),
+}
+
+
+def _regime_probe(inputs):
+    """compute_regime on an inputs dict, with the CONFIG thresholds —
+    exactly what production passes (the breadth band is production's
+    function default; its config entries belong to the unused S5FI basis)."""
+    from framework.regime_calculator import compute_regime
+    cfg = _regime_cfg()
+    return compute_regime(inputs["vix_5d"], inputs["hy_oas"],
+                          inputs["breadth_20d"],
+                          inputs["spy_vs_200dma_pct"],
+                          vix_thresholds=cfg["vix"],
+                          oas_thresholds=cfg["hy"])
+
+
+def _gauge_signature(result, key):
+    """What 'this input's vote' means per input: the gauge vote for the
+    three voters, the gate open/closed for the SPY input."""
+    if key == "spy_vs_200dma_pct":
+        return "gate_open" if result["gate"]["open"] else "gate_closed"
+    gauge = {"vix_5d": "vix_5d_avg", "hy_oas": "hy_spread",
+             "breadth_20d": "breadth"}[key]
+    return result["votes"][gauge]
+
+
+def _nearest_flip(inputs, key, coarse=0.25, tol=1e-3):
+    """Distance from inputs[key] to the nearest value that changes that
+    input's vote/gate — found by PROBING compute_regime (coarse scan out
+    from the current value, then bisection), never by reading thresholds.
+    Returns None if no flip inside the search domain, else a dict with the
+    signed distance, boundary, resulting vote, and whether the STATE flips.
+    """
+    base = _regime_probe(inputs)
+    base_sig = _gauge_signature(base, key)
+    lo, hi = _GAUGE_LAB_DOMAINS[key]
+    v0 = inputs[key]
+    candidates = []
+    for direction in (1.0, -1.0):
+        limit = hi if direction > 0 else lo
+        prev = v0
+        cur = v0
+        found = None
+        while (cur < limit) if direction > 0 else (cur > limit):
+            cur = min(cur + coarse, hi) if direction > 0 \
+                else max(cur - coarse, lo)
+            probe = dict(inputs, **{key: cur})
+            if _gauge_signature(_regime_probe(probe), key) != base_sig:
+                found = (prev, cur)
+                break
+            prev = cur
+        if not found:
+            continue
+        a, b = found                       # same-vote side, flipped side
+        while abs(b - a) > tol:
+            mid = (a + b) / 2.0
+            probe = dict(inputs, **{key: mid})
+            if _gauge_signature(_regime_probe(probe), key) != base_sig:
+                b = mid
+            else:
+                a = mid
+        flipped = _regime_probe(dict(inputs, **{key: b}))
+        candidates.append({
+            "distance": round(b - v0, 3),
+            "boundary_value": round(b, 3),
+            "from": base_sig,
+            "to": _gauge_signature(flipped, key),
+            "state_if_flipped": flipped["state"],
+            "state_flips": flipped["state"] != base["state"],
+        })
+    if not candidates:
+        return None
+    return min(candidates, key=lambda c: abs(c["distance"]))
+
+
+@app.route("/api/regime/simulate", methods=["POST"])
+def regime_simulate():
+    """Gauge Lab (PER-508 item 24a): slider values through the REAL
+    compute_regime (Build 4 extraction — production delegates to the same
+    function). The lab owns zero math; even the flip distances are found
+    by probing this function, not by hardcoding thresholds."""
+    try:
+        body = request.get_json(silent=True)
+    except Exception:
+        body = None
+    if not isinstance(body, dict):
+        return jsonify({"status": "error", "error": "JSON body required"}), 400
+
+    inputs = {}
+    try:
+        for key, (lo, hi) in _GAUGE_LAB_DOMAINS.items():
+            v = body.get(key)
+            if v is None:
+                inputs[key] = None          # simulates an unavailable gauge
+                continue
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                raise ValueError(f"{key} must be a number or null")
+            if not (lo <= v <= hi):
+                raise ValueError(f"{key} out of range [{lo}, {hi}]")
+            inputs[key] = float(v)
+    except ValueError as e:
+        return jsonify({"status": "error", "error": str(e)}), 400
+
+    result = _regime_probe(inputs)
+    votes = result["votes"]
+    counts = {s: sum(1 for v in votes.values() if v == s)
+              for s in ("risk_on", "caution", "risk_off", "unavailable")}
+    flips = {key: (None if inputs[key] is None
+                   else _nearest_flip(inputs, key))
+             for key in _GAUGE_LAB_DOMAINS}
+    return jsonify({
+        "status": "success",
+        "state": result["state"],
+        "action_line": _regime_actions().get(result["state"], ""),
+        "votes": votes,
+        "counts": counts,
+        "gate": result["gate"],
+        "flip_distances": flips,
+    })
+
+
 @app.route("/api/history")
 def get_history():
     """Return search history."""

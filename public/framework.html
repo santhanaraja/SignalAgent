@@ -141,6 +141,40 @@
   .ps-note{color:var(--dim);font-size:12px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;}
 
   /* Responsive */
+  /* ===== Lab panels (PER-508 item 24) — Score Lab visual lineage ===== */
+  .lab-panel{background:var(--surface);border:1px dashed var(--border);border-radius:10px;margin-top:12px;}
+  .lab-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;cursor:pointer;user-select:none;}
+  .lab-head h3{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);}
+  .lab-caret{color:var(--dim);font-size:11px;transition:transform .15s;}
+  .lab-panel.open .lab-caret{transform:rotate(90deg);}
+  .lab-sub{font-size:10px;color:var(--dim);}
+  .lab-seed{font-size:10px;background:rgba(88,166,255,.12);color:var(--blue);padding:3px 10px;border-radius:12px;display:none;}
+  .lab-seed.mismatch{background:rgba(210,153,34,.12);color:var(--yellow);}
+  .lab-reset{font-size:10px;background:var(--bg);border:1px solid var(--border);color:var(--dim);padding:3px 10px;border-radius:12px;cursor:pointer;display:none;}
+  .lab-reset:hover{color:var(--text);border-color:var(--blue);}
+  .lab-body{display:none;padding:0 16px 16px;}
+  .lab-panel.open .lab-body{display:block;}
+  .lab-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:20px;}
+  .lab-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .lab-row>label{width:110px;flex-shrink:0;font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;}
+  .lab-row input[type=range]{flex:1;accent-color:var(--blue);min-width:50px;}
+  .lab-num{width:76px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 6px;font-family:'SF Mono',monospace;font-size:12px;text-align:right;}
+  .lab-num:focus{outline:none;border-color:var(--blue);}
+  .lab-vote{padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;text-transform:uppercase;}
+  .lab-vote.risk_on{background:rgba(63,185,80,.15);color:var(--green);}
+  .lab-vote.caution{background:rgba(210,153,34,.15);color:var(--yellow);}
+  .lab-vote.risk_off{background:rgba(248,81,73,.15);color:var(--red);}
+  .lab-vote.unavailable{background:var(--bg);color:var(--dim);}
+  .lab-ladder{font-size:11px;color:var(--dim);font-family:'SF Mono',monospace;margin:10px 0;line-height:1.7;}
+  .lab-state{font-size:22px;font-weight:700;}
+  .lab-action{font-size:11px;color:var(--dim);margin-top:4px;}
+  .lab-flips{margin-top:12px;border-top:1px solid var(--border);padding-top:8px;}
+  .lab-flips .fl{font-size:11px;font-family:'SF Mono',monospace;margin:3px 0;color:var(--text);}
+  .lab-flips .fl b{font-weight:700;}
+  .lab-flips .fl .st{color:var(--orange);}
+  .lab-note{font-size:10px;color:var(--dim);margin-top:8px;}
+  @media(max-width:700px){.lab-grid{grid-template-columns:1fr;}}
+
   @media(max-width:768px){
     .content{padding:12px 16px;}
     .gauges-grid{grid-template-columns:1fr;}
@@ -180,6 +214,58 @@
   <a href="history.html">History &amp; Changes</a>
   <a href="framework.html" class="active">Framework</a>
   <a href="architecture.html">Architecture</a>
+</div>
+
+<!-- Lab holding pen: persistent DOM, re-slotted into the rendered layout
+     by slotLabs() so slider state survives refreshes (PER-508 item 24) -->
+<div id="labHold" style="display:none;">
+  <div class="lab-panel" id="gaugeLab">
+    <div class="lab-head" onclick="labToggle('gaugeLab')">
+      <span class="lab-caret">&#9656;</span>
+      <h3>&#9878;&#65039; Gauge Lab</h3>
+      <span class="lab-sub">interactive regime calculator — live compute_regime(), zero client math</span>
+      <span class="lab-seed" id="glSeed"></span>
+      <button class="lab-reset" id="glReset" onclick="event.stopPropagation();glResetToSeed()">reset to live</button>
+    </div>
+    <div class="lab-body">
+      <div class="lab-grid">
+        <div>
+          <div class="lab-row">
+            <label for="glVix">VIX 5d avg</label>
+            <input type="range" id="glVix" min="10" max="40" step="0.1" value="16" oninput="glSync('Vix');glSchedule();">
+            <input type="number" class="lab-num" id="glVixNum" min="10" max="40" step="0.1" value="16" oninput="glSync('Vix',true);glSchedule();" onchange="glClamp(this)">
+            <span class="lab-vote unavailable" id="glVoteVix">—</span>
+          </div>
+          <div class="lab-row">
+            <label for="glOas">HY OAS %</label>
+            <input type="range" id="glOas" min="1" max="12" step="0.05" value="2.8" oninput="glSync('Oas');glSchedule();">
+            <input type="number" class="lab-num" id="glOasNum" min="1" max="12" step="0.05" value="2.8" oninput="glSync('Oas',true);glSchedule();" onchange="glClamp(this)">
+            <span class="lab-vote unavailable" id="glVoteOas">—</span>
+          </div>
+          <div class="lab-row">
+            <label for="glBr">Breadth 20d %</label>
+            <input type="range" id="glBr" min="-3" max="3" step="0.01" value="0.6" oninput="glSync('Br');glSchedule();">
+            <input type="number" class="lab-num" id="glBrNum" min="-3" max="3" step="0.01" value="0.6" oninput="glSync('Br',true);glSchedule();" onchange="glClamp(this)">
+            <span class="lab-vote unavailable" id="glVoteBr">—</span>
+          </div>
+          <div class="lab-row">
+            <label for="glSpy">SPY vs 200DMA %</label>
+            <input type="range" id="glSpy" min="-20" max="20" step="0.1" value="9" oninput="glSync('Spy');glSchedule();">
+            <input type="number" class="lab-num" id="glSpyNum" min="-20" max="20" step="0.1" value="9" oninput="glSync('Spy',true);glSchedule();" onchange="glClamp(this)">
+            <span class="lab-vote unavailable" id="glVoteSpy">—</span>
+          </div>
+          <div class="lab-note" id="glHyNote">HY input is OAS mode (FRED primary). The percentile fallback basis is a known limitation — noted, not simulated.</div>
+        </div>
+        <div>
+          <div class="lab-ladder" id="glLadder">—</div>
+          <div class="lab-state" id="glState">—</div>
+          <div class="lab-action" id="glAction"></div>
+          <div class="lab-flips" id="glFlips"></div>
+          <div class="lab-note" style="display:none;color:var(--red);" id="glError"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="content" id="mainContent">
@@ -284,6 +370,221 @@ async function pollStatus(){
   }
 }
 
+/* ===== Gauge Lab (PER-508 item 24a) — Score Lab laws apply ============
+   (1) zero client math: every state/vote/flip-distance below comes from
+   POST /api/regime/simulate, which calls the real compute_regime();
+   (2) pre-seeded from the live artifact with a parity chip;
+   (3) twisted inputs are visibly flagged. ================================ */
+let glTimer=null, glAbort=null, glSeedState=null, glSeededFor=null;
+
+function labToggle(id){document.getElementById(id).classList.toggle('open');}
+
+function parkLabs(){
+  const hold=document.getElementById('labHold');
+  if(!hold)return;
+  for(const id of ['gaugeLab','positionLab']){
+    const lab=document.getElementById(id);
+    if(lab&&lab.parentElement!==hold)hold.appendChild(lab);
+  }
+}
+
+function slotLabs(){
+  const slot=document.getElementById('gaugeLabSlot');
+  const lab=document.getElementById('gaugeLab');
+  if(slot&&lab&&lab.parentElement!==slot)slot.appendChild(lab);
+  if(typeof slotPositionLab==='function')slotPositionLab();
+}
+
+function glSync(which,fromNum){
+  const range=document.getElementById('gl'+which);
+  const num=document.getElementById('gl'+which+'Num');
+  if(fromNum){range.value=num.value;}else{num.value=range.value;}
+}
+
+function glNum(numId,rangeId){
+  const el=document.getElementById(numId);
+  let v=parseFloat(el.value);
+  if(isNaN(v))v=parseFloat(document.getElementById(rangeId).value)||0;
+  return Math.min(parseFloat(el.max),Math.max(parseFloat(el.min),v));
+}
+
+function glInputs(){
+  return {
+    vix_5d:glNum('glVixNum','glVix'),
+    hy_oas:glNum('glOasNum','glOas'),
+    breadth_20d:glNum('glBrNum','glBr'),
+    spy_vs_200dma_pct:glNum('glSpyNum','glSpy'),
+  };
+}
+
+function glSchedule(){clearTimeout(glTimer);glTimer=setTimeout(glSimulate,250);}
+
+async function glSimulate(){
+  const inputs=glInputs();
+  if(glAbort)glAbort.abort();
+  glAbort=new AbortController();
+  try{
+    const r=await fetch('/api/regime/simulate',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(inputs),signal:glAbort.signal});
+    const d=await r.json();
+    if(d.status!=='success')throw new Error(d.error||'simulate failed');
+    glRender(d);
+  }catch(e){
+    if(e.name==='AbortError')return;
+    const el=document.getElementById('glError');
+    el.textContent='Simulate failed — '+e.message;el.style.display='block';
+  }
+}
+
+const GL_STATE_COLORS={'Risk-on / Trending':'var(--green)','Risk-on / Choppy':'var(--yellow)','Caution':'var(--orange)','Risk-off':'var(--red)'};
+const GL_INPUT_LABELS={vix_5d:'VIX 5d',hy_oas:'HY OAS',breadth_20d:'breadth',spy_vs_200dma_pct:'SPY/200DMA'};
+
+function glRender(d){
+  document.getElementById('glError').style.display='none';
+  const votePairs=[['glVoteVix','vix_5d_avg'],['glVoteOas','hy_spread'],['glVoteBr','breadth']];
+  for(const [id,g] of votePairs){
+    const el=document.getElementById(id);
+    el.textContent=(d.votes[g]||'—').replace('_',' ');
+    el.className='lab-vote '+(d.votes[g]||'unavailable');
+  }
+  const spyEl=document.getElementById('glVoteSpy');
+  spyEl.textContent=d.gate.open?'gate open':'gate shut';
+  spyEl.className='lab-vote '+(d.gate.open?'risk_on':'risk_off');
+
+  // ladder arithmetic, spelled out (values from the server, logic display-only)
+  const c=d.counts;
+  let ladder=`${c.risk_on}/3 risk-on · ${c.caution} caution · ${c.risk_off} risk-off`
+    +(c.unavailable?` · ${c.unavailable} dark`:'');
+  const quals=[];
+  if(c.risk_off>=1)quals.push('any risk-off vote caps at Caution');
+  if(c.unavailable>=2)quals.push('2+ dark voters cap at Caution');
+  if(d.gate.capped)quals.push('backdrop gate CLOSED — risk-on capped at Caution');
+  else quals.push(`gate ${d.gate.open?'open':'closed'}`);
+  ladder+='<br>'+quals.join(' · ');
+  document.getElementById('glLadder').innerHTML=ladder;
+
+  const st=document.getElementById('glState');
+  st.textContent=d.state;
+  st.style.color=GL_STATE_COLORS[d.state]||'var(--text)';
+  document.getElementById('glAction').textContent=d.action_line||'';
+
+  // flip distances — the pivotal-voter readout
+  let fl='';
+  for(const [key,f] of Object.entries(d.flip_distances||{})){
+    if(!f)continue;
+    const lbl=GL_INPUT_LABELS[key]||key;
+    const dir=f.distance>=0?'+':'';
+    fl+=`<div class="fl"><b>${lbl}</b>: ${dir}${f.distance} from flipping `
+      +`${f.from.replace('_',' ')} → ${f.to.replace('_',' ')}`
+      +(f.state_flips?` <span class="st">· regime would print ${f.state_if_flipped}</span>`:' · state unchanged')
+      +`</div>`;
+  }
+  document.getElementById('glFlips').innerHTML=fl?'<b style="font-size:10px;color:var(--dim);text-transform:uppercase;">Flip distances</b>'+fl:'';
+
+  // parity chip (law 2) + twist flag (law 3)
+  const chip=document.getElementById('glSeed');
+  if(glSeedState&&chip.style.display!=='none'){
+    const untouched=JSON.stringify(glInputs())===JSON.stringify(glSeedState.inputs);
+    if(!untouched){
+      chip.textContent=`seeded from live (${glSeedState.liveState}) — twisted`;
+      chip.classList.remove('mismatch');
+    }else if(d.state===glSeedState.liveState){
+      chip.textContent=`seeded from live — reproduces ${glSeedState.liveState} ✓${glSeedState.noted?` (${glSeedState.noted} vote-matched)`:''}`;
+      chip.classList.remove('mismatch');
+    }else{
+      chip.textContent=`seeded from live — engine ${d.state} vs live ${glSeedState.liveState} (rounding at a boundary)`;
+      chip.classList.add('mismatch');
+    }
+  }
+}
+
+function glClamp(el){
+  const v=parseFloat(el.value);
+  if(isNaN(v))return;
+  el.value=Math.min(parseFloat(el.max),Math.max(parseFloat(el.min),v));
+}
+
+function glSet(vals){
+  // clamp to the control bounds so the DISPLAY always equals what is
+  // simulated (glNum clamps the POST; an unclamped box showing 45 while
+  // the engine ran 40 lied about flip distances — review finding)
+  for(const [k,ids] of Object.entries({vix_5d:['glVix','glVixNum'],hy_oas:['glOas','glOasNum'],breadth_20d:['glBr','glBrNum'],spy_vs_200dma_pct:['glSpy','glSpyNum']})){
+    if(vals[k]==null)continue;
+    const num=document.getElementById(ids[1]);
+    const v=Math.min(parseFloat(num.max),Math.max(parseFloat(num.min),vals[k]));
+    document.getElementById(ids[0]).value=v;
+    num.value=v;
+  }
+}
+
+function glSeedFromLive(){
+  // derive + apply the live seed unconditionally (reset button path)
+  if(!DATA||!DATA.regime)return false;
+  const g=DATA.regime.gauges||{};
+  const gate=DATA.regime.backdrop_gate||{};
+  const noted=[];
+  const hyG=g.hy_spread||{};
+  let hy=null;
+  if(hyG.source==='FRED'&&hyG.value!=null){
+    hy=hyG.value;
+  }else{
+    // live gauge runs the HYG/IEF fallback (ratio value, not an OAS %) —
+    // seed an OAS that reproduces the recorded VOTE through the real
+    // thresholds; the chip says so (v1 limitation, documented)
+    hy={risk_on:2.0,caution:3.5,risk_off:5.0}[hyG.signal];
+    if(hy!=null)noted.push('HY');
+  }
+  // breadth basis guard (review finding): the S5FI primary is a 0-100
+  // "% above 50DMA" — feeding it into the ±% ratio-change input would
+  // simulate garbage. Only the RSP/SPY basis seeds directly.
+  const brG=g.breadth||{};
+  let br=null;
+  if(brG.source==='RSP/SPY fallback'&&brG.value!=null){
+    br=brG.value;
+  }else{
+    br={risk_on:1.0,caution:0.0,risk_off:-1.0}[brG.signal];
+    if(br!=null)noted.push('breadth');
+  }
+  const seed={
+    vix_5d:(g.vix_5d_avg||{}).value,
+    hy_oas:hy,
+    breadth_20d:br,
+    spy_vs_200dma_pct:gate.value,
+  };
+  if(Object.values(seed).some(v=>v==null))return false;  // partial artifact
+  glSet(seed);
+  glSeedState={inputs:glInputs(),liveState:DATA.regime.regime,
+               noted:noted.join(', ')};
+  const chip=document.getElementById('glSeed');
+  chip.style.display='inline-block';
+  chip.textContent='seeding from live…';
+  document.getElementById('glReset').style.display='inline-block';
+  glSimulate();
+  return true;
+}
+
+function seedGaugeLabIfFresh(){
+  // auto-seed once per artifact generation — but NEVER over a twisted
+  // experiment (review finding: a Run Framework completing mid-experiment
+  // silently erased the user's inputs). A stale twist keeps its inputs;
+  // the chip says the live artifact moved on; "reset to live" reseeds.
+  if(!DATA||!DATA.regime||DATA.generated_at===glSeededFor)return;
+  glSeededFor=DATA.generated_at;
+  if(glSeedState
+     &&JSON.stringify(glInputs())!==JSON.stringify(glSeedState.inputs)){
+    const chip=document.getElementById('glSeed');
+    chip.textContent=`twisted — live artifact updated; "reset to live" reseeds`;
+    chip.classList.remove('mismatch');
+    return;
+  }
+  glSeedFromLive();
+}
+
+function glResetToSeed(){
+  glSeedFromLive();     // reseed from the CURRENT artifact, as labeled
+}
+
 /* ===== Position Signals panel (1B engine) ===== */
 function psBadge(state){
   const map={HELD:'ps-held',EXIT_FIRED:'ps-exit-fired',WATCHING:'ps-watching',
@@ -379,7 +680,16 @@ function renderPositionsPanel(){
 
 function render(){
   if(!DATA){return;}
-  document.getElementById('emptyState').style.display='none';
+  // Park the persistent lab nodes back into the pen BEFORE the innerHTML
+  // wipe destroys their slots — the wipe would take them with it (review
+  // finding: the lab died on every completed re-render).
+  parkLabs();
+  // Null-guard: #emptyState lives inside mainContent and the first
+  // render's innerHTML wipe destroys it — the bare dereference threw on
+  // every re-render and silently broke Refresh since the page shipped
+  // (pre-existing bug surfaced by the item-24a review).
+  const es=document.getElementById('emptyState');
+  if(es)es.style.display='none';
   document.getElementById('tsBar').textContent='Generated: '+fmtEST(DATA.generated_at);
 
   const c=document.getElementById('mainContent');
@@ -474,7 +784,7 @@ function render(){
       <div class="gauge-detail">Macro input — informational, does not vote${m.source?` &middot; Source: ${m.source}`:''}</div>
     </div>`;
   }
-  html+=`</div></div>`;
+  html+=`</div><div id="gaugeLabSlot"></div></div>`;
 
   // ===== LAYER 1.5: POSITION SIGNALS (1B engine, PER-508 backlog) =====
   html+=renderPositionsPanel();
@@ -624,6 +934,8 @@ function render(){
   </div>`;
 
   c.innerHTML=html;
+  slotLabs();      // re-home the persistent lab DOM nodes (state survives)
+  seedGaugeLabIfFresh();
 
   // Fetch and render history
   loadHistory();
