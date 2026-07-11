@@ -65,6 +65,138 @@ _SEVERITY = {
 }
 
 
+# ---------------------------------------------------------------------------
+# The 5-condition assessment as a pure function (PER-508 item 24b)
+#
+# The ONLY implementation of the condition evaluators, the state map, and
+# the extension guard. PositionSignalEngine.evaluate computes the scalar
+# inputs from price history and delegates every decision here; the Position
+# Lab endpoint (/api/position/simulate) feeds user inputs through the same
+# function — a second copy of the rules is structurally impossible (Score
+# Lab precedent). Threshold defaults mirror config.yaml positions; the
+# engine passes its config values explicitly.
+# ---------------------------------------------------------------------------
+
+def _reclaim(above, all_five):
+    if not above:
+        return WATCHING
+    return RE_ENTRY_READY if all_five else RE_ENTRY_ARMING
+
+
+def next_state(prev, kind, above, all_five):
+    if prev in (None, ""):
+        if kind == "holding":
+            return HELD if above else EXIT_FIRED
+        return _reclaim(above, all_five)
+    if prev == HELD:
+        return HELD if above else EXIT_FIRED
+    # EXIT_FIRED / WATCHING / RE_ENTRY_ARMING / RE_ENTRY_READY
+    state = _reclaim(above, all_five)
+    # positions.json is authoritative for what is held: a HOLDING whose
+    # re-entry conditions complete returns to HELD (live stop resumes).
+    # Without this, HELD is unreachable forever after one exit.
+    if state == RE_ENTRY_READY and kind == "holding":
+        return HELD
+    return state
+
+
+def assess_position(close, sma20, sma20_5d_ago, atr14,
+                    consecutive_closes_above, regime_state, theme_qualified,
+                    kind, *, prev_state=None, theme_detail=None,
+                    confirmation_closes=2, atr_mult=0.5,
+                    extension_guard_max=1.8, slope_lookback_days=5):
+    """The 5 conditions + state + extension guard on scalar inputs.
+
+    Returns {state, conditions{1..5}, conditions_met, all_conditions_met,
+    extension_pct, extension_atr[, extension_guard][, a_plus_only]
+    [, distance_to_sma20_pct]} exactly as evaluate() embeds them.
+    prev_state=None gives the stateless assessment the lab uses.
+    """
+    above_now = close > sma20
+    atr_break = above_now and atr14 is not None \
+        and close > sma20 + atr_mult * atr14
+
+    c1 = {
+        "name": "trigger",
+        "met": above_now,
+        "detail": f"close {close:.2f} {'above' if above_now else 'below'}"
+                  f" SMA20 {sma20:.2f}",
+    }
+    c2_met = consecutive_closes_above >= confirmation_closes or atr_break
+    if atr_break:
+        c2_how = (f"close {close:.2f} > SMA20 + "
+                  f"{atr_mult}*ATR14 ({sma20 + atr_mult * atr14:.2f})")
+    else:
+        c2_how = (f"{min(consecutive_closes_above, confirmation_closes)}"
+                  f"/{confirmation_closes} consecutive closes above SMA20")
+    c2 = {"name": "confirmation", "met": c2_met, "detail": c2_how,
+          "consecutive_closes_above": consecutive_closes_above,
+          "atr14": None if atr14 is None else round(atr14, 2)}
+
+    if regime_state == "Risk-on / Trending":
+        c3 = {"met": True, "mode": "full",
+              "detail": "regime Risk-on / Trending — full clearance"}
+    elif regime_state == "Risk-on / Choppy":
+        c3 = {"met": True, "mode": "conditional",
+              "detail": "regime Risk-on / Choppy — conditional, A+ setups only"}
+    else:
+        c3 = {"met": False, "mode": "blocked",
+              "detail": f"regime {regime_state} — re-entry blocked"}
+    c3["name"] = "regime_gate"
+
+    slope_ok = sma20 >= sma20_5d_ago
+    c4 = {
+        "name": "slope",
+        "met": slope_ok,
+        "detail": f"SMA20 {sma20:.2f} vs {slope_lookback_days}d ago "
+                  f"{sma20_5d_ago:.2f} ({'flat/rising' if slope_ok else 'falling'})",
+    }
+
+    c5 = {
+        "name": "thesis",
+        "met": bool(theme_qualified),
+        "detail": theme_detail if theme_detail is not None else
+                  f"theme {'qualified' if theme_qualified else 'not qualified'}",
+    }
+
+    conditions = {"1_trigger": c1, "2_confirmation": c2,
+                  "3_regime_gate": c3, "4_slope": c4, "5_thesis": c5}
+    all_five = all(c["met"] for c in conditions.values())
+
+    state = next_state(prev_state, kind, above_now, all_five)
+
+    ext_pct = (close - sma20) / sma20 * 100
+    ext_atr = None if not atr14 else (close - sma20) / atr14
+
+    # Extension guard (PER-508 item 20): a WATCHLIST name cannot go
+    # RE_ENTRY_READY while extended beyond the ceiling. Conditions 1-2
+    # confirm a reclaim NEAR the mean; a name that ran vertically away
+    # from it passes them trivially. Holdings exempt.
+    extension_guard = None
+    if (kind == "watching" and state == RE_ENTRY_READY
+            and ext_atr is not None and ext_atr > extension_guard_max):
+        state = EXTENDED_HOLD
+        extension_guard = (f"extension {round(ext_atr, 2)}×ATR > "
+                           f"{extension_guard_max}× — re-entry suppressed")
+
+    result = {
+        "state": state,
+        "conditions": conditions,
+        "conditions_met": sum(1 for c in conditions.values() if c["met"]),
+        "all_conditions_met": all_five,
+        "extension_pct": round(ext_pct, 2),
+        "extension_atr": None if ext_atr is None else round(ext_atr, 2),
+    }
+    if state == RE_ENTRY_READY and c3.get("mode") == "conditional":
+        result["a_plus_only"] = True
+    if extension_guard:
+        result["extension_guard"] = extension_guard
+    if not above_now:
+        result["distance_to_sma20_pct"] = round(
+            (close - sma20) / sma20 * 100, 2)
+    return result
+
+
 class PositionSignalEngine:
     """Evaluate the 5-condition re-entry rule per tracked ticker."""
 
@@ -137,80 +269,23 @@ class PositionSignalEngine:
                 break
             consec_above += 1
 
-        atr_break = above_now and atr is not None \
-            and last_close > sma_now + self.atr_mult * atr
-
-        c1 = {
-            "name": "trigger",
-            "met": above_now,
-            "detail": f"close {last_close:.2f} {'above' if above_now else 'below'}"
-                      f" SMA20 {sma_now:.2f}",
-        }
-        c2_met = consec_above >= self.confirmation_closes or atr_break
-        if atr_break:
-            c2_how = (f"close {last_close:.2f} > SMA20 + "
-                      f"{self.atr_mult}*ATR14 ({sma_now + self.atr_mult * atr:.2f})")
-        else:
-            c2_how = (f"{min(consec_above, self.confirmation_closes)}"
-                      f"/{self.confirmation_closes} consecutive closes above SMA20")
-        c2 = {"name": "confirmation", "met": c2_met, "detail": c2_how,
-              "consecutive_closes_above": consec_above,
-              "atr14": None if atr is None else round(atr, 2)}
-
-        if regime_state == "Risk-on / Trending":
-            c3 = {"met": True, "mode": "full",
-                  "detail": "regime Risk-on / Trending — full clearance"}
-        elif regime_state == "Risk-on / Choppy":
-            c3 = {"met": True, "mode": "conditional",
-                  "detail": "regime Risk-on / Choppy — conditional, A+ setups only"}
-        else:
-            c3 = {"met": False, "mode": "blocked",
-                  "detail": f"regime {regime_state} — re-entry blocked"}
-        c3["name"] = "regime_gate"
-
-        slope_ok = sma_now >= sma_then
-        c4 = {
-            "name": "slope",
-            "met": slope_ok,
-            "detail": f"SMA20 {sma_now:.2f} vs {self.slope_lookback}d ago "
-                      f"{sma_then:.2f} ({'flat/rising' if slope_ok else 'falling'})",
-        }
-
-        c5 = {
-            "name": "thesis",
-            "met": theme_status["met"],
-            "detail": theme_status["detail"],
-        }
+        # All condition/state/guard decisions live in assess_position
+        # (module-level pure, PER-508 item 24b) — evaluate only computes
+        # the scalar inputs from price history and re-attaches df-derived
+        # extras.
+        result = assess_position(
+            last_close, sma_now, sma_then, atr, consec_above, regime_state,
+            theme_status["met"], kind, prev_state=prev_state,
+            theme_detail=theme_status["detail"],
+            confirmation_closes=self.confirmation_closes,
+            atr_mult=self.atr_mult,
+            extension_guard_max=self.extension_guard_max,
+            slope_lookback_days=self.slope_lookback)
         if theme_status.get("no_theme_mapping"):
-            c5["no_theme_mapping"] = True
+            result["conditions"]["5_thesis"]["no_theme_mapping"] = True
 
-        conditions = {"1_trigger": c1, "2_confirmation": c2, "3_regime_gate": c3,
-                      "4_slope": c4, "5_thesis": c5}
-        all_five = all(c["met"] for c in conditions.values())
-
-        state = self._next_state(prev_state, kind, above_now, all_five)
-
-        ext_pct = (last_close - sma_now) / sma_now * 100
-        ext_atr = None if not atr else (last_close - sma_now) / atr
-
-        # Extension guard (PER-508 item 20): a WATCHLIST name cannot go
-        # RE_ENTRY_READY while extended beyond the ceiling. Conditions 1-2
-        # confirm a reclaim NEAR the mean; a name that ran vertically away
-        # from it passes them trivially (MRNA printed READY at 2.8xATR).
-        # The 5 conditions still evaluate and emit — the guard sits after
-        # them as a final gate on the READY state only. Holdings exempt:
-        # an extended HELD winner is trailing-stop territory, never
-        # force-exited here.
-        extension_guard = None
-        if (kind == "watching" and state == RE_ENTRY_READY
-                and ext_atr is not None
-                and ext_atr > self.extension_guard_max):
-            state = EXTENDED_HOLD
-            extension_guard = (f"extension {round(ext_atr, 2)}×ATR > "
-                               f"{self.extension_guard_max}× — re-entry suppressed")
-
-        result = {
-            "state": state,
+        state = result["state"]
+        result.update({
             "close": round(last_close, 2),
             # short MAs (PER-508 producer amendment): display-only inputs
             # for the assessment technicals; finite whenever sma20 is
@@ -218,45 +293,32 @@ class PositionSignalEngine:
             "sma5": round(float(close.rolling(5).mean().iloc[-1]), 2),
             "sma10": round(float(close.rolling(10).mean().iloc[-1]), 2),
             "sma20": round(sma_now, 2),
-            "extension_pct": round(ext_pct, 2),
-            "extension_atr": None if ext_atr is None else round(ext_atr, 2),
-            "conditions": conditions,
-            "conditions_met": sum(1 for c in conditions.values() if c["met"]),
-            "all_conditions_met": all_five,
+        })
+        # The EXACT simulate inputs this evaluation used — the Position Lab
+        # seeds from these verbatim (parity by construction; the display
+        # fields above are rounded and can flip a branch at a boundary).
+        result["assess_inputs"] = {
+            "close": last_close,
+            "sma20": sma_now,
+            "sma20_5d_ago": sma_then,
+            "atr14": atr,
+            "consecutive_closes_above": consec_above,
+            "regime_state": regime_state,
+            "theme_qualified": theme_status["met"],
+            "kind": kind,
         }
-        if state == RE_ENTRY_READY and c3.get("mode") == "conditional":
-            result["a_plus_only"] = True
-        if extension_guard:
-            result["extension_guard"] = extension_guard
-        if not above_now:
-            result["distance_to_sma20_pct"] = round(
-                (last_close - sma_now) / sma_now * 100, 2)
         # Effective stop for held names (and the stop that just fired)
         if state in (HELD, EXIT_FIRED):
             result["stop"] = self._stop_for(entry, sma_now)
         return result
 
     def _next_state(self, prev, kind, above, all_five):
-        if prev in (None, ""):
-            if kind == "holding":
-                return HELD if above else EXIT_FIRED
-            return self._reclaim_state(above, all_five)
-        if prev == HELD:
-            return HELD if above else EXIT_FIRED
-        # EXIT_FIRED / WATCHING / RE_ENTRY_ARMING / RE_ENTRY_READY
-        state = self._reclaim_state(above, all_five)
-        # positions.json is authoritative for what is held: a HOLDING whose
-        # re-entry conditions complete returns to HELD (live stop resumes).
-        # Without this, HELD is unreachable forever after one exit.
-        if state == RE_ENTRY_READY and kind == "holding":
-            return HELD
-        return state
+        """Delegates to the module-level pure state map (item 24b)."""
+        return next_state(prev, kind, above, all_five)
 
     @staticmethod
     def _reclaim_state(above, all_five):
-        if not above:
-            return WATCHING
-        return RE_ENTRY_READY if all_five else RE_ENTRY_ARMING
+        return _reclaim(above, all_five)
 
     @staticmethod
     def _atr(df, period):

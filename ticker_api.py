@@ -296,6 +296,7 @@ def _regime_cfg():
         with open(cfg_path) as f:
             cfg = yaml.safe_load(f)
         gauges = cfg["regime"]["gauges"]
+        pos = cfg.get("positions", {}) or {}
         _REGIME_CFG = {
             "actions": {s["name"]: s.get("action", "")
                         for s in cfg["regime"]["states"]},
@@ -303,6 +304,14 @@ def _regime_cfg():
                     gauges["vix_5d_avg"]["caution_threshold"]),
             "hy": (gauges["hy_spread"]["risk_on_threshold"],
                    gauges["hy_spread"]["caution_threshold"]),
+            # Position Lab (24b): the same config values the 1B engine
+            # passes to assess_position
+            "positions": {
+                "confirmation_closes": pos.get("confirmation_closes", 2),
+                "atr_mult": pos.get("atr_mult", 0.5),
+                "extension_guard_max": pos.get("extension_guard_max", 1.8),
+                "slope_lookback_days": pos.get("slope_lookback_days", 5),
+            },
         }
     return _REGIME_CFG
 
@@ -438,6 +447,64 @@ def regime_simulate():
         "gate": result["gate"],
         "flip_distances": flips,
     })
+
+
+@app.route("/api/position/simulate", methods=["POST"])
+def position_simulate():
+    """Position Lab (PER-508 item 24b): field values through the REAL
+    assess_position — the extracted 1B condition evaluators + extension
+    guard the production engine delegates to. Zero math here."""
+    try:
+        body = request.get_json(silent=True)
+    except Exception:
+        body = None
+    if not isinstance(body, dict):
+        return jsonify({"status": "error", "error": "JSON body required"}), 400
+
+    def _num(key, lo, hi, allow_null=False):
+        v = body.get(key)
+        if v is None and allow_null:
+            return None
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(f"{key} must be a number")
+        if not (lo <= v <= hi):
+            raise ValueError(f"{key} out of range [{lo}, {hi}]")
+        return float(v)
+
+    try:
+        close = _num("close", 0.01, 1e6)
+        sma20 = _num("sma20", 0.01, 1e6)
+        sma20_5d_ago = _num("sma20_5d_ago", 0.01, 1e6)
+        atr14 = _num("atr14", 0.0, 1e5, allow_null=True)
+        # subnormal ATR (e.g. 1e-320) divides to Infinity, which json.dumps
+        # emits as a bare token browsers cannot parse (review finding);
+        # anything below a tenth of a cent is "no ATR"
+        if atr14 is not None and atr14 < 1e-4:
+            atr14 = None
+        consec = body.get("consecutive_closes_above")
+        if isinstance(consec, bool) or not isinstance(consec, int) \
+                or not (0 <= consec <= 1000):
+            raise ValueError("consecutive_closes_above must be an integer 0-1000")
+        regime_state = body.get("regime_state")
+        if not isinstance(regime_state, str) or len(regime_state) > 50:
+            raise ValueError("regime_state must be a string")
+        theme_qualified = body.get("theme_qualified")
+        if not isinstance(theme_qualified, bool):
+            raise ValueError("theme_qualified must be a boolean")
+        kind = body.get("kind")
+        if kind not in ("holding", "watching"):
+            raise ValueError("kind must be 'holding' or 'watching'")
+    except ValueError as e:
+        return jsonify({"status": "error", "error": str(e)}), 400
+
+    from framework.position_signals import assess_position
+    result = assess_position(close, sma20, sma20_5d_ago, atr14, consec,
+                             regime_state, theme_qualified, kind,
+                             **_regime_cfg()["positions"])
+    return app.response_class(
+        response=json.dumps({"status": "success", **result},
+                            cls=NumpyEncoder),
+        mimetype="application/json")
 
 
 @app.route("/api/history")
