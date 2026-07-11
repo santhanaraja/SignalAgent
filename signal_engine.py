@@ -923,83 +923,58 @@ def check_thesis_breakers(group_name, group_info, group_stocks, macro_data, sp50
 # ============================================================
 # SIGNAL SCORING
 # ============================================================
-def score_stock(df, group_info=None):
-    """
-    Compute a composite score (0-100) and signal for a stock.
+# ---------------------------------------------------------------------------
+# Score component functions (PER-508 item 19)
+#
+# The ONLY implementation of the scoring formula. score_stock() computes
+# indicators from price data and delegates every point decision here;
+# /api/score/simulate (Score Lab) feeds user inputs through the same
+# functions. The user's hand-built calculator prototype drifted from
+# production before it shipped (pre-July-3 overextension branch: 81 vs 76)
+# — a second copy of these branches must never exist.
+# ---------------------------------------------------------------------------
 
-    Additive from a base of 50 across five components; per-component points
-    are returned in details["score_components"] ({rsi, macd, ma, ytd, vol})
-    for the dashboard's score-breakdown tooltip. See docs/scoring.md.
-    """
-    close = df["Close"]
-    score = 50
-    details = {}
-    components = {}
+SCORE_BASE = 50
+QUALIFIER_GATE = 50   # universe qualifier line (see docs/scoring.md)
 
-    # --- RSI ---
-    rsi = compute_rsi(close)
-    current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
-    details["rsi"] = round(current_rsi, 1)
+# Simulator vocabulary for the MACD component: (bullish, momentum_confirms).
+# "confirms" means the histogram moved WITH the cross side — rising while
+# bullish, falling while bearish.
+MACD_STATES = {
+    "bullish_rising":  (True, True),      # +13
+    "bullish":         (True, False),     # +8
+    "bearish":         (False, False),    # -8
+    "bearish_falling": (False, True),     # -13
+}
 
-    if current_rsi < 30:
-        pts = 15
-    elif current_rsi < 40:
-        pts = 8
-    elif current_rsi < 60:
-        pts = 3
-    elif current_rsi < 70:
-        pts = -3
-    elif current_rsi < 80:
-        pts = -8
-    else:
-        pts = -15
-    components["rsi"] = pts
-    score += pts
 
-    # --- MACD ---
-    macd_line, signal_line, histogram = compute_macd(close)
-    current_macd = macd_line.iloc[-1] if not pd.isna(macd_line.iloc[-1]) else 0
-    current_signal = signal_line.iloc[-1] if not pd.isna(signal_line.iloc[-1]) else 0
-    current_hist = histogram.iloc[-1] if not pd.isna(histogram.iloc[-1]) else 0
-    prev_hist = histogram.iloc[-2] if len(histogram) > 1 and not pd.isna(histogram.iloc[-2]) else 0
+def score_rsi_points(rsi):
+    if rsi < 30:
+        return 15
+    if rsi < 40:
+        return 8
+    if rsi < 60:
+        return 3
+    if rsi < 70:
+        return -3
+    if rsi < 80:
+        return -8
+    return -15
 
-    details["macd"] = round(current_macd, 3)
-    details["macd_signal"] = round(current_signal, 3)
-    details["macd_histogram"] = round(current_hist, 3)
 
-    if current_macd > current_signal:
-        pts = 8 + (5 if current_hist > prev_hist else 0)
-    else:
-        pts = -8 - (5 if current_hist < prev_hist else 0)
-    components["macd"] = pts
-    score += pts
+def score_macd_points(bullish, momentum_confirms):
+    if bullish:
+        return 8 + (5 if momentum_confirms else 0)
+    return -8 - (5 if momentum_confirms else 0)
 
-    # --- Moving Averages ---
-    # NOTE (known bias, kept as-is): when MA20/MA50 are NaN (fewer than
-    # 20/50 bars), they default to current_price, so all three comparisons
-    # below fail and a young listing takes the full -14. In practice the
-    # universe's 90-day history gate keeps such names out.
-    ma20, ma50, ma200 = compute_moving_averages(close)
-    current_price = close.iloc[-1]
-    ma20_val = ma20.iloc[-1] if not pd.isna(ma20.iloc[-1]) else current_price
-    ma50_val = ma50.iloc[-1] if not pd.isna(ma50.iloc[-1]) else current_price
-    ma200_val = ma200.iloc[-1] if not pd.isna(ma200.iloc[-1]) else None
 
-    details["price"] = round(current_price, 2)
-    details["ma20"] = round(ma20_val, 2)
-    details["ma50"] = round(ma50_val, 2)
-    details["ma200"] = round(ma200_val, 2) if ma200_val else None
+def score_ma_points(above_ma20, above_ma50, ma20_gt_ma50):
+    return (4 if above_ma20 else -4) \
+        + (6 if above_ma50 else -6) \
+        + (4 if ma20_gt_ma50 else -4)
 
-    pts = (4 if current_price > ma20_val else -4) \
-        + (6 if current_price > ma50_val else -6) \
-        + (4 if ma20_val > ma50_val else -4)
-    components["ma"] = pts
-    score += pts
 
-    # --- YTD Momentum ---
-    ytd_return = compute_ytd_return(df)
-    details["ytd_return"] = ytd_return
-
+def score_ytd_points(ytd_return):
     if ytd_return > 50:
         pts = 8
     elif ytd_return > 20:
@@ -1019,40 +994,144 @@ def score_stock(df, group_info=None):
         pts -= 15
     elif ytd_return > 100:
         pts -= 10
-    components["ytd"] = pts
-    score += pts
+    return pts
+
+
+def score_vol_points(vol_ratio):
+    if vol_ratio > 1.5:
+        return 3
+    if vol_ratio < 0.7:
+        return -3
+    return 0
+
+
+def compose_score(components):
+    """Clamped composite from the per-component points dict."""
+    return max(0, min(100, SCORE_BASE + sum(components.values())))
+
+
+def score_signal_band(score):
+    if score >= 75:
+        return "strong-buy"
+    if score >= 60:
+        return "buy"
+    if score >= 45:
+        return "hold"
+    if score >= 30:
+        return "sell"
+    return "strong-sell"
+
+
+def simulate_score(rsi, macd_state, above_ma20, above_ma50, ma20_gt_ma50,
+                   ytd_pct, vol_ratio):
+    """Score Lab entry point: user inputs -> the real scoring functions.
+
+    Returns (score, band, components) exactly as score_stock would produce
+    for a stock exhibiting these indicator values.
+    """
+    bullish, confirms = MACD_STATES[macd_state]
+    components = {
+        "rsi": score_rsi_points(rsi),
+        "macd": score_macd_points(bullish, confirms),
+        "ma": score_ma_points(above_ma20, above_ma50, ma20_gt_ma50),
+        "ytd": score_ytd_points(ytd_pct),
+        "vol": score_vol_points(vol_ratio),
+    }
+    score = compose_score(components)
+    return score, score_signal_band(score), components
+
+
+def score_stock(df, group_info=None):
+    """
+    Compute a composite score (0-100) and signal for a stock.
+
+    Additive from a base of 50 across five components; per-component points
+    are returned in details["score_components"] ({rsi, macd, ma, ytd, vol})
+    for the dashboard's score-breakdown tooltip. See docs/scoring.md.
+    All point decisions live in the score_*_points functions above — shared
+    with /api/score/simulate, never duplicated.
+    """
+    close = df["Close"]
+    details = {}
+    components = {}
+
+    # --- RSI ---
+    rsi = compute_rsi(close)
+    current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
+    details["rsi"] = round(current_rsi, 1)
+    components["rsi"] = score_rsi_points(current_rsi)
+
+    # --- MACD ---
+    macd_line, signal_line, histogram = compute_macd(close)
+    current_macd = macd_line.iloc[-1] if not pd.isna(macd_line.iloc[-1]) else 0
+    current_signal = signal_line.iloc[-1] if not pd.isna(signal_line.iloc[-1]) else 0
+    current_hist = histogram.iloc[-1] if not pd.isna(histogram.iloc[-1]) else 0
+    prev_hist = histogram.iloc[-2] if len(histogram) > 1 and not pd.isna(histogram.iloc[-2]) else 0
+
+    details["macd"] = round(current_macd, 3)
+    details["macd_signal"] = round(current_signal, 3)
+    details["macd_histogram"] = round(current_hist, 3)
+
+    bullish = current_macd > current_signal
+    confirms = (current_hist > prev_hist) if bullish else (current_hist < prev_hist)
+    macd_state = next(k for k, v in MACD_STATES.items() if v == (bullish, confirms))
+    components["macd"] = score_macd_points(bullish, confirms)
+
+    # --- Moving Averages ---
+    # NOTE (known bias, kept as-is): when MA20/MA50 are NaN (fewer than
+    # 20/50 bars), they default to current_price, so all three comparisons
+    # below fail and a young listing takes the full -14. In practice the
+    # universe's 90-day history gate keeps such names out.
+    ma20, ma50, ma200 = compute_moving_averages(close)
+    current_price = close.iloc[-1]
+    ma20_val = ma20.iloc[-1] if not pd.isna(ma20.iloc[-1]) else current_price
+    ma50_val = ma50.iloc[-1] if not pd.isna(ma50.iloc[-1]) else current_price
+    ma200_val = ma200.iloc[-1] if not pd.isna(ma200.iloc[-1]) else None
+
+    details["price"] = round(current_price, 2)
+    details["ma20"] = round(ma20_val, 2)
+    details["ma50"] = round(ma50_val, 2)
+    details["ma200"] = round(ma200_val, 2) if ma200_val else None
+
+    components["ma"] = score_ma_points(current_price > ma20_val,
+                                       current_price > ma50_val,
+                                       ma20_val > ma50_val)
+
+    # --- YTD Momentum ---
+    ytd_return = compute_ytd_return(df)
+    details["ytd_return"] = ytd_return
+    components["ytd"] = score_ytd_points(ytd_return)
 
     # --- Volume ---
     vol_ratio = compute_volume_trend(df)
     details["volume_ratio"] = vol_ratio
-    if vol_ratio > 1.5:
-        pts = 3
-    elif vol_ratio < 0.7:
-        pts = -3
-    else:
-        pts = 0
-    components["vol"] = pts
-    score += pts
+    components["vol"] = score_vol_points(vol_ratio)
 
     # --- Momentum Metrics ---
     momentum = compute_momentum_metrics(df)
     details.update(momentum)
 
-    score = max(0, min(100, score))
+    score = compose_score(components)
     details["composite_score"] = score
     details["score_components"] = components
 
-    if score >= 75:
-        signal = "strong-buy"
-    elif score >= 60:
-        signal = "buy"
-    elif score >= 45:
-        signal = "hold"
-    elif score >= 30:
-        signal = "sell"
-    else:
-        signal = "strong-sell"
+    # The EXACT simulate_score inputs this run scored — Score Lab seeds from
+    # these verbatim, so a pre-seeded ticker reproduces its score by
+    # construction. The display fields above are rounded AFTER scoring
+    # (rsi 1dp, price/MAs 2dp) and can flip a branch at a boundary; these
+    # cannot. ytd/vol are rounded inside their compute functions pre-scoring,
+    # so they are already exact.
+    details["score_inputs"] = {
+        "rsi": float(current_rsi),
+        "macd_state": macd_state,
+        "above_ma20": bool(current_price > ma20_val),
+        "above_ma50": bool(current_price > ma50_val),
+        "ma20_gt_ma50": bool(ma20_val > ma50_val),
+        "ytd_pct": ytd_return,
+        "vol_ratio": vol_ratio,
+    }
 
+    signal = score_signal_band(score)
     details["signal"] = signal
     return score, signal, details
 
@@ -1961,6 +2040,7 @@ def run_engine():
                     "days_to_earnings": days_to_earnings(earnings_map.get(ticker)),
                     "score": sig["score"],
                     "score_components": d.get("score_components"),
+                    "score_inputs": d.get("score_inputs"),
                     "signal": sig["signal"],
                     "ytd_return": d.get("ytd_return", 0),
                     "price": d.get("price", 0),

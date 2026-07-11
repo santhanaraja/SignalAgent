@@ -18,6 +18,9 @@ from signal_engine import (
     fetch_data,
     fetch_fundamentals_yfinance,
     score_stock,
+    simulate_score,
+    MACD_STATES,
+    QUALIFIER_GATE,
     compute_trade_signal,
     compute_swing_trade_signal,
     compute_intraday_trade_signal,
@@ -150,6 +153,7 @@ def _analyze_ticker(symbol):
         "score": score,
         "signal": signal,
         "score_components": details.get("score_components"),
+        "score_inputs": details.get("score_inputs"),
         "trade_signal": trade_sig,
         "trade_reasoning": trade_reason,
         "group_context": group_ctx,
@@ -222,6 +226,59 @@ def search_ticker(symbol):
         )
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/score/simulate", methods=["POST"])
+def score_simulate():
+    """Score Lab (PER-508 item 19): feed slider values through the REAL
+    score_stock component functions. The page owns zero math — a drifted
+    hand-mirrored formula (81 vs production 76 at YTD 209%) is why this
+    endpoint exists."""
+    try:
+        body = request.get_json(silent=True)
+    except Exception:
+        # silent=True only swallows JSONDecodeError — pathological bodies
+        # (e.g. thousands-deep nesting -> RecursionError) still raise
+        body = None
+    if not isinstance(body, dict):
+        return jsonify({"status": "error", "error": "JSON body required"}), 400
+
+    def _num_in(key, lo, hi):
+        v = body.get(key)
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(f"{key} must be a number")
+        if not (lo <= v <= hi):
+            raise ValueError(f"{key} out of range [{lo}, {hi}]")
+        return float(v)
+
+    try:
+        rsi = _num_in("rsi", 0, 100)
+        ytd_pct = _num_in("ytd_pct", -100, 10000)
+        vol_ratio = _num_in("vol_ratio", 0, 100)
+        macd_state = body.get("macd_state")
+        # isinstance first: `in` on a dict hashes the candidate, and a JSON
+        # list/dict here raised TypeError -> 500 (review finding)
+        if not isinstance(macd_state, str) or macd_state not in MACD_STATES:
+            raise ValueError(
+                f"macd_state must be one of {sorted(MACD_STATES)}")
+        toggles = {}
+        for key in ("above_ma20", "above_ma50", "ma20_gt_ma50"):
+            if not isinstance(body.get(key), bool):
+                raise ValueError(f"{key} must be a boolean")
+            toggles[key] = body[key]
+    except ValueError as e:
+        return jsonify({"status": "error", "error": str(e)}), 400
+
+    score, band, components = simulate_score(
+        rsi, macd_state, toggles["above_ma20"], toggles["above_ma50"],
+        toggles["ma20_gt_ma50"], ytd_pct, vol_ratio)
+    return jsonify({
+        "status": "success",
+        "score": score,
+        "band": band,
+        "score_components": components,
+        "gate_distance": score - QUALIFIER_GATE,
+    })
 
 
 @app.route("/api/history")

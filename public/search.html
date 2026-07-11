@@ -151,6 +151,37 @@
   .hi-time{font-size:9px;color:var(--dim);}
   .empty-history{text-align:center;padding:20px;color:var(--dim);font-size:12px;}
 
+  /* Score Lab (PER-508 item 19) — pure UI; every number comes from
+     POST /api/score/simulate (the real score_stock component functions) */
+  .sl-panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-top:12px;}
+  .sl-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+  .sl-head h3{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);}
+  .sl-sub{font-size:10px;color:var(--dim);}
+  .sl-seed{font-size:10px;background:rgba(88,166,255,.12);color:var(--blue);padding:3px 10px;border-radius:12px;display:none;}
+  .sl-seed.mismatch{background:rgba(210,153,34,.12);color:var(--yellow);}
+  .sl-reset{font-size:10px;background:var(--surface2);border:1px solid var(--border);color:var(--dim);padding:3px 10px;border-radius:12px;cursor:pointer;display:none;}
+  .sl-reset:hover{color:var(--text);border-color:var(--blue);}
+  .sl-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:24px;}
+  .sl-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+  .sl-row>label{width:78px;flex-shrink:0;font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;}
+  .sl-row input[type=range]{flex:1;accent-color:var(--blue);min-width:60px;}
+  .sl-num{width:74px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 6px;font-family:'SF Mono',monospace;font-size:12px;text-align:right;}
+  .sl-num:focus{outline:none;border-color:var(--blue);}
+  .sl-select{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;font-size:12px;}
+  .sl-toggles{display:flex;gap:8px;flex-wrap:wrap;flex:1;}
+  .sl-toggle{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text);cursor:pointer;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;}
+  .sl-toggle input{accent-color:var(--green);cursor:pointer;}
+  .sl-table{width:100%;border-collapse:collapse;}
+  .sl-table td{padding:5px 8px;font-size:12px;border-bottom:1px solid var(--border);}
+  .sl-table td:first-child{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.5px;}
+  .sl-table td.pts{text-align:right;font-family:'SF Mono',monospace;font-weight:600;}
+  .sl-table td.cap{text-align:right;font-size:10px;color:var(--dim);font-family:'SF Mono',monospace;width:44px;}
+  .sl-score-row{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap;}
+  .sl-score{font-size:34px;font-weight:700;font-family:'SF Mono',monospace;}
+  .sl-gate{font-size:11px;color:var(--dim);margin-top:6px;}
+  .sl-error{display:none;font-size:11px;color:var(--red);margin-top:8px;}
+  @media(max-width:700px){.sl-grid{grid-template-columns:1fr;}}
+
   /* Responsive */
   @media(max-width:900px){.content-layout{grid-template-columns:1fr;}.history-panel{position:static;}}
   @media(max-width:600px){.search-section,.content-layout{padding-left:14px;padding-right:14px;}.stat-grid{grid-template-columns:1fr 1fr;}}
@@ -185,7 +216,8 @@
 </div>
 
 <div class="content-layout">
-  <!-- Results -->
+  <!-- Left column: analysis results + Score Lab -->
+  <div class="results-column">
   <div class="results" id="results">
 
     <div class="results-header">
@@ -281,6 +313,69 @@
     </div>
   </div>
 
+  <!-- Score Lab (PER-508 item 19) -->
+  <div class="sl-panel" id="scoreLab">
+    <div class="sl-head">
+      <h3>&#9878;&#65039; Score Lab</h3>
+      <span class="sl-sub">interactive scoring calculator — live engine math, zero client formulas</span>
+      <span class="sl-seed" id="slSeed"></span>
+      <button class="sl-reset" id="slReset" onclick="slResetToSeed()">reset to seed</button>
+    </div>
+    <div class="sl-grid">
+      <div class="sl-controls">
+        <div class="sl-row">
+          <label for="slRsi">RSI</label>
+          <input type="range" id="slRsi" min="0" max="100" step="0.1" value="55" oninput="slSync('Rsi');slSchedule();">
+          <input type="number" class="sl-num" id="slRsiNum" min="0" max="100" step="0.1" value="55" oninput="slSync('Rsi',true);slSchedule();">
+        </div>
+        <div class="sl-row">
+          <label for="slMacd">MACD</label>
+          <select class="sl-select" id="slMacd" onchange="slSchedule()">
+            <option value="bullish_rising">Bullish cross, histogram rising (+13)</option>
+            <option value="bullish" selected>Bullish (+8)</option>
+            <option value="bearish">Bearish (&minus;8)</option>
+            <option value="bearish_falling">Bearish, histogram falling (&minus;13)</option>
+          </select>
+        </div>
+        <div class="sl-row">
+          <label>MA structure</label>
+          <div class="sl-toggles">
+            <label class="sl-toggle"><input type="checkbox" id="slMa20" checked onchange="slSchedule()">Price &gt; MA20</label>
+            <label class="sl-toggle"><input type="checkbox" id="slMa50" checked onchange="slSchedule()">Price &gt; MA50</label>
+            <label class="sl-toggle"><input type="checkbox" id="slMaCross" checked onchange="slSchedule()">MA20 &gt; MA50</label>
+          </div>
+        </div>
+        <div class="sl-row">
+          <label for="slYtd">YTD %</label>
+          <input type="range" id="slYtd" min="-100" max="400" step="1" value="10" oninput="slSync('Ytd');slSchedule();">
+          <input type="number" class="sl-num" id="slYtdNum" min="-100" max="10000" step="0.1" value="10" oninput="slSync('Ytd',true);slSchedule();">
+        </div>
+        <div class="sl-row">
+          <label for="slVol">Vol ratio</label>
+          <input type="range" id="slVol" min="0" max="5" step="0.01" value="1" oninput="slSync('Vol');slSchedule();">
+          <input type="number" class="sl-num" id="slVolNum" min="0" max="100" step="0.01" value="1" oninput="slSync('Vol',true);slSchedule();">
+        </div>
+      </div>
+      <div class="sl-output">
+        <table class="sl-table">
+          <tr><td>Base</td><td class="pts">50</td><td class="cap"></td></tr>
+          <tr><td>RSI</td><td class="pts" id="slPtsRsi">—</td><td class="cap">±15</td></tr>
+          <tr><td>MACD</td><td class="pts" id="slPtsMacd">—</td><td class="cap">±13</td></tr>
+          <tr><td>MA</td><td class="pts" id="slPtsMa">—</td><td class="cap">±14</td></tr>
+          <tr><td>YTD</td><td class="pts" id="slPtsYtd">—</td><td class="cap">net</td></tr>
+          <tr><td>Volume</td><td class="pts" id="slPtsVol">—</td><td class="cap">±3</td></tr>
+        </table>
+        <div class="sl-score-row">
+          <span class="sl-score" id="slScore">—</span>
+          <span class="sig-badge" id="slBand">—</span>
+        </div>
+        <div class="sl-gate" id="slGate"></div>
+        <div class="sl-error" id="slError"></div>
+      </div>
+    </div>
+  </div>
+  </div><!-- /results-column -->
+
   <!-- History Sidebar -->
   <div class="history-panel">
     <h3>Recent Searches <button onclick="clearHistory()">Clear</button></h3>
@@ -339,6 +434,157 @@ function scoreGateLine(sc){const dd=sc-50;return `${sc} → ${scoreBand(sc)} ban
 function scoreCompLine(c,sc){return `base 50 · RSI ${sgn(c.rsi)}/±15 · MACD ${sgn(c.macd)}/±13 · MA ${sgn(c.ma)}/±14 · YTD ${sgn(c.ytd)}/+12 · Vol ${sgn(c.vol)}/±3 → ${sc}`;}
 function scoreTooltipText(c,sc){return c&&sc!=null ? scoreCompLine(c,sc)+'\n'+scoreGateLine(sc) : '';}
 
+/* ---- Score Lab (PER-508 item 19) ----------------------------------
+   Pure UI: every score below comes from POST /api/score/simulate, which
+   runs the REAL score_stock component functions. No formula lives here —
+   a hand-mirrored copy drifted (81 vs production 76) before it shipped. */
+let slTimer = null, slAbort = null, slSeedState = null;
+
+function slSync(which, fromNum){
+  const range = document.getElementById('sl'+which);
+  const num = document.getElementById('sl'+which+'Num');
+  if(fromNum){ range.value = num.value; } else { num.value = range.value; }
+}
+
+function slNum(numId, rangeId){
+  // Clamp to the number field's own bounds; an empty/garbage field falls
+  // back to its paired slider (they are kept in sync) so nothing is ever
+  // silently scored as 0 and the server never sees an out-of-range 400.
+  const el = document.getElementById(numId);
+  let v = parseFloat(el.value);
+  if(isNaN(v)) v = parseFloat(document.getElementById(rangeId).value) || 0;
+  return Math.min(parseFloat(el.max), Math.max(parseFloat(el.min), v));
+}
+
+function slInputs(){
+  return {
+    rsi: slNum('slRsiNum', 'slRsi'),
+    macd_state: document.getElementById('slMacd').value,
+    above_ma20: document.getElementById('slMa20').checked,
+    above_ma50: document.getElementById('slMa50').checked,
+    ma20_gt_ma50: document.getElementById('slMaCross').checked,
+    ytd_pct: slNum('slYtdNum', 'slYtd'),
+    vol_ratio: slNum('slVolNum', 'slVol'),
+  };
+}
+
+function slSchedule(){
+  clearTimeout(slTimer);
+  slTimer = setTimeout(slSimulate, 250);
+}
+
+async function slSimulate(){
+  const inputs = slInputs();
+  if(slAbort) slAbort.abort();
+  slAbort = new AbortController();
+  try{
+    const r = await fetch('/api/score/simulate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(inputs),
+      signal: slAbort.signal,
+    });
+    const d = await r.json();
+    if(d.status !== 'success') throw new Error(d.error || 'simulate failed');
+    slRender(d);
+  }catch(e){
+    if(e.name === 'AbortError') return;
+    document.getElementById('slError').textContent = 'Simulate failed — ' + e.message;
+    document.getElementById('slError').style.display = 'block';
+  }
+}
+
+function slRender(d){
+  document.getElementById('slError').style.display = 'none';
+  const c = d.score_components;
+  for(const [k, id] of [['rsi','slPtsRsi'],['macd','slPtsMacd'],['ma','slPtsMa'],['ytd','slPtsYtd'],['vol','slPtsVol']]){
+    const el = document.getElementById(id);
+    el.textContent = sgn(c[k]);
+    el.style.color = c[k] > 0 ? 'var(--green)' : c[k] < 0 ? 'var(--red)' : 'var(--dim)';
+  }
+  const scoreEl = document.getElementById('slScore');
+  scoreEl.textContent = d.score;
+  scoreEl.style.color = scoreHex(d.score);
+  const bandEl = document.getElementById('slBand');
+  bandEl.textContent = d.band;
+  bandEl.className = 'sig-badge ' + sigClass(d.band);
+  const gd = d.gate_distance;
+  document.getElementById('slGate').innerHTML =
+    `<span style="color:${gd >= 0 ? 'var(--green)' : 'var(--red)'};font-weight:600;">${Math.abs(gd)} ${gd >= 0 ? 'above' : 'below'}</span> the &ge;50 universe qualifier gate`;
+  // Seed parity check — acceptance: a pre-seeded ticker reproduces its live score
+  const chip = document.getElementById('slSeed');
+  if(slSeedState && chip.style.display !== 'none'){
+    const untouched = JSON.stringify(slInputs()) === JSON.stringify(slSeedState.inputs);
+    if(!untouched){
+      chip.textContent = `seeded from ${slSeedState.ticker} (live ${slSeedState.liveScore}) — twisted`;
+      chip.classList.remove('mismatch');
+    } else if(d.score === slSeedState.liveScore){
+      chip.textContent = `seeded from ${slSeedState.ticker} — reproduces live score ${slSeedState.liveScore} ✓`;
+      chip.classList.remove('mismatch');
+    } else {
+      chip.textContent = `seeded from ${slSeedState.ticker} — engine ${d.score} vs live ${slSeedState.liveScore} (payload rounding at a branch boundary)`;
+      chip.classList.add('mismatch');
+    }
+  }
+}
+
+const SL_MACD_FROM_POINTS = {13: 'bullish_rising', 8: 'bullish', '-8': 'bearish', '-13': 'bearish_falling'};
+
+function seedScoreLab(d){
+  // Preferred seed: d.score_inputs — the EXACT simulate inputs the engine
+  // scored, emitted at scoring time (parity by construction). Fallback for
+  // old cached payloads reconstructs from display fields, which are rounded
+  // AFTER scoring (rsi 1dp, price/MAs 2dp) and can flip a branch boundary —
+  // the parity chip flags that case rather than hiding it.
+  let seed = d.score_inputs;
+  if(!seed){
+    if(!d.score_components) return;
+    seed = {
+      rsi: d.rsi,
+      macd_state: SL_MACD_FROM_POINTS[String(d.score_components.macd)] || 'bullish',
+      above_ma20: d.price > d.ma20, above_ma50: d.price > d.ma50,
+      ma20_gt_ma50: d.ma20 > d.ma50,
+      ytd_pct: d.ytd_return, vol_ratio: d.volume_ratio,
+    };
+  }
+  document.getElementById('slRsi').value = seed.rsi;
+  document.getElementById('slRsiNum').value = seed.rsi;
+  document.getElementById('slMacd').value = seed.macd_state;
+  document.getElementById('slMa20').checked = seed.above_ma20;
+  document.getElementById('slMa50').checked = seed.above_ma50;
+  document.getElementById('slMaCross').checked = seed.ma20_gt_ma50;
+  document.getElementById('slYtd').value = seed.ytd_pct;
+  document.getElementById('slYtdNum').value = seed.ytd_pct;
+  document.getElementById('slVol').value = seed.vol_ratio;
+  document.getElementById('slVolNum').value = seed.vol_ratio;
+  slSeedState = {ticker: d.ticker, liveScore: d.score, inputs: slInputs()};
+  const chip = document.getElementById('slSeed');
+  chip.style.display = 'inline-block';
+  chip.textContent = `seeding from ${d.ticker}…`;
+  chip.classList.remove('mismatch');
+  document.getElementById('slReset').style.display = 'inline-block';
+  slSimulate();
+}
+
+function slResetToSeed(){
+  if(!slSeedState) return;
+  const s = slSeedState.inputs;
+  document.getElementById('slRsi').value = s.rsi;
+  document.getElementById('slRsiNum').value = s.rsi;
+  document.getElementById('slMacd').value = s.macd_state;
+  document.getElementById('slMa20').checked = s.above_ma20;
+  document.getElementById('slMa50').checked = s.above_ma50;
+  document.getElementById('slMaCross').checked = s.ma20_gt_ma50;
+  document.getElementById('slYtd').value = s.ytd_pct;
+  document.getElementById('slYtdNum').value = s.ytd_pct;
+  document.getElementById('slVol').value = s.vol_ratio;
+  document.getElementById('slVolNum').value = s.vol_ratio;
+  slSimulate();
+}
+
+// First paint with the default inputs
+slSimulate();
+
 // Enter key
 document.getElementById('tickerInput').addEventListener('keydown', e=>{
   if(e.key==='Enter') doSearch();
@@ -369,6 +615,7 @@ async function doSearch(){
 
     DATA = data;
     renderResults(data);
+    seedScoreLab(data);   // Score Lab: seed sliders with the live components
     loadHistory();
   } catch(e) {
     errBanner.textContent = 'Connection error — is the API server running?';
