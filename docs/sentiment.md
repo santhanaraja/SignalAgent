@@ -79,8 +79,10 @@ direction* — so they count as two independent signals and D-012 leaves them al
 The VIX and TLT pairs are the fixable redundancy the swaps target.)
 
 **D-012 fix** (targeted swaps, still seven rows): row 5 → **"Market Internals"** =
-% of the 531-name universe above its 50DMA (real breadth, from cached daily data,
-**no new fetch**); row 7 → **HYG vs LQD** 20-day spread (junk vs IG, CNN's actual
+% of the ~530-name universe above its 50DMA (real breadth, from the committed
+universe artifact — **no new fetch**; the artifact is weekly-rotated, so this row
+steps on Saturday's rotation, not intraday — a deliberate data-integrity trade
+against the 531/no-fetch/daily three-way); row 7 → **HYG vs LQD** 20-day spread (junk vs IG, CNN's actual
 definition). Result: VIX and TLT each appear exactly once → seven rows, seven
 independent inputs. Row 4 keeps its VIX-trend proxy under its honest label; all
 raws stay displayed. D-012 also adds daily persistence (`{date, composite, 7
