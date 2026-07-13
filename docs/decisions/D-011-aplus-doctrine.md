@@ -32,7 +32,7 @@ corrected against the recorded artifact, marked †)
 | RSI | ~60s | **55** † (in the 45–70 band; the brief estimated ~low-40s — artifact `rsi_14`) |
 | Quality score | 86–89 (strong-buy band) | 55 (hold band), outranked |
 | Group health | Biotech loaded with strong-buys | Biotech stopped out the whole deployment 2 days prior |
-| Earnings runway | 31 days | earnings 2026-07-31 † — 15 sessions to the print (the ruling recorded ~13; see fact-check note) |
+| Earnings runway | 31 days | earnings 2026-07-31 † — **14 sessions before the print** (amendment-2 convention), failing the ≥15 bar |
 
 Same five green pips, opposite momentum through the mean
 (source: [docs/briefs/knife-vs-landing.mermaid](../briefs/knife-vs-landing.mermaid)):
@@ -57,10 +57,13 @@ flowchart LR
     style P1 fill:#20303a,color:#fff
 ```
 
-*(Diagram quoted verbatim from the brief exhibit; its RSI and grade
-annotations carry the brief's estimates — the recorded artifact prints
-RSI 55, and the C-vs-B grade is one of the two adjudication items in
-the fact-check note below.)*
+*(Diagram quoted verbatim from the brief exhibit. Its RSI annotation
+carries the brief's estimate — the recorded artifact prints RSI 55.
+Its "ER 13td" annotation predates amendment 2 — the recorded figure is
+14 sessions strictly before the 2026-07-31 print. Its "Grade: C"
+annotation, which predated the grade algorithm, is now CORRECT under
+amendment 1's C-escalation clause — the knife's approach failure is
+exactly what escalates; see the fact-check note.)*
 
 ## Rulings (PER-508 comment 11716 — all four as recommended)
 
@@ -72,19 +75,26 @@ the fact-check note below.)*
   conditions · (2) extension ≤ 1.8×ATR (existing guard) · (3) approach
   filter per Q1 · (4) RSI 45–70 at entry · (5) quality score ≥ 75
   (strong-buy band; waived for index vehicles along with group rows) ·
-  (6) group breaker clear · (7) earnings runway per Q3. All else
-  advisory. **Grade computation:** all seven → **A+**; conditions +
-  guard pass but any of 3–7 fail → **B** (failing reasons named);
-  conditions fail → **C/blocked**.
+  (6) group breaker clear · (7) earnings runway per Q3 — **sessions
+  strictly BEFORE the print day; the print is not runway** (amendment 2).
+  All else advisory. **Grade computation (as amended 2026-07-12):**
+  all seven → **A+**; conditions + guard pass but any of items 4–7
+  fail → **B** (failing reasons named); **approach-filter failure
+  (item 3) escalates to C — blocked in every regime, including
+  Trending** (amendment 1; rationale on record: Q4 permits B entries
+  in Trending, and a B-graded knife would be a permitted knife,
+  contradicting the doctrine's founding case); mechanical conditions
+  fail → **C/blocked**.
 - **Q3 — Earnings runway: ≥ 15 trading days (~3 weeks) for A+.** A
   2–6-week swing entered inside that straddles the binary by
   construction. R8's ≤7d chip remains the warning tier. Names
-  re-qualify after the print. **Live consequence at ruling time, as
-  recorded in the ruling: "MRNA grades C today"** — fails approach
-  (below own SMA5/10), score (55), group health, and runway (recorded
-  as ~13 trading days). *Both the C grade and the runway count are
-  flagged in the fact-check note below — the algorithm as ruled
-  computes B, and the artifact counts 15 sessions.*
+  re-qualify after the print. Convention (amendment 2): runway counts
+  trading sessions **strictly before the print day**. **Live
+  consequence, now computing consistently: MRNA grades C today** —
+  the approach-filter failure (below own SMA5/10) escalates to C per
+  amendment 1, with score (55), group health, and runway (14 sessions
+  before the Jul 31 print, failing the ≥15 bar) as further named
+  failures.
 - **Q4 — Enforcement: hard gate in Choppy/Caution** — RE_ENTRY_READY
   requires grade A+; otherwise `READY (B — reasons)` rendered
   blocked-amber, the same visual law as EXTENDED_HOLD. **Advisory in
@@ -95,30 +105,29 @@ the fact-check note below.)*
   server-side from the same pure function (Lab law 1,
   [D-010](D-010-lab-pattern-laws.md)).
 
-## Fact-check note — two items in the ruling awaiting adjudication
+## Fact-check note — two in-ruling discrepancies, found and adjudicated
 
-The registry's fact-check pass (run before this record shipped) found
-two discrepancies **inside the ruling itself** — recorded here rather
-than silently resolved, per the standing rule:
+The registry's fact-check pass found two discrepancies **inside the
+ruling itself** before this record shipped; both were carried openly as
+adjudication items and **both were ruled the same day** — the
+registry's designed lifecycle (find → flag → adjudicate → amend)
+completing its first full cycle:
 
-1. **"MRNA grades C today" contradicts the ruled algorithm.** Per Q2 as
-   ruled: conditions + guard pass but any of items 3–7 fail → **B**;
-   only failing the mechanical conditions yields C. MRNA passes all
-   five conditions and the guard (artifact: 5/5, 0.43×ATR), and its
-   named failures (approach, score, group health, runway) are all in
-   the 3–7 band — the algorithm as written computes **B**, while the
-   ruling records **C**. Either the worked example should read B
-   (blocked identically in Choppy under Q4), or the algorithm needs a
-   C-escalation clause (e.g., approach-filter failure or ≥N failing
-   rows → C). Adjudication requested; implementation blocks on it only
-   for the B/C boundary, not for the gate behavior.
-2. **The runway count.** The artifact records MRNA earnings
-   2026-07-31 — 15 trading sessions from the next session (Jul 13),
-   not the ruling's ~13. At the ruled ≥15 bar this sits AT the line,
-   so whether runway is a named failure depends on the counting
-   convention (inclusive of the print day or not) — unruled. The other
-   three named failures stand regardless; MRNA's refusal is not in
-   question, only which rows are cited.
+1. **The C-vs-B contradiction → C-ESCALATION CLAUSE (amendment 1).**
+   As originally ruled, Q2 computed **B** for MRNA (conditions + guard
+   pass; failures all in the 3–7 band) while the ruling recorded
+   **C**. Adjudicated: approach-filter failure (item 3) escalates the
+   grade to C — blocked in every regime, including Trending. Rationale
+   on record: Q4 permits B entries in Trending; a B-graded knife would
+   be a permitted knife, contradicting the doctrine's founding case.
+   All other 3–7 failures remain B rows. The worked example now
+   computes consistently.
+2. **The runway count → CONVENTION RULED (amendment 2).** The ruling
+   recorded ~13 trading days; the artifact's 2026-07-31 print allows
+   15 sessions counting inclusively. Adjudicated: runway counts
+   trading sessions **strictly before the print day** (the print is
+   not runway) — MRNA = 14 sessions, failing the ≥15 bar. The
+   convention is recorded in the Q2 checklist row.
 
 ## Consequences
 
