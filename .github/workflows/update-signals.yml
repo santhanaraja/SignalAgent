@@ -46,6 +46,18 @@ jobs:
         env:
           PYTHONUNBUFFERED: '1'
 
+      # D-012: append today's Fear & Greed reading to data/fear_greed_history.json
+      # (once-per-day upsert inside the script — last write of the day wins, so
+      # the post-close run leaves the closing value). Reads the committed universe
+      # artifact for the Market Internals breadth row (no extra universe fetch).
+      # Rides the data commit below. continue-on-error + the script never exits
+      # non-zero: an F&G/network hiccup must never block the data pipeline.
+      - name: Persist Fear & Greed history
+        continue-on-error: true
+        run: python fear_greed_engine.py
+        env:
+          PYTHONUNBUFFERED: '1'
+
       # Framework runs BEFORE the history manager: history_manager reads
       # public/framework.json to log regime_change events (PER-508 item 18),
       # which must reflect THIS run's regime, not the previous one's.

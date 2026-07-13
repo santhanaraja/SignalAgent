@@ -30,10 +30,13 @@ run_once() {
     echo -e "${BLUE}  Signal Pipeline — $(date '+%Y-%m-%d %H:%M:%S')${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 
-    echo -e "${GREEN}[1/2] Running Signal Engine...${NC}"
+    echo -e "${GREEN}[1/3] Running Signal Engine...${NC}"
     python3 signal_engine.py
 
-    echo -e "\n${GREEN}[2/2] Running History Manager...${NC}"
+    echo -e "\n${GREEN}[2/3] Persisting Fear & Greed history...${NC}"
+    python3 fear_greed_engine.py
+
+    echo -e "\n${GREEN}[3/3] Running History Manager...${NC}"
     python3 history_manager.py
 
     echo -e "\n${GREEN}✓ Pipeline complete.${NC}"

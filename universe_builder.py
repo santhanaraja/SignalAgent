@@ -442,6 +442,11 @@ def _ticker_metrics(ticker, df, sp500_ytd=None):
         "r1m": momentum["return_1m"],
         "score": score,
         "score_components": _details.get("score_components"),
+        # Raw price>MA50 boolean (the +6 term behind the score `ma` component),
+        # surfaced explicitly so the Fear & Greed "Market Internals" breadth row
+        # (D-012) reads it directly instead of reverse-engineering it from the
+        # component points. Uses score_inputs (pre-round) to match the component.
+        "above_50dma": (_details.get("score_inputs") or {}).get("above_ma50"),
         "signal": signal,
         "history_days": int(span_days),
         "rows": int(len(df)),
@@ -667,7 +672,8 @@ def build_active_universe(write=True, verbose=True):
                                     "status": "no_valid_data", "fails": []})
                 continue
             entry = {"ticker": t, "score": m["score"], "ytd": m["ytd"],
-                     "components": m.get("score_components"), "fails": []}
+                     "components": m.get("score_components"),
+                     "above_50dma": m.get("above_50dma"), "fails": []}
             if t in qual_by_ticker:
                 if g["exclusion_reason"] == "below_min_candidates":
                     entry["status"] = "group_below_min_candidates"
