@@ -44,7 +44,7 @@ flowchart TD
 | [D-008](D-008-gauge-b-architecture.md) | Gauge B architecture (Q1–Q4: trend chassis, harness-decided credit shape, asymmetric hysteresis, regime-scaled R28 ceiling 90/50/25/5) | 2026-07-12 | Ruled | — |
 | [D-009](D-009-exit-timing-1230.md) | Exit timing — 12:30 intraday checkpoint | 2026-07-11 | **Proposed** — gated on Build 5 evidence | — |
 | [D-010](D-010-lab-pattern-laws.md) | The Lab pattern three laws | 2026-07-11 | Ruled | — |
-| [D-011](D-011-aplus-doctrine.md) | The A+ Doctrine — computed setup grade (approach filter, 7-item checklist, earnings runway, regime-shaped enforcement) | 2026-07-12 | **Proposed** — four rulings requested | — |
+| [D-011](D-011-aplus-doctrine.md) | The A+ Doctrine — computed setup grade (composite approach filter, 7-item checklist, ≥15td earnings runway, hard-gate Choppy/Caution) | 2026-07-12 | Ruled | — |
 
 Status meanings: **Proposed** (deliberation open or parked with its
 retest recipe) · **Ruled** (in force) · **Superseded-by-D-xxx** (kept for

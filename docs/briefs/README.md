@@ -8,4 +8,4 @@ record links back here.
 | Brief | Record |
 |---|---|
 | [gauge-b-design-brief.md](gauge-b-design-brief.md) (Q1–Q4, 2026-07-12) | [D-008](../decisions/D-008-gauge-b-architecture.md) — Ruled |
-| [aplus-doctrine-brief.md](aplus-doctrine-brief.md) (Q1–Q4, 2026-07-12) | [D-011](../decisions/D-011-aplus-doctrine.md) — Proposed |
+| [aplus-doctrine-brief.md](aplus-doctrine-brief.md) (Q1–Q4, 2026-07-12) | [D-011](../decisions/D-011-aplus-doctrine.md) — Ruled |
