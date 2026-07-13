@@ -100,6 +100,15 @@
   .rule-row.elevated .rule-msg{color:var(--yellow);}
   .rule-row.action_needed{background:rgba(240,136,62,.05);}
   .rule-row.action_needed .rule-msg{color:var(--orange);}
+  .rule-row.warning{background:rgba(210,153,34,.05);}
+  .rule-row.warning .rule-msg{color:var(--yellow);}
+  .rule-row.info .rule-msg{color:var(--dim);}
+  .rule-row.no_price .rule-msg{color:var(--dim);font-style:italic;}
+  /* R28 dollar-enforcement strip (PER-508 Phase 0) */
+  .r28-strip{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;}
+  .r28-cell{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 14px;}
+  .r28-cell .l{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);}
+  .r28-cell .v{font-size:15px;font-weight:700;font-family:'SF Mono',monospace;}
 
   /* Concentration limits */
   .conc-bar{margin-top:8px;}
@@ -1111,20 +1120,75 @@ function render(){
   const rules=DATA.rules||{};
   const evals=rules.evaluations||[];
   const summary=rules.summary||{};
+  const r28=DATA.r28||null;
+  const r28ok=!!(r28&&r28.status==='ok');
+  // degraded (no holding priced) keeps the static R15-R18 reminders on
+  // the board — an artifact outage must not retire the fallback text
+  const r28live=r28ok&&!r28.degraded;
 
   html+=`
   <div class="section">
-    <div class="section-title">Layer 3: Standing Rules (R1-R27)</div>
+    <div class="section-title">Layer 3: Standing Rules (R1-R27) + R28 Dollar Enforcement</div>`;
+
+  // ---- R28: computed dollar enforcement (PER-508 Phase 0; D-007/D-008 Q4).
+  // The R15-R18 rows below flip from static reminder text to these
+  // computed rows — display-only concentration discipline finally dies.
+  if(r28ok){
+    html+=`<div class="r28-strip">
+      <div class="r28-cell"><div class="l">Capital</div><div class="v">$${Number(r28.capital_usd).toLocaleString()}</div></div>
+      <div class="r28-cell"><div class="l">Deployed</div><div class="v">$${Number(r28.deployed_usd).toLocaleString()} (${r28.deployed_pct}%)</div></div>
+      <div class="r28-cell"><div class="l">${r28.ceiling_state} ceiling (D-008 Q4)</div><div class="v">${r28.ceiling_pct}%</div></div>
+      <div class="r28-cell"><div class="l">Cash</div><div class="v">${r28.cash_pct}%</div></div>
+    </div>
+    <div class="rules-list" style="margin-bottom:14px;">`;
+    const r28icon=s=>s==='compliant'?'&#x2705;':s==='violation'?'&#x274C;':s==='action_needed'?'&#x1F536;':s==='warning'?'&#x26A0;':(s==='no_price'||s==='invalid'||s==='unavailable')?'&#x26D4;':'&#x2139;&#xFE0F;';
+    const r28rows=[
+      {rule:'R17&rarr;R28',row:r28.ceiling},
+      {rule:'R18&rarr;R28',row:r28.cash_floor},
+      ...(r28.positions||[]).map(p=>({rule:'R15',row:p})),
+      ...(r28.groups||[]).map(g=>({rule:'R16&rarr;R28',row:g})),
+    ];
+    const r28sort={violation:0,action_needed:1,unavailable:2,warning:3,invalid:4,no_price:5,compliant:6,info:7};
+    r28rows.sort((a,b)=>(r28sort[a.row.status]??4)-(r28sort[b.row.status]??4));
+    for(const {rule,row} of r28rows){
+      html+=`<div class="rule-row ${row.status}">
+        <div class="rule-id">${rule}</div>
+        <div class="rule-status">${r28icon(row.status)}</div>
+        <div class="rule-msg">${row.message}</div>
+      </div>`;
+    }
+    html+=`</div>`;
+  }else if(r28){
+    html+=`<div class="rules-list" style="margin-bottom:14px;">
+      <div class="rule-row elevated"><div class="rule-id">R28</div>
+      <div class="rule-status">&#x26A0;</div>
+      <div class="rule-msg">${r28.message||'R28 unavailable'}</div></div>
+    </div>`;
+  }
+
+  // Tiles must match the VISIBLE board (review finding): when the R28
+  // panel is live, the retired static R15-R18 rows leave the tallies and
+  // R28's own statuses join them.
+  const visEvals=evals.filter(e=>!(r28live&&['R15','R16','R17','R18'].includes(e.rule)));
+  const tally=s=>visEvals.filter(e=>e.status===s).length;
+  const rs=r28live?(r28.summary||{}):{};
+  const tCompliant=tally('compliant')+(rs.compliant||0);
+  // elevated rows count as Action Needed — the rule engine's own summary
+  // semantics, preserved so the tiles read continuously across the flip
+  const tAction=tally('action_needed')+tally('elevated')+(rs.action_needed||0);
+  const tViol=tally('violation')+(rs.violations||0);
+  html+=`
     <div class="rules-summary">
-      <div class="rule-stat"><div class="n" style="color:var(--green);">${summary.compliant||0}</div><div class="l">Compliant</div></div>
-      <div class="rule-stat"><div class="n" style="color:var(--orange);">${summary.action_needed||0}</div><div class="l">Action Needed</div></div>
-      <div class="rule-stat"><div class="n" style="color:var(--red);">${summary.violations||0}</div><div class="l">Violations</div></div>
+      <div class="rule-stat"><div class="n" style="color:var(--green);">${tCompliant}</div><div class="l">Compliant</div></div>
+      <div class="rule-stat"><div class="n" style="color:var(--orange);">${tAction}</div><div class="l">Action Needed</div></div>
+      <div class="rule-stat"><div class="n" style="color:var(--red);">${tViol}</div><div class="l">Violations</div></div>
+      ${rs.warnings?`<div class="rule-stat"><div class="n" style="color:var(--yellow);">${rs.warnings}</div><div class="l">Warnings</div></div>`:''}
     </div>
     <div class="rules-list">`;
 
   // Show violations and action_needed first, then elevated, then compliant
   const sortOrder={violation:0,action_needed:1,elevated:2,compliant:3};
-  const sorted=[...evals].sort((a,b)=>(sortOrder[a.status]||3)-(sortOrder[b.status]||3));
+  const sorted=[...visEvals].sort((a,b)=>(sortOrder[a.status]||3)-(sortOrder[b.status]||3));
 
   for(const e of sorted){
     const icon=e.status==='compliant'?'&#x2705;':e.status==='violation'?'&#x274C;':e.status==='elevated'?'&#x26A0;':'&#x1F536;';

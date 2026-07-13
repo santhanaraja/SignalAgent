@@ -47,7 +47,13 @@ qualification gates.
 
 - **Phase 0 (FIRST, standalone): R28 dollar enforcement** — rule engine
   reads positions.json + prices; per-position 5–8% (R15), per-GICS-group
-  15% + max 2 positions/group (successor to R5/R16), aggregate exposure
+  caps (successor to R5/R16) — *drafted 15% + max 2/group; amended
+  2026-07-13 to **20% + max 3/group**: 15% against the 8% max position
+  forced undersizing the second name to 1.875-of-full, while 20% fits
+  two full-size names with room; the correlated-group tradeoff is
+  acknowledged on the record (the July-6 biotech book). The D-008 Q4
+  ceiling is unchanged — emergent consequence: 90/20 forces ≥5 groups
+  at full deployment* — aggregate exposure
   and cash floor as computed statuses with dollar numbers in
   assessment.json, the framework page, both Slack pushes.
   *Amended same day by [D-008](D-008-gauge-b-architecture.md) Q4 (comment

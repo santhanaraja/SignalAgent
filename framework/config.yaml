@@ -2,6 +2,23 @@ framework:
   version: "1.0"
   last_updated: "2026-06-12"
 
+# R28 real-dollar enforcement (PER-508 Phase 0; D-007 + D-008 Q4 govern).
+# USER-MAINTAINED BY HAND until a broker integration exists — R28 computes
+# every limit as a % of this number, so a stale value skews every dollar
+# status. Derived at build time from the July-6 book reading ~19% deployed
+# ($18,714 across IWM/ARWR/BIIB); correct it if the account has moved.
+account_capital_usd: 100000
+
+r28:
+  # Per-GICS-group caps (D-007 Phase 0, AMENDED 2026-07-13 from 15%/2:
+  # 15% against the 8% max position forced undersizing the second name
+  # to 1.875-of-full; 20% fits two full-size positions with room. The
+  # correlated-group tradeoff is acknowledged in the record — the July-6
+  # biotech book. Ceiling unchanged (D-008 Q4 90/50/25/5); emergent:
+  # 90/20 forces >=5 groups at full deployment.)
+  group_max_pct: 20
+  group_max_positions: 3
+
 regime:
   # SWING-horizon gauge (weeks-long holds, checked daily).
   # Voters: vix_5d_avg, hy_spread, breadth.

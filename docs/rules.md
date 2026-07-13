@@ -31,12 +31,16 @@ elevation keys off `theme_result["active_themes"]`, which is the
 `active` list in `framework/state/qualified_themes.json` — currently
 `["Semis", "Biotech"]`.
 
-**The rule engine has zero knowledge of `positions.json`.** The Build 1B
-holdings (IWM / ARWR / BIIB) and their dollar values never enter
-`rule_engine.py`. No rule computes anything against deployed capital,
-share counts, cash balance, or per-name size. Every "sizing" and
-"deployment" rule (R15–R18) carries its numbers in **text only**. This
-is the single most important fact for interpreting what fires.
+**The rule engine itself has zero knowledge of `positions.json` — by
+design, and still true.** As of PER-508 Phase 0 the dollar computations
+live in a separate module: `framework/portfolio_rules.py` (R28,
+`assess_portfolio` — a pure function per the Lab laws) reads
+positions.json share counts × EOD closes × `account_capital_usd` and
+computes R15–R18's numbers as real dollar statuses every framework run
+(the `r28` block in framework.json / assessment.json, rendered in
+Layer 3). `rule_engine.py` remains dollar-blind; R28 is the computing
+authority ([D-007](decisions/D-007-theme-layer-retirement.md),
+[D-008](decisions/D-008-gauge-b-architecture.md) Q4).
 
 ---
 
@@ -173,10 +177,10 @@ message). "Elevates" = the condition under which status becomes
 | **R12** | Exit timeframe must be slower than entry timeframe. | timeframe | active themes > 0 | ADVISORY |
 | **R13** | Never override a fired stop. | stop_override | Risk-off/Caution **or** active themes | ADVISORY |
 | **R14** | Bank big winners back to preservation core where tax-efficient. | profit_taking | **never** (in no set) | DISPLAY-ONLY |
-| **R15** | Maximum single-position size: 5-8% of relevant account's capital. | position_size | Risk-off/Caution **or** active themes | ADVISORY³ |
-| **R16** | Maximum single-theme exposure: 15% of total book. | theme_concentration | Risk-off/Caution only | DISPLAY-ONLY³ |
-| **R17** | Maximum total theme exposure (across all active themes): 25% of total book. *Superseded by [D-008](decisions/D-008-gauge-b-architecture.md) Q4: the static 25% cap is absorbed into R28's regime-scaled ceiling (90/50/25/5).* | total_theme_exposure | Risk-off/Caution only | DISPLAY-ONLY³ |
-| **R18** | Minimum cash reserve at all times: 30-40% in money market vehicles. *Amended by [D-008](decisions/D-008-gauge-b-architecture.md) Q4: the floor as written is absorbed into R28's regime-scaled ceiling (implied cash floor 10% at Trending).* | cash_reserve | Risk-off/Caution only | DISPLAY-ONLY³ |
+| **R15** | Maximum single-position size: 5-8% of relevant account's capital. *Computed by R28 since PER-508 Phase 0 ([D-007](decisions/D-007-theme-layer-retirement.md)): dollar statuses per holding, warning at 7.2%.* | position_size | Risk-off/Caution **or** active themes | **COMPUTED (R28)** |
+| **R16** | Maximum single-theme exposure: 15% of total book. *Succeeded by R28's per-GICS-group caps ([D-007](decisions/D-007-theme-layer-retirement.md), Phase 0 caps amended 2026-07-13): group ≤20% of capital AND ≤3 positions, computed in dollars (warning above 18%).* | theme_concentration | Risk-off/Caution only | **COMPUTED (R28)** |
+| **R17** | Maximum total theme exposure (across all active themes): 25% of total book. *Superseded by [D-008](decisions/D-008-gauge-b-architecture.md) Q4: the static 25% cap is absorbed into R28's regime-scaled ceiling (90/50/25/5), computed by R28.* | total_theme_exposure | Risk-off/Caution only | **COMPUTED (R28)** |
+| **R18** | Minimum cash reserve at all times: 30-40% in money market vehicles. *Amended by [D-008](decisions/D-008-gauge-b-architecture.md) Q4: the floor as written is absorbed into R28's regime-scaled ceiling (implied cash floor 10% at Trending); R28 reports it as the ceiling's complement.* | cash_reserve | Risk-off/Caution only | **COMPUTED (R28)** |
 | **R19** | Aggressive sleeve cost basis capped at active theme limits. | cost_basis | active themes > 0 | ADVISORY |
 | **R20** | Never fund the aggressive sleeve from preservation core. Never cross-fund between accounts. | cross_funding | **never** (in no set) | DISPLAY-ONLY |
 | **R21** | No new entries on same day as stop-out from related name. | same_day_entry | active themes > 0 | ADVISORY |
@@ -214,12 +218,17 @@ rule-engine surface is still just a reminder.
    residual). EXIT_FIRED rows never re-alert: that exit already signaled
    at a prior close and belongs to the post-close report.
 
-³ **R15–R18 carry live numbers (5–8%, 15%, 25%, 30–40%) but nothing
-computes them.** The concentration limits emit static text in
-theme_ranker (`concentration_notes`: `"Max per theme: 15% of book"`,
-`"Max total themes: 25% of book"`, lines 257–262) with no dollar
-comparison. R15/R18 exist only as reminder text. No code reads
-`positions.json` share counts × prices to check any of these.
+³ **HISTORICAL (fixed by R28, PER-508 Phase 0):** through 2026-07-12
+these rows carried live numbers that nothing computed — static text
+with no dollar comparison, no code reading `positions.json` × prices.
+`framework/portfolio_rules.py` (assess_portfolio, a pure function per
+the Lab laws) now computes all four against actual dollars every run:
+per-position %, per-GICS-group exposure + count, the D-008 Q4
+regime-scaled ceiling, and the implied cash floor. Enforcement class
+COMPUTED (reporting-hard — it cannot block broker orders and does not
+pretend to). A ceiling breach from a regime downshift is action_needed
+— derisk via normal exit discipline (stops/R11); never a same-day
+forced liquidation.
 
 ### Rules that never leave `compliant`
 
@@ -239,20 +248,24 @@ concentration, with the actual numbers and whether code enforces them.
 | Rule | Limit (from text) | Where the number lives | Computed against real $? | Enforcement |
 |---|---|---|---|---|
 | **R5** | ≤ 2 active themes | `themes.ranking.max_active_themes: 2` | Yes — theme *count* | **HARD** (theme_ranker won't persist a 3rd) |
-| **R15** | Single position 5–8% of account | rule text only | **No** | ADVISORY reminder |
-| **R16** | Single theme ≤ 15% of book | `concentration_limits.max_per_theme_pct_of_book: 15` | **No** (emitted as static text) | DISPLAY-ONLY |
-| **R17** | All themes ≤ 25% of book | `concentration_limits.max_total_themes_pct_of_book: 25` | **No** (emitted as static text) | DISPLAY-ONLY |
-| **R18** | Cash reserve 30–40% | rule text only | **No** | DISPLAY-ONLY |
+| **R15** | Single position 5–8% of account | rule text + `portfolio_rules.py` | **Yes — R28** (warning >7.2%, violation >8%) | **COMPUTED (R28)** |
+| **R16** | Single theme ≤ 15% of book | `portfolio_rules.py` per-GICS-group caps (config `r28:`) | **Yes — R28** (≤20% AND ≤3 positions/group, amended 2026-07-13) | **COMPUTED (R28)** |
+| **R17** | All themes ≤ 25% of book | `portfolio_rules.py` regime-scaled ceiling ([D-008](decisions/D-008-gauge-b-architecture.md) Q4: 90/50/25/5) | **Yes — R28** | **COMPUTED (R28)** — supersedes the static 25% |
+| **R18** | Cash reserve 30–40% | `portfolio_rules.py` cash-floor row | **Yes — R28** (informational: the ceiling's complement) | **COMPUTED (R28)** |
 | **R7 / R23** | Size from risk-to-stop, not oversizing | rule text only | **No** | ADVISORY reminder |
 | **R26** | No margin on aggressive options | rule text only | **No** | DISPLAY-ONLY |
 
-**Is there a HARD aggregate portfolio-deployment ceiling? No.** There is
-no explicit portfolio-level maximum anywhere in code — not even at
-Trending; total exposure is bounded only *implicitly* and only *on paper*
-by per-name sizing (R15, advisory), the cash floor (R18, display-only),
-and the theme-concentration limits (R16/R17, display-only text) — none of
-which the code computes against actual dollars — with the single hard
-constraint being R5's cap of two active themes.
+**Is there a HARD aggregate portfolio-deployment ceiling? Still no —
+but there is now a COMPUTED one.** Since PER-508 Phase 0, R28 computes
+the regime-scaled total-exposure ceiling (Trending 90 / Choppy 50 /
+Caution 25 / Risk-off 5, per [D-008](decisions/D-008-gauge-b-architecture.md)
+Q4) against actual dollars every run — enforcement class COMPUTED
+(reporting-hard): it reports violations and downshift action_needed
+statuses with dollar numbers, but cannot block a broker order and does
+not pretend to. A downshift breach is an advisory to derisk via normal
+exit discipline (stops/R11), never a same-day forced liquidation. The
+single HARD constraint remains R5's two-theme cap (until D-007 Phase 2
+retires it into R28's per-group caps).
 
 ---
 

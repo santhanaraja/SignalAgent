@@ -1285,6 +1285,16 @@ def framework_signals_json():
 _ASSESSMENT_VOTERS = ("vix_5d_avg", "hy_spread", "breadth")
 
 
+def _assessment_r28(data):
+    """R28 real-dollar enforcement block (PER-508 Phase 0) — passthrough
+    of the framework artifact's computed block; no recomputation here."""
+    r28 = data.get("r28")
+    if not isinstance(r28, dict):
+        return {"error": "r28 block absent from framework artifact "
+                         "(pre-R28 artifact — regenerates on next run)"}
+    return r28
+
+
 def _assessment_regime(data):
     regime = data.get("regime") or {}
     out = {
@@ -1536,6 +1546,7 @@ def assessment_json():
            "framework_generated_at": data.get("generated_at")}
     for key, fn in (("regime", _assessment_regime),
                     ("positions", _assessment_positions),
+                    ("r28", _assessment_r28),
                     ("technicals", _assessment_technicals),
                     ("vol_complex", _assessment_vol),
                     ("themes", _assessment_themes),

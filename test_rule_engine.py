@@ -11,6 +11,7 @@ pipeline-reachable state is unchanged.
 Run: python3 test_rule_engine.py
 """
 
+import datetime
 import os
 import sys
 from collections import Counter
@@ -19,6 +20,7 @@ import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import framework.rule_engine as re_mod
 from framework.rule_engine import RuleEngine
 
 CONFIG = yaml.safe_load(
@@ -31,11 +33,30 @@ CAUTION = "Caution"
 RISK_OFF = "Risk-off"
 
 
+class _FixedDate(datetime.date):
+    """Pinned to a Friday: R1 flips to action_needed on Sundays
+    (rule_engine reads datetime.date.today() directly), so an unpinned
+    tally assertion failed every Sunday — found live 2026-07-12."""
+    @classmethod
+    def today(cls):
+        return cls(2026, 7, 10)
+
+
+class _PinnedDatetime:
+    date = _FixedDate
+    datetime = datetime.datetime
+
+
 def _eval(regime, active, entries=None, exits=None):
     rr = {"regime": regime}
     tr = {"active_themes": active, "entry_signals": entries or [],
           "exit_signals": exits or []}
-    return RuleEngine(CONFIG).evaluate(rr, tr)
+    old_dt = re_mod.datetime
+    re_mod.datetime = _PinnedDatetime
+    try:
+        return RuleEngine(CONFIG).evaluate(rr, tr)
+    finally:
+        re_mod.datetime = old_dt
 
 
 def _statuses(out):

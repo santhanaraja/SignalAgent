@@ -287,6 +287,63 @@ def run_framework(force_fetch: bool = False) -> dict:
     print(f"[framework] Rules: {summary['compliant']} compliant, "
           f"{summary['action_needed']} action needed, {summary['violations']} violations")
 
+    # --- R28: real-dollar portfolio enforcement (PER-508 Phase 0) ---
+    # Pure assessment on data already computed this run: positions.json
+    # holdings, EOD closes from the position engine's rows, the regime
+    # state, capital from config. Never fails the run.
+    print("[framework] R28 portfolio enforcement...")
+    try:
+        from .portfolio_rules import assess_portfolio, build_group_map
+        positions_path = os.path.join(BASE_DIR, "state", "positions.json")
+        with open(positions_path) as f:
+            positions = json.load(f)
+        # Group resolution: current rotated universe first, then the
+        # dashboard's signals.json group structure as fallback — a holding
+        # whose group rotated OUT of the universe must still aggregate for
+        # the per-group caps (review finding: two ex-universe biotechs
+        # would otherwise bucket alone and the caps could never fire).
+        # A manual "group" key on the positions.json row overrides both.
+        group_map = {}
+        try:
+            with open(os.path.join(BASE_DIR, "..", "data",
+                                   "signals.json")) as f:
+                for grp in json.load(f).get("groups", []):
+                    for s in grp.get("stocks", []):
+                        if s.get("ticker"):
+                            group_map[s["ticker"]] = grp["name"]
+        except Exception:
+            pass
+        try:
+            with open(os.path.join(BASE_DIR, "..", "data",
+                                   "universe_active.json")) as f:
+                group_map.update(build_group_map(json.load(f)))
+        except Exception:
+            pass
+        ps_rows = (position_signals or {}).get("tickers") or {}
+        prices = {t: r.get("close") for t, r in ps_rows.items()
+                  if isinstance(r, dict)}
+        for h in (positions.get("holdings") or []):
+            if isinstance(h, dict) and not h.get("group") \
+                    and h.get("ticker") in group_map:
+                h["group"] = group_map[h["ticker"]]
+        r28_cfg = config.get("r28", {}) or {}
+        r28_result = assess_portfolio(
+            positions, prices,
+            config.get("account_capital_usd"), regime_result["regime"],
+            group_max_pct=r28_cfg.get("group_max_pct", 20),
+            group_max_positions=r28_cfg.get("group_max_positions", 3))
+        if r28_result.get("status") == "ok":
+            s = r28_result["summary"]
+            print(f"[framework] R28: deployed {r28_result['deployed_pct']}% "
+                  f"vs {r28_result['ceiling_pct']:.0f}% ceiling — "
+                  f"{s['violations']} violations, {s['action_needed']} "
+                  f"action needed, {s['warnings']} warnings")
+        else:
+            print(f"[framework] R28: {r28_result.get('status')}")
+    except Exception as e:
+        r28_result = {"status": "error", "message": f"R28 failed: {e}"}
+        print(f"[framework] R28 failed (non-fatal): {e}")
+
     # --- Assemble output ---
     output = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -299,6 +356,7 @@ def run_framework(force_fetch: bool = False) -> dict:
         "themes": theme_result,
         "theme_leaders": theme_leaders,
         "position_signals": position_signals,
+        "r28": r28_result,
         "rules": rules_result,
         "standing_rules_text": config.get("standing_rules", {}),
     }
