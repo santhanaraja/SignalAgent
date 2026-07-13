@@ -1,5 +1,7 @@
 # Build 4 — Walk-Forward Regime Backtest (2015-01-02 → 2026-07-10)
 
+> Decision records: [D-006](decisions/D-006-build4-protocol.md) (this protocol, reusable) · fired [D-001](decisions/D-001-swing-gauge-1a.md)'s revisit trigger → [D-008](decisions/D-008-gauge-b-architecture.md) (Gauge B, ruled 2026-07-12) · the lag number gates [D-009](decisions/D-009-exit-timing-1230.md).
+
 The production 3-voter swing gauge (Build 1A: VIX 5d avg, HY OAS, RSP/SPY
 breadth, with the SPY-vs-200DMA backdrop gate), reconstructed point-in-time
 over 11.5 years and run through the **exact production decision code** —

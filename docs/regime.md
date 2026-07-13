@@ -1,5 +1,7 @@
 # Swing Regime Gauge
 
+> Decision records: [D-001](decisions/D-001-swing-gauge-1a.md) (voters/gate/ladder — revisit fired 2026-07-11, see [D-008](decisions/D-008-gauge-b-architecture.md)) · [D-002](decisions/D-002-r4-sunday-cadence.md) (R4 cadence) · [D-005](decisions/D-005-sentiment-not-a-voter.md) (sentiment).
+
 Horizon: **swing** — weeks-long holds, checked daily. The gauge answers one
 question: is aggressive swing deployment permitted right now, and at what
 aggression level? Months-horizon macro inputs do not vote here.

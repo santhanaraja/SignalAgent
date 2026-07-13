@@ -1,5 +1,7 @@
 # Standing Rules R1–R27
 
+> Decision records: [D-003](decisions/D-003-1b-position-engine.md) (1B engine / R11 close-basis) · [D-004](decisions/D-004-extension-guard.md) (extension guard) · [D-007](decisions/D-007-theme-layer-retirement.md) (theme retirement → R28 dollar enforcement) · [D-009](decisions/D-009-exit-timing-1230.md) (exit timing, proposed).
+
 Read-only extraction of the standing-rules layer (Layer 3) as actually
 evaluated in code. Source of truth: `framework/rule_engine.py` (evaluation
 logic), `framework/config.yaml` `standing_rules:` (rule text) + `themes:`
@@ -173,8 +175,8 @@ message). "Elevates" = the condition under which status becomes
 | **R14** | Bank big winners back to preservation core where tax-efficient. | profit_taking | **never** (in no set) | DISPLAY-ONLY |
 | **R15** | Maximum single-position size: 5-8% of relevant account's capital. | position_size | Risk-off/Caution **or** active themes | ADVISORY³ |
 | **R16** | Maximum single-theme exposure: 15% of total book. | theme_concentration | Risk-off/Caution only | DISPLAY-ONLY³ |
-| **R17** | Maximum total theme exposure (across all active themes): 25% of total book. | total_theme_exposure | Risk-off/Caution only | DISPLAY-ONLY³ |
-| **R18** | Minimum cash reserve at all times: 30-40% in money market vehicles. | cash_reserve | Risk-off/Caution only | DISPLAY-ONLY³ |
+| **R17** | Maximum total theme exposure (across all active themes): 25% of total book. *Superseded by [D-008](decisions/D-008-gauge-b-architecture.md) Q4: the static 25% cap is absorbed into R28's regime-scaled ceiling (90/50/25/5).* | total_theme_exposure | Risk-off/Caution only | DISPLAY-ONLY³ |
+| **R18** | Minimum cash reserve at all times: 30-40% in money market vehicles. *Amended by [D-008](decisions/D-008-gauge-b-architecture.md) Q4: the floor as written is absorbed into R28's regime-scaled ceiling (implied cash floor 10% at Trending).* | cash_reserve | Risk-off/Caution only | DISPLAY-ONLY³ |
 | **R19** | Aggressive sleeve cost basis capped at active theme limits. | cost_basis | active themes > 0 | ADVISORY |
 | **R20** | Never fund the aggressive sleeve from preservation core. Never cross-fund between accounts. | cross_funding | **never** (in no set) | DISPLAY-ONLY |
 | **R21** | No new entries on same day as stop-out from related name. | same_day_entry | active themes > 0 | ADVISORY |
