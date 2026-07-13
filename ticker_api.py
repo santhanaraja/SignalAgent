@@ -32,7 +32,7 @@ from signal_engine import (
 )
 import numpy as np
 import pandas as pd
-from sentiment_engine import get_trending_with_sentiment, get_symbol_sentiment
+from sentiment_engine import get_symbol_sentiment, technical_sentiment, FACTORS
 from fear_greed_engine import get_fear_greed_index
 
 app = Flask(__name__, static_folder="public", static_url_path="")
@@ -527,26 +527,35 @@ def clear_history():
 # ------------------------------------------------------------------
 # Sentiment API Routes
 # ------------------------------------------------------------------
-@app.route("/api/sentiment/trending")
-def sentiment_trending():
-    """Return trending tickers with sentiment analysis."""
+@app.route("/api/sentiment/simulate", methods=["POST"])
+def sentiment_simulate():
+    """Sentiment Lab (Lab law 1, D-010): feed the five behavioural factors
+    through the REAL technical_sentiment() aggregator. The page/future lab owns
+    zero math — same no-drift guarantee as the Score and Gauge labs."""
     try:
-        tickers = get_trending_with_sentiment()
-        return app.response_class(
-            response=json.dumps({
-                "status": "success",
-                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                "tickers": tickers,
-            }, cls=NumpyEncoder),
-            mimetype="application/json",
-        )
-    except Exception as e:
-        return jsonify({"status": "error", "error": str(e)}), 500
+        body = request.get_json(silent=True)
+    except Exception:
+        body = None
+    if not isinstance(body, dict):
+        return jsonify({"status": "error", "error": "JSON body required"}), 400
+
+    components = {}
+    for f in FACTORS:
+        v = body.get(f)
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            return jsonify({"status": "error", "error": f"{f} must be a number in [0, 100]"}), 400
+        if not (0 <= v <= 100):
+            return jsonify({"status": "error", "error": f"{f} out of range [0, 100]"}), 400
+        components[f] = float(v)
+
+    result = technical_sentiment(components)
+    return jsonify({"status": "success", **result})
 
 
 @app.route("/api/sentiment/<symbol>")
 def sentiment_symbol(symbol):
-    """Return sentiment analysis for a specific ticker."""
+    """Per-ticker behavioural sentiment: Technical Sentiment + Relative
+    Strength + news strip (D-013)."""
     symbol = symbol.upper().strip()
     if not symbol or len(symbol) > 10:
         return jsonify({"status": "error", "error": "Invalid ticker symbol"}), 400

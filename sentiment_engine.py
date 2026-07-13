@@ -1,385 +1,314 @@
 #!/usr/bin/env python3
 """
-Sentiment Analysis Engine — Multi-source sentiment analysis using
-StockTwits, Yahoo Finance news headlines, and VADER scoring.
-Classifies tickers as Bullish, Bearish, or Trending.
+Behavioral Sentiment Engine (D-013 rebuild).
+
+Per-ticker sentiment computed from what traders DO — price and volume
+behaviour — not what they say. Replaces the retired StockTwits->VADER
+social-chatter engine (obituary in docs/sentiment.md: source shutdown +
+VADER-on-headlines mismatch). Display-only: D-005 rules sentiment is not a
+gauge voter; this is analysis, nothing trades on it.
+
+Three layers (D-013 scope A + C + D; Options-Implied B is a follow-up commit):
+  A. Technical Sentiment — a 0-100 behavioural score from five factors, bucketed
+     Bullish / Bearish / Trending (labels kept per D-013 Q2, now computed).
+     technical_sentiment() is a PURE function (Lab law 1, D-010) shared by the
+     live path and POST /api/sentiment/simulate — a future Sentiment Lab twists
+     the factors through the same code.
+  C. Relative Strength — ticker 20d vs SPY and vs its GICS group; group vs market.
+  D. News strip — yfinance headlines + earnings chip as supporting context.
 """
-
-import time
-import json
 import os
-import requests
+import json
+import time
 
-try:
-    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-    _analyzer = SentimentIntensityAnalyzer()
-except ImportError:
-    _analyzer = None
-    print("[WARN] vaderSentiment not installed — sentiment scoring disabled")
+import numpy as np
 
-try:
-    import yfinance as yf
-    USE_YFINANCE = True
-except ImportError:
-    USE_YFINANCE = False
+from signal_engine import (
+    fetch_data,
+    compute_rsi,
+    compute_macd,
+    compute_moving_averages,
+    compute_momentum_metrics,
+)
 
-# ------------------------------------------------------------------
-# Config
-# ------------------------------------------------------------------
-STOCKTWITS_BASE = "https://api.stocktwits.com/api/2"
 CACHE_TTL = 900  # 15 minutes
-REQUEST_TIMEOUT = 10
 
-# In-memory caches
-_trending_cache = {"data": None, "ts": 0}
-_symbol_cache = {}  # { "AAPL": { "data": {...}, "ts": timestamp } }
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UNIVERSE_ACTIVE_PATH = os.path.join(_BASE_DIR, "data", "universe_active.json")
 
-# Dashboard tickers for fallback trending list
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+_symbol_cache = {}          # {symbol: {"data": ..., "ts": ...}}
+_spy_cache = {"ret": None, "ts": 0}
 
-# Browser-like headers (StockTwits blocks simple User-Agents)
-_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Accept": "application/json",
-    "Accept-Language": "en-US,en;q=0.9",
+# --- Buckets (D-013 Q2: KEEP Bullish / Bearish / Trending, now computed from
+# the Technical Sentiment score rather than scraped chatter). Trending is the
+# neutral middle band. ---
+BULLISH_MIN = 60
+BEARISH_MAX = 40
+
+# The five behavioural factors, in composite order.
+FACTORS = ["range_position", "volume_trend", "momentum_posture",
+           "sma_structure", "return_percentile"]
+
+FACTOR_LABELS = {
+    "range_position": "52w range position",
+    "volume_trend": "Volume trend (accum/dist)",
+    "momentum_posture": "RSI + MACD posture",
+    "sma_structure": "SMA structure",
+    "return_percentile": "20d return vs self",
 }
 
 
-# ------------------------------------------------------------------
-# StockTwits Data Fetching
-# ------------------------------------------------------------------
-def fetch_trending_tickers():
-    """
-    Fetch currently trending ticker symbols from StockTwits.
-    Returns list of dicts: [{symbol, title, watchlist_count}, ...]
-    """
-    try:
-        url = f"{STOCKTWITS_BASE}/trending/symbols.json"
-        resp = requests.get(url, timeout=REQUEST_TIMEOUT, headers=_HEADERS)
-        if resp.status_code != 200:
-            print(f"  StockTwits trending API returned {resp.status_code}")
-            return []
-
-        data = resp.json()
-        symbols = data.get("symbols", [])
-        result = []
-        for s in symbols:
-            result.append({
-                "symbol": s.get("symbol", ""),
-                "title": s.get("title", ""),
-                "watchlist_count": s.get("watchlist_count", 0),
-            })
-        return result
-    except Exception as e:
-        print(f"  StockTwits trending unavailable: {e}")
-        return []
+def _clamp(v, lo=0.0, hi=100.0):
+    return max(lo, min(hi, v))
 
 
-def fetch_stocktwits_messages(symbol, limit=30):
-    """
-    Fetch recent messages for a symbol from StockTwits.
-    Returns list of dicts: [{body, created_at, sentiment}, ...]
-    """
-    try:
-        url = f"{STOCKTWITS_BASE}/streams/symbol/{symbol}.json"
-        resp = requests.get(url, timeout=REQUEST_TIMEOUT, headers=_HEADERS)
-        if resp.status_code == 429:
-            print(f"  StockTwits rate limited for {symbol}")
-            return []
-        if resp.status_code != 200:
-            print(f"  StockTwits messages returned {resp.status_code} for {symbol}")
-            return []
-
-        data = resp.json()
-        messages = data.get("messages", [])
-        result = []
-        for msg in messages[:limit]:
-            user_sentiment = None
-            if msg.get("entities", {}).get("sentiment"):
-                user_sentiment = msg["entities"]["sentiment"].get("basic")
-
-            result.append({
-                "body": msg.get("body", ""),
-                "created_at": msg.get("created_at", ""),
-                "user": msg.get("user", {}).get("username", ""),
-                "user_sentiment": user_sentiment,
-                "likes": msg.get("likes", {}).get("total", 0),
-                "source": "stocktwits",
-            })
-        return result
-    except Exception as e:
-        print(f"  StockTwits error for {symbol}: {e}")
-        return []
+def _bucket(score):
+    if score >= BULLISH_MIN:
+        return "Bullish"
+    if score <= BEARISH_MAX:
+        return "Bearish"
+    return "Trending"
 
 
 # ------------------------------------------------------------------
-# Yahoo Finance News Headlines (Fallback data source)
+# The five factors — pure 0-100 maps (unit-pinnable, no network).
 # ------------------------------------------------------------------
-def fetch_yahoo_news_headlines(symbol):
-    """
-    Fetch recent news headlines for a ticker from Yahoo Finance via yfinance.
-    Returns list of message-like dicts compatible with analyze_sentiment().
-    """
-    if not USE_YFINANCE:
-        return []
-
-    try:
-        ticker = yf.Ticker(symbol)
-        news = ticker.news
-        if not news:
-            return []
-
-        messages = []
-        for item in news[:20]:
-            title = item.get("title", "")
-            # Some yfinance versions use different field names
-            publisher = item.get("publisher", item.get("source", ""))
-            pub_date = item.get("providerPublishTime", item.get("publishedDate", ""))
-            link = item.get("link", "")
-
-            if title:
-                messages.append({
-                    "body": title,
-                    "created_at": str(pub_date) if pub_date else "",
-                    "user": publisher or "Yahoo Finance",
-                    "user_sentiment": None,
-                    "likes": 0,
-                    "source": "yahoo_news",
-                    "link": link,
-                })
-        return messages
-    except Exception as e:
-        print(f"  Yahoo news error for {symbol}: {e}")
-        return []
+def _range_position_score(price, low52, high52):
+    """Where price sits in its 52-week range: at low -> 0, at high -> 100."""
+    if high52 <= low52:
+        return 50.0
+    return _clamp((price - low52) / (high52 - low52) * 100)
 
 
-def get_dashboard_tickers():
-    """
-    Get the list of tickers from the dashboard's signals.json
-    to use as a fallback trending list when StockTwits is unavailable.
-    Returns top movers (highest absolute YTD return).
-    """
-    try:
-        signals_path = os.path.join(DATA_DIR, "signals.json")
-        if not os.path.exists(signals_path):
-            return []
-
-        with open(signals_path, "r") as f:
-            data = json.load(f)
-
-        tickers = []
-        for group in data.get("groups", []):
-            for stock in group.get("stocks", []):
-                tickers.append({
-                    "symbol": stock.get("ticker", ""),
-                    "title": group.get("name", ""),
-                    "watchlist_count": 0,
-                    "ytd_return": stock.get("ytd_return", 0),
-                    "score": stock.get("score", 50),
-                })
-
-        # Sort by absolute YTD return (biggest movers = most interesting)
-        tickers.sort(key=lambda t: abs(t.get("ytd_return", 0)), reverse=True)
-        return tickers[:20]  # Top 20 movers
-    except Exception as e:
-        print(f"  Error loading dashboard tickers: {e}")
-        return []
+def _volume_trend_score(up_volume, down_volume):
+    """Accumulation vs distribution: share of recent volume on up days.
+    All volume on up days -> 100 (accumulation); all on down days -> 0."""
+    total = up_volume + down_volume
+    if total <= 0:
+        return 50.0
+    return _clamp(up_volume / total * 100)
 
 
-# ------------------------------------------------------------------
-# VADER Sentiment Analysis
-# ------------------------------------------------------------------
-def analyze_sentiment(messages):
-    """
-    Run VADER sentiment analysis on a list of messages.
-    Returns aggregated sentiment metrics for the ticker.
-    """
-    if not messages:
-        return {
-            "avg_score": 0,
-            "bullish_pct": 0,
-            "bearish_pct": 0,
-            "neutral_pct": 100,
-            "classification": "Neutral",
-            "message_count": 0,
-            "sample_bullish": [],
-            "sample_bearish": [],
-        }
-
-    scores = []
-    bullish_msgs = []
-    bearish_msgs = []
-
-    for msg in messages:
-        body = msg.get("body", "")
-        if not body or not _analyzer:
-            continue
-
-        vs = _analyzer.polarity_scores(body)
-        compound = vs["compound"]
-        scores.append(compound)
-
-        msg_with_score = {
-            "body": body[:200],  # Truncate long messages
-            "user": msg.get("user", ""),
-            "score": round(compound, 3),
-            "created_at": msg.get("created_at", ""),
-            "likes": msg.get("likes", 0),
-        }
-
-        if compound >= 0.05:
-            bullish_msgs.append(msg_with_score)
-        elif compound <= -0.05:
-            bearish_msgs.append(msg_with_score)
-
-    if not scores:
-        return {
-            "avg_score": 0, "bullish_pct": 0, "bearish_pct": 0,
-            "neutral_pct": 100, "classification": "Neutral",
-            "message_count": 0, "sample_bullish": [], "sample_bearish": [],
-        }
-
-    total = len(scores)
-    bullish_count = sum(1 for s in scores if s >= 0.05)
-    bearish_count = sum(1 for s in scores if s <= -0.05)
-    neutral_count = total - bullish_count - bearish_count
-
-    avg_score = round(sum(scores) / total, 3)
-    bullish_pct = round(bullish_count / total * 100, 1)
-    bearish_pct = round(bearish_count / total * 100, 1)
-    neutral_pct = round(neutral_count / total * 100, 1)
-
-    # Classification
-    if bullish_pct > 55 and avg_score > 0.1:
-        classification = "Bullish"
-    elif bearish_pct > 55 and avg_score < -0.1:
-        classification = "Bearish"
+def _momentum_posture_score(rsi, macd_above_signal, hist_rising):
+    """RSI is the 0-100 base posture; MACD tilts it up to +/-10
+    (bullish-and-rising most positive, bearish-and-falling most negative)."""
+    base = _clamp(rsi)
+    if macd_above_signal:
+        adj = 10 if hist_rising else 5
     else:
-        classification = "Trending"
+        adj = -5 if hist_rising else -10
+    return _clamp(base + adj)
 
-    # Sort and pick top samples
-    bullish_msgs.sort(key=lambda x: x["score"], reverse=True)
-    bearish_msgs.sort(key=lambda x: x["score"])
 
+def _sma_structure_score(price, sma20, sma50):
+    """Count of the three bullish MA conditions (price>SMA20, price>SMA50,
+    SMA20>SMA50) -> 0 / 33 / 67 / 100."""
+    trues = sum((price > sma20, price > sma50, sma20 > sma50))
+    return trues / 3 * 100
+
+
+def _return_percentile_score(ret_20d, history_20d):
+    """Percentile of the current 20-day return within the ticker's own recent
+    history of 20-day returns — is it hot or cold *for itself*."""
+    if not history_20d:
+        return 50.0
+    below = sum(1 for r in history_20d if r <= ret_20d)
+    return _clamp(below / len(history_20d) * 100)
+
+
+# ------------------------------------------------------------------
+# Pure aggregator — Lab law 1: the live path AND /api/sentiment/simulate
+# both call THIS. The page owns zero math.
+# ------------------------------------------------------------------
+def technical_sentiment(components):
+    """components: {factor: 0-100} for each of FACTORS. Returns the composite
+    (equal-weight mean, like F&G at ticker granularity), its bucket, and the
+    normalised per-factor scores. Raises KeyError/ValueError on a bad factor."""
+    vals = []
+    for f in FACTORS:
+        v = components[f]
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(f"{f} must be a number in [0, 100]")
+        if not (0 <= v <= 100):
+            raise ValueError(f"{f} out of range [0, 100]")
+        vals.append(float(v))
+    score = round(sum(vals) / len(vals))
     return {
-        "avg_score": avg_score,
-        "bullish_pct": bullish_pct,
-        "bearish_pct": bearish_pct,
-        "neutral_pct": neutral_pct,
-        "classification": classification,
-        "message_count": total,
-        "sample_bullish": bullish_msgs[:3],
-        "sample_bearish": bearish_msgs[:3],
+        "score": score,
+        "bucket": _bucket(score),
+        "components": {f: round(float(components[f]), 1) for f in FACTORS},
     }
 
 
+def relative_strength(ticker_20d, spy_20d, group_20d=None, group_name=None):
+    """Pure relative-strength math from three 20-day returns. group_20d None
+    (ticker not in the active universe) degrades the group rows gracefully."""
+    rows = {
+        "ticker_20d": round(ticker_20d, 2),
+        "spy_20d": round(spy_20d, 2),
+        "vs_spy": round(ticker_20d - spy_20d, 2),          # alpha
+        "group_name": group_name,
+        "group_20d": round(group_20d, 2) if group_20d is not None else None,
+        "vs_group": round(ticker_20d - group_20d, 2) if group_20d is not None else None,
+        "group_vs_market": round(group_20d - spy_20d, 2) if group_20d is not None else None,
+    }
+    return rows
+
+
 # ------------------------------------------------------------------
-# Orchestration Functions
+# Real computation from a ticker's OHLCV.
 # ------------------------------------------------------------------
-def get_trending_with_sentiment():
-    """
-    Fetch trending tickers and analyze sentiment for each.
-    Uses multi-source approach:
-      1. Try StockTwits trending + messages
-      2. If StockTwits fails, use dashboard tickers + Yahoo Finance news
-    Results are cached for 15 minutes.
-    Returns list of ticker sentiment dicts sorted by message activity.
-    """
-    global _trending_cache
+def compute_factors(df):
+    """Compute the five 0-100 behavioural factors from a ticker's OHLCV frame."""
+    close = df["Close"]
+    price = float(close.iloc[-1])
+
+    mom = compute_momentum_metrics(df)
+    # NaN MAs (young listing, <20/<50 rows) fall back to price — matching
+    # score_stock's convention. Note: this biases sma_structure downward for
+    # 30-49-row names (price>SMA50 reads False), same short-history artifact the
+    # rest of the system carries; the universe's 90-day gate keeps most out.
+    ma20s, ma50s, _ = compute_moving_averages(close)
+    ma20 = float(ma20s.iloc[-1]) if not np.isnan(ma20s.iloc[-1]) else price
+    ma50 = float(ma50s.iloc[-1]) if not np.isnan(ma50s.iloc[-1]) else price
+
+    rsi_series = compute_rsi(close)
+    rsi = float(rsi_series.iloc[-1]) if not np.isnan(rsi_series.iloc[-1]) else 50.0
+    macd_line, macd_sig, macd_hist = compute_macd(close)
+    macd_above = float(macd_line.iloc[-1]) > float(macd_sig.iloc[-1])
+    hist_rising = len(macd_hist) > 1 and float(macd_hist.iloc[-1]) > float(macd_hist.iloc[-2])
+
+    # up/down volume over the last 20 sessions (accumulation vs distribution)
+    window = df.iloc[-21:]
+    chg = window["Close"].diff().iloc[1:]
+    vol = window["Volume"].iloc[1:]
+    up_vol = float(vol[chg > 0].sum())
+    down_vol = float(vol[chg < 0].sum())
+
+    # 20-day return + its distribution over the trailing year (percentile-vs-self)
+    r20 = close.pct_change(20).dropna() * 100
+    ret_20d = float(r20.iloc[-1]) if len(r20) else 0.0
+    history_20d = [float(x) for x in r20.iloc[-252:]] if len(r20) else []
+
+    return {
+        "range_position": _range_position_score(price, mom["low_52w"], mom["high_52w"]),
+        "volume_trend": _volume_trend_score(up_vol, down_vol),
+        "momentum_posture": _momentum_posture_score(rsi, macd_above, hist_rising),
+        "sma_structure": _sma_structure_score(price, ma20, ma50),
+        "return_percentile": _return_percentile_score(ret_20d, history_20d),
+    }
+
+
+def _group_for_symbol(symbol, path=None):
+    """(group_name, group_median_1m) for a symbol from the committed universe
+    ranking, or (None, None) if it isn't an active-universe name. The group
+    median is the weekly-rotation value (universe_active.json is rebuilt
+    Saturdays) — honest caveat surfaced on the page."""
+    path = path or UNIVERSE_ACTIVE_PATH
+    try:
+        with open(path) as f:
+            uni = json.load(f)
+    except (OSError, ValueError):
+        return None, None
+    for g in (uni.get("ranking") or []):
+        for t in (g.get("tickers") or []):
+            if t.get("ticker") == symbol:
+                return g.get("name"), g.get("median_1m")
+    return None, None
+
+
+def _spy_20d():
+    """SPY 20-day (1-month) return, cached 15 min. None if unavailable."""
     now = time.time()
+    if _spy_cache["ret"] is not None and (now - _spy_cache["ts"]) < CACHE_TTL:
+        return _spy_cache["ret"]
+    df = fetch_data("SPY", period="6mo")
+    if df is None or len(df) < 22:
+        return None
+    ret = compute_momentum_metrics(df)["return_1m"]
+    _spy_cache.update(ret=ret, ts=now)
+    return ret
 
-    if _trending_cache["data"] is not None and (now - _trending_cache["ts"]) < CACHE_TTL:
-        return _trending_cache["data"]
 
-    # Attempt 1: StockTwits trending
-    print("Fetching trending tickers from StockTwits...")
-    trending = fetch_trending_tickers()
-    source_label = "StockTwits"
-
-    # Attempt 2: Fallback to dashboard tickers if StockTwits unavailable
-    if not trending:
-        print("  StockTwits unavailable — falling back to dashboard tickers + Yahoo Finance news...")
-        trending = get_dashboard_tickers()
-        source_label = "Yahoo Finance News"
-
-    if not trending:
-        if _trending_cache["data"]:
-            return _trending_cache["data"]
+def fetch_news(symbol, limit=8):
+    """yfinance news headlines for the strip — supporting context, never the
+    feature. Graceful: any failure (fetch OR a malformed item) yields [] or
+    skips the item, so a feed hiccup omits the strip, never crashes the page."""
+    try:
+        import yfinance as yf
+        news = yf.Ticker(symbol).news
+    except Exception:
         return []
+    if not isinstance(news, list):
+        return []
+    items = []
+    for it in news[:limit]:
+        # yfinance news items are dicts, but a schema change / bad item must
+        # not sink the whole page — skip anything unparseable.
+        try:
+            if not isinstance(it, dict):
+                continue
+            content = it.get("content") if isinstance(it.get("content"), dict) else it
+            title = (content.get("title") or it.get("title") or "").strip()
+            if not title:
+                continue
+            provider = content.get("provider")
+            publisher = provider.get("displayName") if isinstance(provider, dict) else it.get("publisher", "")
+            canon = content.get("canonicalUrl")
+            link = canon.get("url") if isinstance(canon, dict) else it.get("link", "")
+            items.append({"title": title, "publisher": publisher or "", "link": link or ""})
+        except Exception:
+            continue
+    return items
 
-    results = []
-    for i, ticker_info in enumerate(trending[:20]):
-        symbol = ticker_info["symbol"]
-        print(f"  Analyzing sentiment for {symbol} ({i+1}/{min(len(trending),20)})...")
 
-        # Gather messages from all available sources
-        messages = []
-
-        # Try StockTwits messages
-        st_msgs = fetch_stocktwits_messages(symbol, limit=30)
-        messages.extend(st_msgs)
-
-        # Always try Yahoo Finance news headlines (supplements StockTwits)
-        yf_msgs = fetch_yahoo_news_headlines(symbol)
-        messages.extend(yf_msgs)
-
-        sentiment = analyze_sentiment(messages)
-
-        results.append({
-            "symbol": symbol,
-            "title": ticker_info.get("title", ""),
-            "watchlist_count": ticker_info.get("watchlist_count", 0),
-            "data_source": source_label,
-            **sentiment,
-        })
-
-        # Small delay to avoid rate limiting
-        if i < len(trending) - 1:
-            time.sleep(0.2)
-
-    # Sort by message count (most discussed first)
-    results.sort(key=lambda x: x["message_count"], reverse=True)
-
-    _trending_cache = {"data": results, "ts": now}
-    return results
+def _earnings_chip(symbol):
+    """Next-earnings chip for the news strip (best-effort, cached via
+    earnings_calendar). None on any failure — graceful."""
+    try:
+        from earnings_calendar import get_earnings_map, days_to_earnings
+        date_iso = get_earnings_map([symbol]).get(symbol)
+        if not date_iso:
+            return None
+        return {"date": date_iso, "days": days_to_earnings(date_iso)}
+    except Exception:
+        return None
 
 
 def get_symbol_sentiment(symbol):
-    """
-    Get sentiment analysis for a specific ticker symbol.
-    Uses multi-source: StockTwits + Yahoo Finance news.
-    Results cached for 15 minutes per symbol.
-    """
+    """Full per-ticker behavioural sentiment payload for the page: Technical
+    Sentiment (A), Relative Strength (C), and a news strip (D). Cached 15 min."""
     symbol = symbol.upper().strip()
     now = time.time()
+    cached = _symbol_cache.get(symbol)
+    if cached and (now - cached["ts"]) < CACHE_TTL:
+        return cached["data"]
 
-    if symbol in _symbol_cache and (now - _symbol_cache[symbol]["ts"]) < CACHE_TTL:
-        return _symbol_cache[symbol]["data"]
+    df = fetch_data(symbol, period="1y")
+    if df is None or len(df) < 30:
+        return {"symbol": symbol, "available": False,
+                "error": "Insufficient price history for a technical read."}
 
-    print(f"Analyzing sentiment for {symbol}...")
-    messages = []
+    factors = compute_factors(df)
+    tech = technical_sentiment(factors)
 
-    # Try StockTwits
-    st_msgs = fetch_stocktwits_messages(symbol, limit=30)
-    messages.extend(st_msgs)
-
-    # Always try Yahoo Finance news
-    yf_msgs = fetch_yahoo_news_headlines(symbol)
-    messages.extend(yf_msgs)
-
-    sentiment = analyze_sentiment(messages)
-
-    sources = []
-    if st_msgs:
-        sources.append(f"StockTwits ({len(st_msgs)})")
-    if yf_msgs:
-        sources.append(f"Yahoo News ({len(yf_msgs)})")
+    ticker_20d = compute_momentum_metrics(df)["return_1m"]
+    spy_20d = _spy_20d()
+    group_name, group_20d = _group_for_symbol(symbol)
+    rel = relative_strength(ticker_20d, spy_20d if spy_20d is not None else 0.0,
+                            group_20d, group_name) if spy_20d is not None else None
 
     result = {
         "symbol": symbol,
-        "data_sources": ", ".join(sources) if sources else "No data available",
-        **sentiment,
+        "available": True,
+        "score": tech["score"],
+        "bucket": tech["bucket"],
+        "factors": tech["components"],
+        "factor_labels": FACTOR_LABELS,
+        "relative_strength": rel,
+        "news": fetch_news(symbol),
+        "earnings": _earnings_chip(symbol),
+        "price": round(float(df["Close"].iloc[-1]), 2),
     }
-
     _symbol_cache[symbol] = {"data": result, "ts": now}
     return result
