@@ -67,6 +67,20 @@ def test_chassis_raw_logic():
     print("  chassis raw logic: trend decides direction, throttles scale within: OK")
 
 
+def test_throttle_config():
+    # default require_k=1: any single throttle downgrades In-Trend (campaign rule)
+    assert _raw_chassis_state(True, 25.0, False, 1.0) == "In-Trend-Throttled"
+    # require_k=2: one throttle stays Full; two downgrade
+    assert _raw_chassis_state(True, 25.0, False, 1.0, require_k=2) == "In-Trend-Full"
+    assert _raw_chassis_state(True, 25.0, True, 1.0, require_k=2) == "In-Trend-Throttled"
+    # require_k=3: only all three downgrade
+    assert _raw_chassis_state(True, 25.0, True, 1.0, require_k=3) == "In-Trend-Full"
+    assert _raw_chassis_state(True, 25.0, True, -1.0, require_k=3) == "In-Trend-Throttled"
+    # looser vix_thr: vix 22 is not stress at threshold 25
+    assert _raw_chassis_state(True, 22.0, False, 1.0, vix_thr=25.0) == "In-Trend-Full"
+    print("  throttle config: require_k gating + threshold looseness (defaults=campaign): OK")
+
+
 def test_hysteresis_asymmetric():
     # upgrade needs N=2 closes above confirmed; downgrade is instant (jump to raw)
     raws = ["In-Trend-Full", "In-Trend-Full", "Out-Risk-off", "Out-Risk-off",
@@ -152,6 +166,7 @@ def test_ladder_and_durations(inputs):
 if __name__ == "__main__":
     print("\n=== Gauge B campaign — chassis units + lookahead pins ===")
     test_chassis_raw_logic()
+    test_throttle_config()
     test_hysteresis_asymmetric()
     test_hysteresis_symmetric()
     if not _have_cache():
