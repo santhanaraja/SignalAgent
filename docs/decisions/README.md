@@ -13,6 +13,9 @@ linked."
 Deliberation briefs (the pre-ruling analysis documents) live in
 [`docs/briefs/`](../briefs/); records link back to theirs.
 
+The direction these records serve — plus a dated changelog of what has landed — is
+in [`docs/NORTH-STAR.md`](../NORTH-STAR.md).
+
 ## Lifecycle
 
 ```mermaid
@@ -45,6 +48,10 @@ flowchart TD
 | [D-009](D-009-exit-timing-1230.md) | Exit timing — 12:30 intraday checkpoint | 2026-07-11 | **Proposed** — gated on Build 5 evidence | — |
 | [D-010](D-010-lab-pattern-laws.md) | The Lab pattern three laws | 2026-07-11 | Ruled | — |
 | [D-011](D-011-aplus-doctrine.md) | The A+ Doctrine — computed setup grade (composite approach filter, 7-item checklist, ≥15td earnings runway, hard-gate Choppy/Caution) | 2026-07-12 | Ruled | — |
+| [D-012](D-012-fear-greed-rebuild.md) | Fear & Greed de-duplication (7 rows → 7 independent inputs) + daily persistence | 2026-07-13 | Ruled | — |
+| [D-013](D-013-sentiment-rebuild.md) | Sentiment rebuilt as per-ticker behavioral analysis (Technical Sentiment + relative strength + news; VADER/StockTwits retired) | 2026-07-13 | Ruled | — |
+| [D-014](D-014-tradingview-data-api.md) | TradingView Data API as a candidate yfinance replacement | 2026-07-13 | **Proposed** — parked (gated on a free-tier spike, gated on a trigger) | — |
+| [D-015](D-015-oss-frameworks-survey.md) | Survey serious OSS trading frameworks for borrowable techniques (harvest, don't migrate) | 2026-07-13 | **Proposed** — parked (gated on the build queue clearing) | — |
 
 Status meanings: **Proposed** (deliberation open or parked with its
 retest recipe) · **Ruled** (in force) · **Superseded-by-D-xxx** (kept for
