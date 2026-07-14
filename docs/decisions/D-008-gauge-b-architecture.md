@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | D-008 |
 | **Date** | 2026-07-12 (proposed and ruled same day — session parts 1 and 2) |
-| **Status** | **Ruled** |
+| **Status** | **Ruled** · amended 2026-07-13 (harness campaign complete; throttle calibration locked — PER-508 comment 11724) |
 
 ## Context
 
@@ -84,6 +84,57 @@ Build-queue consequence: R28 (Phase 0 of [D-007](D-007-theme-layer-retirement.md
 the week's flagship) implements the regime-scaled ceiling with these
 numbers from day one.
 
+## Amendment — 2026-07-13: harness campaign complete, throttle locked, Gauge B fully specified
+
+The Q2/Q3/Q4 "harness decides" questions were run
+([docs/gauge-b-campaign.md](../gauge-b-campaign.md), commit `7904bd6`) and the last
+open parameter — the throttle calibration — was chosen from the frontier sweep
+([docs/gauge-b-throttle-sweep.md](../gauge-b-throttle-sweep.md), commit `6603862`).
+**Gauge B is now fully specified** (PER-508 comment 11724). The campaign's honest
+verdict: the chassis is a drawdown-reducer, not a return-enhancer — it loses CAGR to
+the naked 200DMA but wins Sharpe/Sortino/maxDD, and the return gap is throttle
+calibration (the direction layer alone, `binary(chassis)`, posts 10.13% full CAGR).
+
+**The evidence-chosen parameter set:**
+
+| Question | Chosen | Evidence |
+|---|---|---|
+| Q1 architecture | trend chassis (200DMA core; VIX/HY/breadth throttle) | fixes the parliament (1.85% → 9.10% CAGR at the locked config); the 200DMA carried the signal |
+| Q2 credit shape | **pctile_60d** (HY OAS 60-day trailing percentile) | top train **and** validate Sharpe of the six shapes |
+| Q3 hysteresis | **asymmetric N=2** | halves the flicker (In-Trend-Full runs≤2d 77→30 full-sample; whipsaws 21.6→12.9/yr on validate); asymmetric beats symmetric at equal N |
+| Q4 ladder | **90/50/25/5** regime→R28 ceiling | dominates the drafted 25/15/5/0 (7.31% vs 3.52% full CAGR) |
+| **Throttle** (this amendment) | **k1 · vix22 · hy90 · br−0.5** — the Quality point | best risk-adjusted point on the 240-combo frontier |
+
+**Locked throttle — the Quality point** (the In-Trend Full→Throttled cut-point: a
+single throttle firing at these levels downgrades exposure):
+`require_k=1 · vix_cut=22 · hy_pctile_cut=90 · breadth_cut=−0.5`.
+
+- Full-window: **9.10% CAGR · −11.42% maxDD · Sharpe 0.88 / Sortino 1.22** (best
+  risk-adjusted on the entire frontier). Validate: 7.59% CAGR.
+- vs naked 200DMA (9.83% / −19.82% / 0.68 / 0.92): slightly less CAGR, **~half the
+  drawdown**, clearly better risk-adjusted.
+
+**Rationale (a values decision, recorded as such):** chosen over the return-matcher
+(k2/vix20/hy95/br−2: 9.77% / −14.69%) because for a day-job swing trader managing
+family capital, the drawdown one can **hold through** is the only return that
+compounds — −11% is survivable, ~−20% (the naked 200DMA's own drawdown) is where
+strategies get abandoned. Gave up
+~0.7pp full-window CAGR for ~3pp less drawdown and materially better risk-adjusted
+metrics; Sortino 1.22 (edging buy-and-hold's 1.01) confirms the downside efficiency.
+
+**Honest caveat (D-006):** the frontier is full-window Pareto; out-of-sample is
+softer — validate CAGR 7.59% sits below the 200DMA's 9.65% and the validate drawdown
+edge is narrower. The honest claim is **not** "dominates the benchmark out-of-sample"
+— it is "full-window strong; out-of-sample slightly-less-return / moderately-less-
+drawdown; best risk-adjusted point available." The choice optimizes for survivable
+drawdown (the stated goal), not benchmark-relative CAGR.
+
+**Build status:** every Gauge B parameter — chassis, credit shape, hysteresis,
+ladder, throttle — is now evidence-chosen. The Fable Ultracode build (post-Friday)
+implements exactly this config, under the Build 4 step-0 extraction-pin discipline
+(the `compute_regime` replay must reproduce recorded production history on unchanged
+inputs). No open parameters remain.
+
 ## Evidence
 
 - [docs/backtest-regime.md](../backtest-regime.md) — the Build 4 record
@@ -99,6 +150,10 @@ numbers from day one.
    individually.
 2. The trend chassis underperforming its own parliament control
    out-of-sample.
+3. Live Gauge B drawdowns materially exceeding the −11.42% backtest
+   expectation of the locked Quality point, OR a preference shift toward
+   return-over-smoothness — move up the throttle frontier (preserved as the
+   menu in the throttle-sweep doc) toward the return-matcher.
 
 ## Retest recipe
 
@@ -117,6 +172,7 @@ python3 test_regime_extraction.py             # any new ladder must re-pin produ
 
 ## Links
 
-- Jira: PER-508 comment 11715 (the rulings, verbatim source) · 11711 (bear steepening)
+- Jira: PER-508 comment 11715 (the Q1–Q4 rulings) · 11711 (bear steepening) · 11724 (throttle amendment — Gauge B fully specified)
+- Campaign: [docs/gauge-b-campaign.md](../gauge-b-campaign.md) (commit 7904bd6) · [docs/gauge-b-throttle-sweep.md](../gauge-b-throttle-sweep.md) (commit 6603862)
 - Brief: docs/briefs/gauge-b-design-brief.md
 - Fired-from: [D-001](D-001-swing-gauge-1a.md); protocol: [D-006](D-006-build4-protocol.md); phase order: [D-007](D-007-theme-layer-retirement.md)
