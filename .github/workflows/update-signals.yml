@@ -67,6 +67,11 @@ jobs:
         run: python -m framework.framework_runner
         env:
           PYTHONUNBUFFERED: '1'
+          # Gauge B (D-008): the chassis credit throttle's VALIDATED basis is
+          # the FRED OAS 60d percentile — without this key it degrades to the
+          # HYG/IEF fallback basis (visibly flagged CHASSIS DEGRADED on the
+          # framework page). The secret must exist in repo settings.
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         continue-on-error: true
 
       - name: Run History Manager

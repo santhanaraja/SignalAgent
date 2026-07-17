@@ -52,7 +52,10 @@ def _pre_1a_payload():
     }
 
 
-def _current_payload(hours_ago=0):
+def _parliament_payload(hours_ago=0):
+    """A Build-1A parliament artifact — structurally sound for its era but
+    STALE under the chassis engine (D-008 cutover: the guard must refuse to
+    serve the other engine's output as current)."""
     g = {"value": 1.0, "signal": "risk_on", "detail": "d"}
     return {
         "generated_at": _now_iso(hours_ago),
@@ -72,6 +75,28 @@ def _current_payload(hours_ago=0):
         "position_signals": {"tickers": {"IWM": {"state": "HELD"}},
                              "transitions": []},
     }
+
+
+def _current_payload(hours_ago=0):
+    """A Gauge B chassis artifact — the current schema (regime-b-chassis)."""
+    p = _parliament_payload(hours_ago)
+    p["schema"] = "regime-b-chassis"
+    p["regime"]["engine"] = "chassis"
+    p["regime"]["chassis"] = {
+        "engine": "chassis",
+        "raw_state": "In-Trend-Full",
+        "confirmed_state": "In-Trend-Full",
+        "regime": "Risk-on / Trending",
+        "exposure_ceiling_pct": 90.0,
+        "trend_in": True,
+        "throttles": {"vix": {"firing": False}, "hy": {"firing": False},
+                      "breadth": {"firing": False}},
+        "throttles_firing": 0,
+        "hysteresis": {"up": 0, "down": 0, "n": 2, "mode": "asymmetric"},
+        "degraded": False, "degraded_reason": None,
+    }
+    p["regime"]["backdrop_gate"]["role"] = "trend_chassis"
+    return p
 
 
 class _Env:
@@ -166,6 +191,45 @@ def test_valid_but_old_200_with_stale_flag():
     print("  valid-but-old -> 200 + stale_hours flag, no refresh kick: OK")
 
 
+def test_parliament_artifact_stale_under_chassis():
+    """D-008 cutover: a deploy-baked PARLIAMENT artifact under the chassis
+    engine is schema-stale — 503 + refresh kick, exactly like the pre-1A
+    class. This is what regenerates the committed artifact after the flip."""
+    env = _Env()
+    try:
+        env.write(_parliament_payload())
+        env.kicks.clear()
+        r = env.client.get(GUARDED[0])
+        assert r.status_code == 503, f"expected 503, got {r.status_code}"
+        assert r.get_json()["status"] == "warming_up"
+        assert env.wait_for_kick(), "refresh was not kicked"
+    finally:
+        env.close()
+    print("  parliament artifact under chassis engine -> 503 + refresh kick "
+          "(cutover regeneration): OK")
+
+
+def test_chassis_artifact_stale_under_parliament():
+    """Reverse cutover direction (review finding): after a revert to the
+    parliament engine, a chassis artifact must equally read stale and
+    regenerate — the guard is symmetric."""
+    env = _Env()
+    cfg = ticker_api._regime_cfg()
+    old_engine = cfg["engine"]
+    try:
+        cfg["engine"] = "parliament"
+        env.write(_current_payload())              # chassis-era artifact
+        env.kicks.clear()
+        r = env.client.get(GUARDED[0])
+        assert r.status_code == 503, f"expected 503, got {r.status_code}"
+        assert env.wait_for_kick(), "refresh was not kicked"
+    finally:
+        cfg["engine"] = old_engine
+        env.close()
+    print("  chassis artifact under parliament engine -> 503 + refresh kick "
+          "(reverse direction): OK")
+
+
 def test_missing_file_still_404():
     env = _Env()
     try:
@@ -182,5 +246,7 @@ if __name__ == "__main__":
     test_pre_1a_shape_503_and_refresh_kick()
     test_current_shape_200_no_kick()
     test_valid_but_old_200_with_stale_flag()
+    test_parliament_artifact_stale_under_chassis()
+    test_chassis_artifact_stale_under_parliament()
     test_missing_file_still_404()
     print("\nAll serve-guard tests passed.\n")

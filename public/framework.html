@@ -514,6 +514,27 @@ const GL_INPUT_LABELS={vix_5d:'VIX 5d',hy_oas:'HY OAS',breadth_20d:'breadth',spy
 
 function glRender(d){
   document.getElementById('glError').style.display='none';
+  if(d.engine==='chassis'&&d.chassis){
+    // Gauge B (D-008): throttle chips + chassis readout
+    const ch=d.chassis, thr=ch.throttles||{};
+    const chipPairs=[['glVoteVix',thr.vix],['glVoteOas',thr.hy],['glVoteBr',thr.breadth]];
+    for(const [id,t] of chipPairs){
+      const el=document.getElementById(id);
+      if(!t||t.available===false){el.textContent='dark';el.className='lab-vote unavailable';}
+      else{el.textContent=t.firing?'throttled':'clear';el.className='lab-vote '+(t.firing?'risk_off':'risk_on');}
+    }
+    const spyEl=document.getElementById('glVoteSpy');
+    spyEl.textContent=ch.trend_in?'in trend':'out of trend';
+    spyEl.className='lab-vote '+(ch.trend_in?'risk_on':'risk_off');
+
+    const firing=Object.entries({VIX:thr.vix,HY:thr.hy,Breadth:thr.breadth}).filter(([,t])=>t&&t.firing).map(([n])=>n);
+    let ladder=`chassis: ${ch.trend_in?'IN trend':'OUT of trend'} · ${firing.length?`throttled by ${firing.join(' + ')}`:'no throttles firing'}`
+      +` → raw ${ch.raw_state}`
+      +`<br>confirmed ${ch.confirmed_state} · ceiling ${ch.exposure_ceiling_pct}%`
+      +(ch.raw_state!==ch.confirmed_state?` · upgrade needs ${ch.hysteresis.n} closes (${ch.hysteresis.up} so far; downgrades instant)`:'')
+      +(thr.hy&&thr.hy.pctile!=null?` · HY OAS 60d pctile ${thr.hy.pctile}`:'');
+    document.getElementById('glLadder').innerHTML=ladder;
+  }else{
   const votePairs=[['glVoteVix','vix_5d_avg'],['glVoteOas','hy_spread'],['glVoteBr','breadth']];
   for(const [id,g] of votePairs){
     const el=document.getElementById(id);
@@ -535,6 +556,7 @@ function glRender(d){
   else quals.push(`gate ${d.gate.open?'open':'closed'}`);
   ladder+='<br>'+quals.join(' · ');
   document.getElementById('glLadder').innerHTML=ladder;
+  }
 
   const st=document.getElementById('glState');
   st.textContent=d.state;
@@ -548,7 +570,7 @@ function glRender(d){
     const lbl=GL_INPUT_LABELS[key]||key;
     const dir=f.distance>=0?'+':'';
     fl+=`<div class="fl"><b>${lbl}</b>: ${dir}${f.distance} from flipping `
-      +`${f.from.replace('_',' ')} → ${f.to.replace('_',' ')}`
+      +`${f.from.replace(/_/g,' ')} → ${f.to.replace(/_/g,' ')}`
       +(f.state_flips?` <span class="st">· regime would print ${f.state_if_flipped}</span>`:' · state unchanged')
       +`</div>`;
   }
@@ -942,13 +964,34 @@ function render(){
         <div class="regime-state" style="color:${regimeColor};">${regime.regime||'Unknown'}</div>
         <div class="regime-action">${regime.action||''}</div>
       </div>
-      <div class="regime-meta">
+      ${(regime.engine==='chassis'&&regime.chassis)?(()=>{const ch=regime.chassis;
+        const thr=ch.throttles||{};
+        const firing=Object.entries({VIX:thr.vix,HY:thr.hy,Breadth:thr.breadth}).filter(([,t])=>t&&t.firing).map(([n])=>n);
+        return `<div class="regime-meta">
+        <div class="label">Trend Chassis (D-008)</div>
+        <div style="font-size:18px;font-weight:700;color:${regimeColor};">${ch.trend_in===false?'Out of Trend':ch.trend_in?'In Trend':'Trend Unknown'}</div>
+        <div style="font-size:11px;margin-top:4px;">${firing.length?`Throttled: ${firing.join(' + ')}`:(ch.trend_in?'No throttles firing':'&mdash;')}</div>
+        ${ch.raw_state&&ch.raw_state!==ch.confirmed_state?`<div style="font-size:11px;margin-top:4px;">raw ${ch.raw_state} &rarr; needs ${(ch.hysteresis&&ch.hysteresis.n)||2} closes (${(ch.hysteresis&&ch.hysteresis.up)||0} so far)</div>`:''}
+        ${regime.consecutive_weeks_at_state>1?`<div style="font-size:11px;margin-top:4px;">${regime.consecutive_weeks_at_state} consecutive weeks</div>`:''}
+      </div>`;})():`<div class="regime-meta">
         <div class="label">Voter Score</div>
         <div style="font-size:18px;font-weight:700;color:${regimeColor};">${regime.risk_on_count||0}/${Object.keys(gauges).length||3} Risk-On</div>
         <div style="font-size:11px;margin-top:4px;">${regime.caution_count||0} Caution &middot; ${regime.risk_off_count||0} Risk-Off</div>
         ${regime.consecutive_weeks_at_state>1?`<div style="font-size:11px;margin-top:4px;">${regime.consecutive_weeks_at_state} consecutive weeks</div>`:''}
-      </div>
+      </div>`}
     </div>`;
+
+  // Chassis degraded banner (credit/trend data outage — state may be
+  // served from the recorded fallback)
+  if(regime.engine==='chassis'&&regime.chassis&&regime.chassis.degraded){
+    const reasons={
+      data_unavailable:'chassis input data unavailable — serving last recorded state',
+      data_unavailable_stale:'chassis inputs down and the recorded state is stale — decayed to Out-Defensive (fail closed)',
+      hy_data_unavailable:'HY credit data unavailable — credit throttle dark',
+      hy_fallback_basis:'credit throttle on the HYG/IEF fallback basis (FRED OAS unavailable) — not the D-008-validated basis',
+    };
+    html+=`<div class="override-banner show"><strong>CHASSIS DEGRADED:</strong> ${reasons[regime.chassis.degraded_reason]||'degraded'}</div>`;
+  }
 
   // Override banner
   if(regime.intra_week_override){
@@ -956,9 +999,11 @@ function render(){
   }
 
   // Backdrop-gate banner: explain a gate-capped state (voters can all be
-  // green while the regime reads Caution — the gate is why)
+  // green while the regime reads Caution — the gate is why). Parliament
+  // only — under the chassis, an outage renders the CHASSIS DEGRADED banner
+  // above and "capped at Caution" would be false (review finding).
   const gate=regime.backdrop_gate||null;
-  if(gate&&gate.capped){
+  if(gate&&gate.capped&&regime.engine!=='chassis'){
     const why=gate.reason==='data_unavailable'?'SPY/200DMA data unavailable (gate fails closed)':'SPY closed below its 200DMA';
     html+=`<div class="override-banner show"><strong>BACKDROP GATE:</strong> ${why} — regime capped at Caution. ${gate.detail||''}</div>`;
   }
@@ -987,17 +1032,18 @@ function render(){
   }
   // Backdrop gate tile (not a voter)
   if(gate){
+    const chassisMode=regime.engine==='chassis';
     const gsig=gate.open?'risk_on':'risk_off';
-    const gtext=gate.open?'gate open':'gate shut';
+    const gtext=chassisMode?(gate.open?'in trend':'out of trend'):(gate.open?'gate open':'gate shut');
     html+=`
     <div class="gauge-card">
       <div class="gauge-header">
-        <div class="gauge-name">SPY vs 200DMA &middot; GATE</div>
+        <div class="gauge-name">SPY vs 200DMA &middot; ${chassisMode?'TREND':'GATE'}</div>
         <div class="gauge-signal ${gsig}">${gtext}</div>
       </div>
       <div class="gauge-value">${gate.value!=null?Number(gate.value).toFixed(2):'—'}</div>
       <div class="gauge-detail">${gate.detail||''}</div>
-      <div class="gauge-detail">Backdrop gate — caps risk-on states below the 200DMA; not a voter</div>
+      <div class="gauge-detail">${chassisMode?'The trend CHASSIS (D-008) — direction decides the regime; VIX/HY/breadth only throttle within it':'Backdrop gate — caps risk-on states below the 200DMA; not a voter'}</div>
     </div>`;
   }
   // Macro input tiles (computed, non-voting)

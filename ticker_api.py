@@ -297,6 +297,7 @@ def _regime_cfg():
             cfg = yaml.safe_load(f)
         gauges = cfg["regime"]["gauges"]
         pos = cfg.get("positions", {}) or {}
+        chassis = cfg["regime"].get("chassis") or {}
         _REGIME_CFG = {
             "actions": {s["name"]: s.get("action", "")
                         for s in cfg["regime"]["states"]},
@@ -304,6 +305,20 @@ def _regime_cfg():
                     gauges["vix_5d_avg"]["caution_threshold"]),
             "hy": (gauges["hy_spread"]["risk_on_threshold"],
                    gauges["hy_spread"]["caution_threshold"]),
+            # Gauge B chassis (D-008): engine flag + locked calibration —
+            # the same values production passes to the shared chassis step
+            "engine": cfg["regime"].get("engine", "chassis"),
+            "regime_raw": cfg["regime"],
+            "hy_cfg": gauges["hy_spread"],
+            "chassis": {
+                "n": int(chassis.get("hysteresis_n", 2)),
+                "mode": chassis.get("hysteresis_mode", "asymmetric"),
+                "vix_thr": float(chassis.get("vix_throttle", 22.0)),
+                "hy_cut": float(chassis.get("hy_pctile_cut", 90.0)),
+                "hy_window": int(chassis.get("hy_pctile_window", 60)),
+                "breadth_thr": float(chassis.get("breadth_throttle", -0.5)),
+                "require_k": int(chassis.get("require_k", 1)),
+            },
             # Position Lab (24b): the same config values the 1B engine
             # passes to assess_position
             "positions": {
@@ -354,15 +369,150 @@ def _gauge_signature(result, key):
     return result["votes"][gauge]
 
 
-def _nearest_flip(inputs, key, coarse=0.25, tol=1e-3):
+# --- Gauge B chassis lab plumbing (D-008) ----------------------------------
+
+_OAS_TAIL = {"vals": None, "ts": 0}
+_OAS_TAIL_TTL = 900
+_OAS_TAIL_FAIL_TTL = 120
+
+
+def _oas_tail():
+    """Trailing OAS values for the lab's OAS->percentile conversion, cached
+    15 min. None when FRED is unavailable (the hy throttle then reads
+    unavailable in the lab — never a faked percentile). FAILURES are cached
+    too (2 min): the flip-distance probe calls this hundreds of times per
+    request, and an uncached failure meant hundreds of 10s-timeout FRED
+    attempts on one slider move (review finding)."""
+    import time as _time
+    now = _time.time()
+    age = now - _OAS_TAIL["ts"]
+    if _OAS_TAIL["vals"] is not None and age < _OAS_TAIL_TTL:
+        return _OAS_TAIL["vals"]
+    if _OAS_TAIL["vals"] is None and _OAS_TAIL["ts"] > 0 \
+            and age < _OAS_TAIL_FAIL_TTL:
+        return None                      # negative cache — don't re-hammer FRED
+    from framework.regime_calculator import fetch_oas_series
+    s = fetch_oas_series(_regime_cfg()["hy_cfg"])
+    if s is None:
+        _OAS_TAIL.update(vals=None, ts=now)
+        return None
+    _OAS_TAIL.update(vals=[float(v) for v in s.values], ts=now)
+    return _OAS_TAIL["vals"]
+
+
+def _chassis_carry():
+    """The persisted hysteresis carry (read-only) the lab steps FROM. Uses
+    the record's carry_pre_final — the carry production held BEFORE today's
+    replay step — so an untouched seeded lab reproduces today's confirmed
+    state instead of double-stepping the current bar (review finding).
+    Falls back to the post-step counters for records predating the field."""
+    import json as _json
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "framework", "state", "regime_chassis_state.json")
+    try:
+        with open(path) as f:
+            rec = _json.load(f)
+        from framework.regime_calculator import CHASSIS_RANK
+        pre = rec.get("carry_pre_final")
+        if isinstance(pre, dict) and pre.get("confirmed") in CHASSIS_RANK:
+            return {"confirmed": pre["confirmed"],
+                    "up": int(pre.get("up", 0)),
+                    "down": int(pre.get("down", 0))}
+        if rec.get("confirmed") in CHASSIS_RANK:
+            return {"confirmed": rec["confirmed"],
+                    "up": int(rec.get("up", 0)),
+                    "down": int(rec.get("down", 0))}
+    except (OSError, ValueError, TypeError):
+        pass
+    from framework.regime_calculator import new_chassis_hysteresis
+    return new_chassis_hysteresis()
+
+
+def _chassis_probe(inputs):
+    """One chassis step on the lab inputs through the REAL production
+    functions: hy_oas -> 60d percentile against the live trailing OAS window
+    (production's own pctile_of_last), raw state via chassis_raw_state,
+    confirmed via chassis_step from the persisted carry. The lab owns zero
+    math (law 1)."""
+    from framework.regime_calculator import (
+        chassis_step, pctile_of_last, CHASSIS_TO_REGIME)
+    ccfg = _regime_cfg()["chassis"]
+
+    hy_pctile = None
+    hy_stress = False
+    hy_basis = "unavailable"
+    if inputs["hy_oas"] is not None:
+        tail = _oas_tail()
+        if tail is not None and len(tail) >= ccfg["hy_window"]:
+            # "if today's OAS printed X, given the actual trailing window" —
+            # a WHAT-IF framing, deliberately one observation ahead of the
+            # live path (production's shift(1) window is [T-60..T-1] and
+            # never contains today's print). At a pctile sitting exactly on
+            # the cut this can differ from the live block by ~1/60 pctile pt.
+            window_vals = tail[-(ccfg["hy_window"] - 1):] + [inputs["hy_oas"]]
+            hy_pctile = pctile_of_last(window_vals, ccfg["hy_window"])
+            hy_stress = hy_pctile is not None and hy_pctile >= ccfg["hy_cut"]
+            hy_basis = "fred_oas_pctile"
+
+    trend = inputs["spy_vs_200dma_pct"]
+    vix = inputs["vix_5d"]
+    breadth = inputs["breadth_20d"]
+    # unavailable inputs fail toward the conservative side of each role:
+    # trend unknown -> out-of-trend (fail closed, parliament convention);
+    # vix/breadth unknown -> throttle can't prove stress -> not firing
+    trend_v = trend if trend is not None else -1.0
+    vix_v = vix if vix is not None else 0.0
+    breadth_v = breadth if breadth is not None else 0.0
+
+    r = chassis_step(trend_v, vix_v, hy_stress, breadth_v, _chassis_carry(),
+                     n=ccfg["n"], mode=ccfg["mode"], vix_thr=ccfg["vix_thr"],
+                     breadth_thr=ccfg["breadth_thr"],
+                     require_k=ccfg["require_k"])
+    return {
+        "raw_state": r["raw_state"],
+        "confirmed_state": r["state"],
+        "state": CHASSIS_TO_REGIME[r["state"]],
+        "exposure_ceiling_pct": r["exposure"] * 100.0,
+        "trend_in": bool(trend_v >= 0),
+        "throttles": {
+            "vix": {"firing": bool(vix_v >= ccfg["vix_thr"]),
+                    "cut": ccfg["vix_thr"],
+                    "available": vix is not None},
+            "hy": {"firing": bool(hy_stress), "pctile": hy_pctile,
+                   "cut": ccfg["hy_cut"], "basis": hy_basis,
+                   "available": hy_basis != "unavailable"},
+            "breadth": {"firing": bool(breadth_v < ccfg["breadth_thr"]),
+                        "cut": ccfg["breadth_thr"],
+                        "available": breadth is not None},
+        },
+        "hysteresis": {**r["hysteresis_state"], "n": ccfg["n"],
+                       "mode": ccfg["mode"]},
+    }
+
+
+def _chassis_signature(result, key):
+    """Per-input chassis signature: the trend direction for SPY, the
+    throttle firing/clear for the three modifiers."""
+    if key == "spy_vs_200dma_pct":
+        return "in_trend" if result["trend_in"] else "out_of_trend"
+    t = {"vix_5d": "vix", "hy_oas": "hy", "breadth_20d": "breadth"}[key]
+    return "throttle_firing" if result["throttles"][t]["firing"] else "clear"
+
+
+def _nearest_flip(inputs, key, coarse=0.25, tol=1e-3,
+                  probe_fn=None, sig_fn=None):
     """Distance from inputs[key] to the nearest value that changes that
-    input's vote/gate — found by PROBING compute_regime (coarse scan out
-    from the current value, then bisection), never by reading thresholds.
+    input's vote/gate (parliament) or throttle/trend signature (chassis) —
+    found by PROBING the real regime function (coarse scan out from the
+    current value, then bisection), never by reading thresholds.
     Returns None if no flip inside the search domain, else a dict with the
-    signed distance, boundary, resulting vote, and whether the STATE flips.
+    signed distance, boundary, resulting signature, and whether the STATE
+    flips. probe_fn/sig_fn default to the parliament pair.
     """
-    base = _regime_probe(inputs)
-    base_sig = _gauge_signature(base, key)
+    probe_fn = probe_fn or _regime_probe
+    sig_fn = sig_fn or _gauge_signature
+    base = probe_fn(inputs)
+    base_sig = sig_fn(base, key)
     lo, hi = _GAUGE_LAB_DOMAINS[key]
     v0 = inputs[key]
     candidates = []
@@ -375,7 +525,7 @@ def _nearest_flip(inputs, key, coarse=0.25, tol=1e-3):
             cur = min(cur + coarse, hi) if direction > 0 \
                 else max(cur - coarse, lo)
             probe = dict(inputs, **{key: cur})
-            if _gauge_signature(_regime_probe(probe), key) != base_sig:
+            if sig_fn(probe_fn(probe), key) != base_sig:
                 found = (prev, cur)
                 break
             prev = cur
@@ -385,16 +535,16 @@ def _nearest_flip(inputs, key, coarse=0.25, tol=1e-3):
         while abs(b - a) > tol:
             mid = (a + b) / 2.0
             probe = dict(inputs, **{key: mid})
-            if _gauge_signature(_regime_probe(probe), key) != base_sig:
+            if sig_fn(probe_fn(probe), key) != base_sig:
                 b = mid
             else:
                 a = mid
-        flipped = _regime_probe(dict(inputs, **{key: b}))
+        flipped = probe_fn(dict(inputs, **{key: b}))
         candidates.append({
             "distance": round(b - v0, 3),
             "boundary_value": round(b, 3),
             "from": base_sig,
-            "to": _gauge_signature(flipped, key),
+            "to": sig_fn(flipped, key),
             "state_if_flipped": flipped["state"],
             "state_flips": flipped["state"] != base["state"],
         })
@@ -431,6 +581,31 @@ def regime_simulate():
     except ValueError as e:
         return jsonify({"status": "error", "error": str(e)}), 400
 
+    if _regime_cfg()["engine"] == "chassis":
+        # Gauge B (D-008): the lab reflects the LIVE chassis — raw state
+        # from the inputs, confirmed via the persisted hysteresis carry.
+        result = _chassis_probe(inputs)
+        flips = {key: (None if inputs[key] is None
+                       else _nearest_flip(inputs, key,
+                                          probe_fn=_chassis_probe,
+                                          sig_fn=_chassis_signature))
+                 for key in _GAUGE_LAB_DOMAINS}
+        return jsonify({
+            "status": "success",
+            "engine": "chassis",
+            "state": result["state"],
+            "action_line": _regime_actions().get(result["state"], ""),
+            "chassis": {
+                "raw_state": result["raw_state"],
+                "confirmed_state": result["confirmed_state"],
+                "exposure_ceiling_pct": result["exposure_ceiling_pct"],
+                "trend_in": result["trend_in"],
+                "throttles": result["throttles"],
+                "hysteresis": result["hysteresis"],
+            },
+            "flip_distances": flips,
+        })
+
     result = _regime_probe(inputs)
     votes = result["votes"]
     counts = {s: sum(1 for v in votes.values() if v == s)
@@ -440,6 +615,7 @@ def regime_simulate():
              for key in _GAUGE_LAB_DOMAINS}
     return jsonify({
         "status": "success",
+        "engine": "parliament",
         "state": result["state"],
         "action_line": _regime_actions().get(result["state"], ""),
         "votes": votes,
@@ -933,19 +1109,36 @@ def _run_framework_refresh():
 # STRUCTURAL — the "schema" tag stamped by framework_runner is
 # informational/versioning; the invariants below decide.
 # ------------------------------------------------------------------
-FRAMEWORK_SCHEMA = "regime-1a-3voter"
+def FRAMEWORK_SCHEMA():
+    """The schema tag the configured engine produces (informational; the
+    structural invariants below decide validity)."""
+    from framework.regime_calculator import artifact_schema
+    return artifact_schema(_regime_cfg()["regime_raw"])
+
+
 _REGIME_VOTERS = {"vix_5d_avg", "hy_spread", "breadth"}
 FRAMEWORK_STALE_AFTER_HOURS = 6   # age flag threshold — informational, never a 503
 
 
 def _framework_shape_valid(data):
-    """Structural invariants of the current regime output schema."""
+    """Structural invariants of the current regime output schema. Includes
+    the ENGINE invariant (D-008 cutover): an artifact produced by the other
+    regime engine — e.g. a deploy-baked parliament artifact under a chassis
+    server — is schema-stale and must regenerate, never serve as current
+    (the R28 artifact-baking lesson)."""
     regime = (data or {}).get("regime") or {}
-    return (
+    base_ok = (
         isinstance(regime.get("backdrop_gate"), dict)
         and isinstance(regime.get("macro_inputs"), dict)
         and set((regime.get("gauges") or {}).keys()) == _REGIME_VOTERS
     )
+    if not base_ok:
+        return False
+    if _regime_cfg()["engine"] == "chassis":
+        return regime.get("engine") == "chassis" \
+            and isinstance(regime.get("chassis"), dict)
+    # parliament: legacy artifacts carry no engine key — accept absent
+    return regime.get("engine") != "chassis"
 
 
 def _framework_stale_hours(data):
@@ -1309,6 +1502,10 @@ def _assessment_regime(data):
     out = {
         "regime": regime.get("regime"),
         "action": regime.get("action"),
+        # Gauge B (D-008): engine + the chassis readout (raw vs confirmed,
+        # throttles, hysteresis) ride the assessment like every other layer
+        "engine": regime.get("engine"),
+        "chassis": regime.get("chassis"),
         "risk_on_count": regime.get("risk_on_count"),
         "caution_count": regime.get("caution_count"),
         "risk_off_count": regime.get("risk_off_count"),

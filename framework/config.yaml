@@ -22,8 +22,38 @@ r28:
 
 regime:
   # SWING-horizon gauge (weeks-long holds, checked daily).
-  # Voters: vix_5d_avg, hy_spread, breadth.
-  # spy_vs_200dma is the backdrop GATE (binary cap, not a voter).
+  #
+  # engine: "chassis" (Gauge B, D-008 — the live path) or "parliament"
+  # (Build 1A 3-voter ladder, kept fully intact for reversibility).
+  # REVERT LEVER: set this to "parliament" — do NOT delete the key (an
+  # absent key defaults to chassis) and do not git-revert the config alone.
+  engine: "chassis"
+
+  # Gauge B trend chassis (D-008, ALL parameters locked by evidence —
+  # campaign 7904bd6 + throttle frontier 6603862, amendment PER-508
+  # comment 11724). 200DMA trend decides direction; VIX/HY/breadth are
+  # throttle modifiers that scale exposure WITHIN the trend, never
+  # override it. Do not tune these outside a D-008 revisit.
+  chassis:
+    hysteresis_n: 2               # Q3: upgrades need 2 consecutive closes
+    hysteresis_mode: "asymmetric" # Q3: downgrades instant (crash brake).
+                                  # "symmetric" exists as the HARNESS CONTROL
+                                  # only — the 60-day-replay seed independence
+                                  # is guaranteed under asymmetric mode alone;
+                                  # never run symmetric in production.
+    vix_throttle: 22.0            # throttle fires at vix_5d >= 22 (Quality point)
+    hy_pctile_cut: 90.0           # throttle fires at OAS 60d pctile >= 90
+    hy_pctile_window: 60          # Q2: pctile_60d credit shape
+    breadth_throttle: -0.5        # throttle fires at breadth_20d < -0.5
+    require_k: 1                  # In-Trend downgrades on any 1 throttle
+    replay_days: 60               # trailing replay window (hysteresis converges
+                                  # from any seed within ~3 days; 60 = deep margin)
+
+  # Voters: vix_5d_avg, hy_spread, breadth (still computed + displayed as
+  # gauge chips and throttle inputs under the chassis; the vote tally only
+  # decides the state when engine = "parliament").
+  # spy_vs_200dma is the backdrop GATE (parliament) / the trend CHASSIS
+  # direction (chassis engine).
   # yield_curve is a non-voting macro input (routed to macro_inputs).
   gauges:
     spy_vs_200dma:

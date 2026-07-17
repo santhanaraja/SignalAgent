@@ -13,7 +13,7 @@ import yaml
 import yfinance as yf
 import pandas as pd
 
-from .regime_calculator import RegimeCalculator
+from .regime_calculator import RegimeCalculator, artifact_schema
 from .theme_ranker import ThemeRanker
 from .rule_engine import RuleEngine
 from .constituent_ranker import ConstituentRanker
@@ -347,10 +347,11 @@ def run_framework(force_fetch: bool = False) -> dict:
     # --- Assemble output ---
     output = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        # Serve-layer shape sentinel (mirrored in ticker_api): bump this tag
-        # whenever the regime output schema changes so a deploy-baked
-        # framework.json from an older schema is never served as current.
-        "schema": "regime-1a-3voter",
+        # Serve-layer shape sentinel (mirrored in ticker_api): derived from
+        # the configured regime engine so a flag flip (chassis <-> parliament)
+        # forces the committed artifact to regenerate rather than serving the
+        # other engine's output as current.
+        "schema": artifact_schema(config.get("regime")),
         "framework_version": config.get("framework", {}).get("version", "1.0"),
         "regime": regime_result,
         "themes": theme_result,

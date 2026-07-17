@@ -26,6 +26,10 @@ RISK_OFF = "Risk-off"
 
 BASE_CONFIG = {
     "regime": {
+        # These tests pin the Build-1A PARLIAMENT (kept intact behind the
+        # engine flag for reversibility — D-008 cutover). The chassis path
+        # is pinned by test_gauge_chassis.py.
+        "engine": "parliament",
         "gauges": {
             "spy_vs_200dma": {"proxy": "SPY", "lookback_days": 200,
                               "risk_on_threshold": 0, "caution_threshold": -2,

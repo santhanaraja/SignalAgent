@@ -39,9 +39,23 @@ def _framework_payload(exit_fired=False, shift=True, now_et=None):
         # date late in the ET evening, and the freshness guard would
         # (correctly) skip — which is a different test
         "generated_at": gen.isoformat(),
-        "schema": "regime-1a-3voter",
+        "schema": "regime-b-chassis",
         "regime": {
             "regime": "Risk-on / Choppy", "action": "A+ only.",
+            # chassis-era artifact (D-008): serve guard requires engine match
+            "engine": "chassis",
+            "chassis": {"engine": "chassis",
+                        "raw_state": "In-Trend-Throttled",
+                        "confirmed_state": "In-Trend-Throttled",
+                        "regime": "Risk-on / Choppy",
+                        "exposure_ceiling_pct": 50.0, "trend_in": True,
+                        "throttles": {"vix": {"firing": True},
+                                      "hy": {"firing": False},
+                                      "breadth": {"firing": False}},
+                        "throttles_firing": 1,
+                        "hysteresis": {"up": 0, "down": 0, "n": 2,
+                                       "mode": "asymmetric"},
+                        "degraded": False, "degraded_reason": None},
             "risk_on_count": 2, "caution_count": 1, "risk_off_count": 0,
             "gauges": {
                 "vix_5d_avg": {"value": 16.1, "spot": 15.93,

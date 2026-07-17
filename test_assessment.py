@@ -32,10 +32,28 @@ def _framework_payload(run_date="2026-07-09"):
     g = {"value": 1.0, "signal": "risk_on", "detail": "d"}
     return {
         "generated_at": _now_iso(),
-        "schema": "regime-1a-3voter",
+        "schema": "regime-b-chassis",
         "regime": {
             "regime": "Risk-on / Choppy",
             "action": "A+ setups only.",
+            # chassis-era artifact (D-008): the serve guard requires the
+            # engine + chassis block to match the configured engine
+            "engine": "chassis",
+            "chassis": {
+                "engine": "chassis",
+                "raw_state": "In-Trend-Throttled",
+                "confirmed_state": "In-Trend-Throttled",
+                "regime": "Risk-on / Choppy",
+                "exposure_ceiling_pct": 50.0,
+                "trend_in": True,
+                "throttles": {"vix": {"firing": False},
+                              "hy": {"firing": True},
+                              "breadth": {"firing": False}},
+                "throttles_firing": 1,
+                "hysteresis": {"up": 0, "down": 0, "n": 2,
+                               "mode": "asymmetric"},
+                "degraded": False, "degraded_reason": None,
+            },
             "risk_on_count": 2, "caution_count": 1, "risk_off_count": 0,
             "gauges": {
                 "vix_5d_avg": {"value": 17.2, "spot": 16.8, "signal": "risk_on",
