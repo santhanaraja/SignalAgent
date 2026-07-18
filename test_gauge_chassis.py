@@ -368,7 +368,12 @@ def test_phantom_bar_guard():
         ch = r["chassis"]
         assert ch["replay"]["end"] == _STUB_LAST_DAY, ch["replay"]
         rec = json.load(open(os.path.join(tmp, "regime_chassis_state.json")))
-        assert rec["as_of"] == _STUB_LAST_DAY, rec
+        assert rec["as_of"] == _STUB_LAST_DAY
+        # perf fix round-trip: the engine run persists the lab's fetch-free
+        # percentile basis (59 raw OAS values + the window size)
+        assert rec["hy_window"] == 60
+        assert isinstance(rec["oas_window_tail"], list)
+        assert len(rec["oas_window_tail"]) == 59, rec
         # identical outcome to the phantom-free fetch — the phantom step is gone
         calc2 = _calc(tmp, base)
         r2 = calc2.compute()
@@ -522,9 +527,9 @@ def test_artifact_schema_tags():
 def test_simulate_endpoint_chassis():
     import ticker_api
     client = ticker_api.app.test_client()
-    # fixed OAS tail + a fresh carry so the parity check is deterministic
-    ticker_api._OAS_TAIL["vals"] = [3.0] * 200
-    ticker_api._OAS_TAIL["ts"] = 9e12
+    # fixed persisted OAS tail (record-served seam) for determinism
+    old_tail = ticker_api._chassis_oas_tail
+    ticker_api._chassis_oas_tail = lambda: ([3.0] * 59, 60)
     inputs = {"vix_5d": 16.0, "hy_oas": 2.7, "breadth_20d": 0.2,
               "spy_vs_200dma_pct": 8.0}
     resp = client.post("/api/regime/simulate", json=inputs)
@@ -559,6 +564,55 @@ def test_simulate_endpoint_chassis():
           "throttle flips, 400s intact: OK")
 
 
+def test_simulate_perf_and_zero_fetch():
+    """Perf pin (lab regression fix): one simulate request — including all
+    flip-distance probing — must complete in <500ms and perform ZERO external
+    fetches. The fetch layer is booby-trapped: any attempt to fetch OAS or
+    price data inside the request path fails the test."""
+    import time
+    import ticker_api
+    from framework import regime_calculator as rc
+
+    def boom(*a, **k):
+        raise AssertionError("request path attempted an external fetch")
+    old_fetch = rc.fetch_oas_series
+    old_tail = ticker_api._chassis_oas_tail
+    old_carry = ticker_api._chassis_carry
+    rc.fetch_oas_series = boom
+    ticker_api._chassis_oas_tail = lambda: ([3.0] * 59, 60)
+    ticker_api._chassis_carry = lambda: {"confirmed": "In-Trend-Full",
+                                         "up": 0, "down": 0}
+    try:
+        client = ticker_api.app.test_client()
+        payload = {"vix_5d": 16.9, "hy_oas": 2.8, "breadth_20d": 0.5,
+                   "spy_vs_200dma_pct": 7.2}
+        t0 = time.time()
+        resp = client.post("/api/regime/simulate", json=payload)
+        dt = time.time() - t0
+        assert resp.status_code == 200, resp.get_json()
+        d = resp.get_json()
+        assert d["engine"] == "chassis"
+        assert d["chassis"]["throttles"]["hy"]["available"] is True
+        assert all(d["flip_distances"][k] is not None
+                   for k in ("vix_5d", "hy_oas", "breadth_20d",
+                             "spy_vs_200dma_pct"))
+        assert dt < 0.5, f"simulate took {dt*1000:.0f}ms (bar: 500ms)"
+        # record absent -> hy honestly unavailable, still fast, still 200
+        ticker_api._chassis_oas_tail = lambda: (None, None)
+        t0 = time.time()
+        resp = client.post("/api/regime/simulate", json=payload)
+        dt = time.time() - t0
+        assert resp.status_code == 200
+        assert resp.get_json()["chassis"]["throttles"]["hy"]["available"] is False
+        assert dt < 0.5
+    finally:
+        rc.fetch_oas_series = old_fetch
+        ticker_api._chassis_oas_tail = old_tail
+        ticker_api._chassis_carry = old_carry
+    print(f"  perf pin: full simulate (incl. ~500 probes) <500ms, zero "
+          f"fetches (booby-trapped), record-absent degrade honest: OK")
+
+
 if __name__ == "__main__":
     print("\n=== Gauge B production chassis pins (D-008 build) ===")
     test_locked_config()
@@ -579,4 +633,5 @@ if __name__ == "__main__":
     test_calculator_outage_fallback_and_parliament()
     test_artifact_schema_tags()
     test_simulate_endpoint_chassis()
+    test_simulate_perf_and_zero_fetch()
     print("\nAll Gauge B chassis pins green.")

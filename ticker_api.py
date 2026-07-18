@@ -371,33 +371,38 @@ def _gauge_signature(result, key):
 
 # --- Gauge B chassis lab plumbing (D-008) ----------------------------------
 
-_OAS_TAIL = {"vals": None, "ts": 0}
-_OAS_TAIL_TTL = 900
-_OAS_TAIL_FAIL_TTL = 120
+def _chassis_oas_tail():
+    """The lab's OAS->percentile basis, served from the PERSISTED chassis
+    record (written by the last engine run) — the request path performs ZERO
+    external fetches (perf fix: FRED inside the probe loop was the 34s cold
+    path). Returns (tail_values, hy_window) or (None, None) when the record
+    predates the field or the last run used the HYG/IEF fallback basis (a
+    what-if OAS print can't be ranked against a ratio window — the lab reads
+    hy unavailable, honestly, rather than faking a percentile)."""
+    import json as _json
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "framework", "state", "regime_chassis_state.json")
+    try:
+        with open(path) as f:
+            rec = _json.load(f)
+        tail = rec.get("oas_window_tail")
+        window = int(rec.get("hy_window") or 0)
+        if isinstance(tail, list) and window > 1 and len(tail) >= window - 1:
+            return [float(v) for v in tail], window
+    except (OSError, ValueError, TypeError):
+        pass
+    return None, None
 
 
-def _oas_tail():
-    """Trailing OAS values for the lab's OAS->percentile conversion, cached
-    15 min. None when FRED is unavailable (the hy throttle then reads
-    unavailable in the lab — never a faked percentile). FAILURES are cached
-    too (2 min): the flip-distance probe calls this hundreds of times per
-    request, and an uncached failure meant hundreds of 10s-timeout FRED
-    attempts on one slider move (review finding)."""
-    import time as _time
-    now = _time.time()
-    age = now - _OAS_TAIL["ts"]
-    if _OAS_TAIL["vals"] is not None and age < _OAS_TAIL_TTL:
-        return _OAS_TAIL["vals"]
-    if _OAS_TAIL["vals"] is None and _OAS_TAIL["ts"] > 0 \
-            and age < _OAS_TAIL_FAIL_TTL:
-        return None                      # negative cache — don't re-hammer FRED
-    from framework.regime_calculator import fetch_oas_series
-    s = fetch_oas_series(_regime_cfg()["hy_cfg"])
-    if s is None:
-        _OAS_TAIL.update(vals=None, ts=now)
-        return None
-    _OAS_TAIL.update(vals=[float(v) for v in s.values], ts=now)
-    return _OAS_TAIL["vals"]
+def _chassis_ctx():
+    """Request-scoped chassis context, built ONCE per simulate request and
+    passed to every flip-distance probe: the persisted carry, the persisted
+    OAS window, and the config. The probe loop runs ~500 evaluations per
+    request — per-probe file reads put a 500x multiplier on disk latency
+    (the ~2s warm-request cost on Render; perf fix)."""
+    tail, window = _chassis_oas_tail()
+    return {"carry": _chassis_carry(), "oas_tail": tail,
+            "oas_window": window, "ccfg": _regime_cfg()["chassis"]}
 
 
 def _chassis_carry():
@@ -428,31 +433,36 @@ def _chassis_carry():
     return new_chassis_hysteresis()
 
 
-def _chassis_probe(inputs):
+def _chassis_probe(inputs, ctx=None):
     """One chassis step on the lab inputs through the REAL production
-    functions: hy_oas -> 60d percentile against the live trailing OAS window
+    functions: hy_oas -> percentile against the PERSISTED trailing OAS window
     (production's own pctile_of_last), raw state via chassis_raw_state,
     confirmed via chassis_step from the persisted carry. The lab owns zero
-    math (law 1)."""
+    math (law 1) and performs zero fetches: it simulates "what would the
+    chassis say with these inputs given the CURRENT persisted window" — the
+    window and carry come from the last engine run's state record, via the
+    request-scoped ctx (built once; ~500 probes reuse it)."""
     from framework.regime_calculator import (
         chassis_step, pctile_of_last, CHASSIS_TO_REGIME)
-    ccfg = _regime_cfg()["chassis"]
+    if ctx is None:
+        ctx = _chassis_ctx()
+    ccfg = ctx["ccfg"]
 
     hy_pctile = None
     hy_stress = False
     hy_basis = "unavailable"
-    if inputs["hy_oas"] is not None:
-        tail = _oas_tail()
-        if tail is not None and len(tail) >= ccfg["hy_window"]:
-            # "if today's OAS printed X, given the actual trailing window" —
-            # a WHAT-IF framing, deliberately one observation ahead of the
-            # live path (production's shift(1) window is [T-60..T-1] and
-            # never contains today's print). At a pctile sitting exactly on
-            # the cut this can differ from the live block by ~1/60 pctile pt.
-            window_vals = tail[-(ccfg["hy_window"] - 1):] + [inputs["hy_oas"]]
-            hy_pctile = pctile_of_last(window_vals, ccfg["hy_window"])
-            hy_stress = hy_pctile is not None and hy_pctile >= ccfg["hy_cut"]
-            hy_basis = "fred_oas_pctile"
+    if inputs["hy_oas"] is not None and ctx["oas_tail"] is not None:
+        # "if today's OAS printed X, given the persisted trailing window" —
+        # a WHAT-IF framing, deliberately one observation ahead of the live
+        # path (production's shift(1) window is [T-60..T-1] and never
+        # contains today's print). At a pctile sitting exactly on the cut
+        # this can differ from the live block by ~1/60 pctile pt. The window
+        # is as of the last engine run (record as_of), not refetched.
+        window = ctx["oas_window"]
+        window_vals = ctx["oas_tail"][-(window - 1):] + [inputs["hy_oas"]]
+        hy_pctile = pctile_of_last(window_vals, window)
+        hy_stress = hy_pctile is not None and hy_pctile >= ccfg["hy_cut"]
+        hy_basis = "fred_oas_pctile"
 
     trend = inputs["spy_vs_200dma_pct"]
     vix = inputs["vix_5d"]
@@ -464,7 +474,7 @@ def _chassis_probe(inputs):
     vix_v = vix if vix is not None else 0.0
     breadth_v = breadth if breadth is not None else 0.0
 
-    r = chassis_step(trend_v, vix_v, hy_stress, breadth_v, _chassis_carry(),
+    r = chassis_step(trend_v, vix_v, hy_stress, breadth_v, ctx["carry"],
                      n=ccfg["n"], mode=ccfg["mode"], vix_thr=ccfg["vix_thr"],
                      breadth_thr=ccfg["breadth_thr"],
                      require_k=ccfg["require_k"])
@@ -584,10 +594,15 @@ def regime_simulate():
     if _regime_cfg()["engine"] == "chassis":
         # Gauge B (D-008): the lab reflects the LIVE chassis — raw state
         # from the inputs, confirmed via the persisted hysteresis carry.
-        result = _chassis_probe(inputs)
+        # ONE context for the whole request (carry + persisted OAS window +
+        # config): the ~500 flip probes below reuse it — zero fetches, zero
+        # per-probe file reads (perf fix: was ~2s warm / 34s cold on Render).
+        ctx = _chassis_ctx()
+        probe = lambda p: _chassis_probe(p, ctx)  # noqa: E731
+        result = probe(inputs)
         flips = {key: (None if inputs[key] is None
                        else _nearest_flip(inputs, key,
-                                          probe_fn=_chassis_probe,
+                                          probe_fn=probe,
                                           sig_fn=_chassis_signature))
                  for key in _GAUGE_LAB_DOMAINS}
         return jsonify({

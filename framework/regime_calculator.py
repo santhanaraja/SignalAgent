@@ -729,7 +729,14 @@ class RegimeCalculator:
                 hy_stress = (pct >= ccfg["hy_cut"]).where(pct.notna())
                 valid = pct.dropna()
                 hy_meta = {"basis": "fred_oas_pctile",
-                           "pctile": round(float(valid.iloc[-1]), 1)}
+                           "pctile": round(float(valid.iloc[-1]), 1),
+                           # trailing raw observations persisted for the Gauge
+                           # Lab's what-if percentile — the lab must NEVER
+                           # fetch in the request path (perf fix): it converts
+                           # a hypothetical OAS print against THIS window.
+                           "oas_window_tail": [
+                               round(float(v), 4) for v in
+                               oas.values[-(ccfg["hy_window"] - 1):]]}
         if hy_stress is None:
             # Fallback: HYG/IEF ratio percentile, INVERTED (low ratio = wide
             # spreads = stress) — the HY voter's own production fallback
@@ -911,6 +918,11 @@ class RegimeCalculator:
                     },
                     "replay_days_used": int(len(frame)),
                     "hy_basis": hy_meta["basis"],
+                    "hy_window": int(ccfg["hy_window"]),
+                    # the lab's fetch-free percentile basis (None on the
+                    # HYG/IEF fallback — a what-if OAS print can't be ranked
+                    # against a ratio window, the lab reads hy unavailable)
+                    "oas_window_tail": hy_meta.get("oas_window_tail"),
                     "engine": "chassis",
                 }, fh, indent=2)
             os.replace(tmp_path, state_path)

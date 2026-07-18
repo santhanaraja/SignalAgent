@@ -26,8 +26,7 @@ C = ticker_api.app.test_client()
 # deterministic fixtures: flat OAS history at 3.0 (probe >= 3.0 -> pctile 100
 # -> credit throttle fires; probe < 3.0 -> pctile ~1.7 -> clear), and a
 # controllable "persisted" hysteresis carry
-ticker_api._OAS_TAIL["vals"] = [3.0] * 200
-ticker_api._OAS_TAIL["ts"] = 9e12
+ticker_api._chassis_oas_tail = lambda: ([3.0] * 59, 60)
 
 _CARRY = {"confirmed": "In-Trend-Full", "up": 0, "down": 0}
 ticker_api._chassis_carry = lambda: dict(_CARRY)
