@@ -263,11 +263,41 @@ def run_framework(force_fetch: bool = False) -> dict:
     print(f"[framework] Constituent leaders ranked for {len(theme_leaders)} themes "
           f"(qualified: {', '.join(qualified_names) or 'none'})")
 
+    # --- Shared ticker->group resolution (ONE resolver — D-007 Phase 1):
+    # condition 5 and R28 both consume this map. Loaded once here; the whole
+    # block is best-effort (an unreadable/misshapen artifact degrades the
+    # gate and R28, never the run — the old block lived inside R28's try).
+    universe_active = {}
+    group_map = {}
+    try:
+        from .portfolio_rules import resolve_group_map
+        signals_data = {}
+        try:
+            with open(os.path.join(BASE_DIR, "..", "data",
+                                   "universe_active.json")) as f:
+                universe_active = json.load(f)
+        except Exception:
+            universe_active = {}
+        try:
+            with open(os.path.join(BASE_DIR, "..", "data",
+                                   "signals.json")) as f:
+                signals_data = json.load(f)
+        except Exception:
+            signals_data = {}
+        if not isinstance(universe_active, dict):
+            universe_active = {}
+        group_map = resolve_group_map(universe_active, signals_data)
+    except Exception as e:
+        print(f"[framework] group resolution unavailable: {e}")
+        universe_active, group_map = {}, {}
+
     # --- Layer 2.75: Position signal engine (exit / re-entry state machine) ---
     print("[framework] Evaluating position signals...")
     try:
         pos_engine = PositionSignalEngine(config, fetch_data)
-        position_signals = pos_engine.compute(regime_result, theme_result)
+        position_signals = pos_engine.compute(
+            regime_result, theme_result,
+            universe_active=universe_active, group_map=group_map)
         n_pos = len(position_signals.get("tickers", {}))
         n_trans = len(position_signals.get("transitions", []))
         print(f"[framework] Position signals: {n_pos} tickers evaluated, "
@@ -293,32 +323,14 @@ def run_framework(force_fetch: bool = False) -> dict:
     # state, capital from config. Never fails the run.
     print("[framework] R28 portfolio enforcement...")
     try:
-        from .portfolio_rules import assess_portfolio, build_group_map
+        from .portfolio_rules import assess_portfolio
         positions_path = os.path.join(BASE_DIR, "state", "positions.json")
         with open(positions_path) as f:
             positions = json.load(f)
-        # Group resolution: current rotated universe first, then the
-        # dashboard's signals.json group structure as fallback — a holding
-        # whose group rotated OUT of the universe must still aggregate for
-        # the per-group caps (review finding: two ex-universe biotechs
-        # would otherwise bucket alone and the caps could never fire).
-        # A manual "group" key on the positions.json row overrides both.
-        group_map = {}
-        try:
-            with open(os.path.join(BASE_DIR, "..", "data",
-                                   "signals.json")) as f:
-                for grp in json.load(f).get("groups", []):
-                    for s in grp.get("stocks", []):
-                        if s.get("ticker"):
-                            group_map[s["ticker"]] = grp["name"]
-        except Exception:
-            pass
-        try:
-            with open(os.path.join(BASE_DIR, "..", "data",
-                                   "universe_active.json")) as f:
-                group_map.update(build_group_map(json.load(f)))
-        except Exception:
-            pass
+        # Group resolution: the SHARED resolver built above (universe
+        # selected + ranking audit rows + signals.json fallback) — a holding
+        # whose group rotated OUT of the universe still aggregates for the
+        # per-group caps. A manual "group" key on the row overrides it.
         ps_rows = (position_signals or {}).get("tickers") or {}
         prices = {t: r.get("close") for t, r in ps_rows.items()
                   if isinstance(r, dict)}

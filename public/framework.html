@@ -135,6 +135,11 @@
   .ps-arming{background:rgba(210,153,34,.15);color:var(--yellow);}
   .ps-ready{background:rgba(63,185,80,.15);color:var(--green);}
   .ps-extended{background:rgba(240,136,62,.2);color:var(--orange);border:1px solid rgba(240,136,62,.5);}
+  /* D-011 setup grade chips */
+  .ps-grade{display:inline-block;padding:1px 8px;border-radius:4px;font-size:10px;font-weight:800;font-family:'SF Mono',monospace;letter-spacing:.3px;}
+  .ps-grade-a{background:rgba(63,185,80,.2);color:var(--green);border:1px solid rgba(63,185,80,.5);}
+  .ps-grade-b{background:rgba(210,153,34,.18);color:var(--yellow);border:1px solid rgba(210,153,34,.45);}
+  .ps-grade-c{background:rgba(248,81,73,.14);color:var(--red);border:1px solid rgba(248,81,73,.4);}
   @keyframes psPulse{0%,100%{opacity:1;}50%{opacity:.45;}}
   .ps-num{font-family:'SF Mono',monospace;color:var(--dim);}
   .ps-num b{color:var(--text);font-weight:600;}
@@ -321,10 +326,38 @@
             </select>
           </div>
           <div class="lab-row">
-            <label>Theme</label>
-            <label class="lab-sub" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-              <input type="checkbox" id="plTheme" checked onchange="plSchedule()"> qualified
+            <label>Group</label>
+            <label class="lab-sub" style="display:flex;align-items:center;gap:6px;cursor:pointer;" title="Condition 5 (D-007 Phase 1): the ticker's GICS group is in the current active universe">
+              <input type="checkbox" id="plTheme" checked onchange="plSchedule()"> in universe
             </label>
+          </div>
+          <div class="lab-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:6px;">
+            <label class="lab-sub" style="width:auto;font-weight:700;" title="D-011 A+ doctrine — the seven-row setup grade, computed by the same grade_setup() production grades with">A+ grade rows</label>
+          </div>
+          <div class="lab-row">
+            <label for="plSma5">SMA5</label>
+            <input type="number" class="lab-num" id="plSma5" min="0.01" max="1000000" step="0.01" value="65.5" oninput="plSchedule()">
+            <label class="lab-sub" style="display:flex;align-items:center;gap:6px;cursor:pointer;width:auto;" title="Approach filter: at least one up-close since the swing low">
+              <input type="checkbox" id="plUpClose" checked onchange="plSchedule()"> up-close
+            </label>
+          </div>
+          <div class="lab-row">
+            <label for="plRsi">RSI-14</label>
+            <input type="number" class="lab-num" id="plRsi" min="0" max="100" step="0.1" value="55" oninput="plSchedule()">
+            <label for="plScore" style="width:auto;">Score</label>
+            <input type="number" class="lab-num" id="plScore" min="0" max="100" step="1" value="80" oninput="plSchedule()">
+          </div>
+          <div class="lab-row">
+            <label for="plBreaker">Breaker</label>
+            <select class="lab-num" style="width:auto;text-align:left;" id="plBreaker" onchange="plSchedule()">
+              <option value="clear" selected>clear</option>
+              <option value="watch">watch</option>
+              <option value="warning">warning</option>
+              <option value="critical">critical</option>
+              <option value="">unknown</option>
+            </select>
+            <label for="plRunway" style="width:auto;" title="Trading sessions strictly before the earnings print (amendment 2)">Runway</label>
+            <input type="number" class="lab-num" id="plRunway" min="0" max="1000" step="1" value="20" oninput="plSchedule()">
           </div>
         </div>
         <div>
@@ -333,6 +366,7 @@
           <div class="lab-action" id="plExt"></div>
           <div class="lab-action" id="plGuard" style="color:var(--orange);"></div>
           <div class="lab-flips" id="plConds"></div>
+          <div class="lab-flips" id="plGradeRows"></div>
           <div class="lab-note" style="display:none;color:var(--red);" id="plError"></div>
         </div>
       </div>
@@ -737,6 +771,10 @@ function plInputs(){
   const n=(id,lo,hi)=>{const el=document.getElementById(id);
     let v=parseFloat(el.value);if(isNaN(v))v=lo;
     return Math.min(hi,Math.max(lo,v));};
+  const nn=(id,lo,hi)=>{const el=document.getElementById(id);
+    if(el.value==='')return null;
+    let v=parseFloat(el.value);if(isNaN(v))return null;
+    return Math.min(hi,Math.max(lo,v));};
   return {
     close:n('plClose',0.01,1000000),
     sma20:n('plSma20',0.01,1000000),
@@ -744,8 +782,17 @@ function plInputs(){
     atr14:n('plAtr',0,100000),
     consecutive_closes_above:Math.round(n('plConsec',0,1000)),
     regime_state:document.getElementById('plRegime').value,
-    theme_qualified:document.getElementById('plTheme').checked,
+    group_in_universe:document.getElementById('plTheme').checked,
     kind:document.getElementById('plKind').value,
+    // D-011 grade rows (same request -> grade_setup server-side, law 1).
+    // Empty field = null (unavailable) — mirrors the endpoint's allow_null
+    sma5:nn('plSma5',0.01,1000000),
+    up_close_since_swing_low:document.getElementById('plUpClose').checked,
+    rsi14:nn('plRsi',0,100),
+    quality_score:(v=>v==null?null:Math.round(v))(nn('plScore',0,100)),
+    score_waived:false,
+    breaker_status:document.getElementById('plBreaker').value||null,
+    runway_sessions:(v=>v==null?null:Math.round(v))(nn('plRunway',0,1000)),
   };
 }
 
@@ -776,7 +823,12 @@ function plRender(d){
     `<span title="The 5 re-entry conditions">${psPips(d.conditions)}</span>`
     +` <span class="lab-sub">${d.conditions_met}/5 met</span>`
     +(d.a_plus_only?` <span class="ps-flag" title="Regime is Risk-on / Choppy — conditional clearance">A+ ONLY</span>`:'');
-  document.getElementById('plState').innerHTML=psBadge(d.state);
+  document.getElementById('plState').innerHTML=
+    psBadge(d.state,d.grade_gate)+(d.grade?' '+psGrade(d.grade):'');
+  document.getElementById('plGradeRows').innerHTML=d.grade?
+    '<b style="font-size:10px;color:var(--dim);text-transform:uppercase;">A+ rows ('+d.grade.grade+')</b>'
+    +Object.entries(d.grade.rows).map(([k,r])=>`<div class="fl">${r.met?'✓':'✗'} ${r.detail}</div>`).join('')
+    +(d.grade_gate?`<div class="fl" style="color:var(--orange);">${d.grade_gate}</div>`:''):'';
   document.getElementById('plExt').textContent=
     `extension ${d.extension_pct>0?'+':''}${d.extension_pct}%`
     +(d.extension_atr!=null?` (${d.extension_atr}×ATR)`:' (no ATR)');
@@ -820,16 +872,27 @@ function plSeedFromTicker(){
     sma20_5d_ago:row.sma20+(c4.met?-1:1),
     atr14:c2.atr14,consecutive_closes_above:c2.consecutive_closes_above||0,
     regime_state:(DATA&&DATA.regime&&DATA.regime.regime)||'Caution',
-    theme_qualified:!!c5.met,kind:row.kind||'watching',
+    group_in_universe:!!c5.met,kind:row.kind||'watching',
   };
+  // artifacts from before the D-007 rewire carry theme_qualified
+  if(si&&si.group_in_universe===undefined&&si.theme_qualified!==undefined)
+    si.group_in_universe=si.theme_qualified;
   document.getElementById('plClose').value=seed.close;
   document.getElementById('plSma20').value=seed.sma20;
   document.getElementById('plSma5d').value=seed.sma20_5d_ago;
   document.getElementById('plAtr').value=seed.atr14==null?'':seed.atr14;
   document.getElementById('plConsec').value=seed.consecutive_closes_above;
   document.getElementById('plRegime').value=seed.regime_state;
-  document.getElementById('plTheme').checked=!!seed.theme_qualified;
+  document.getElementById('plTheme').checked=!!seed.group_in_universe;
   document.getElementById('plKind').value=seed.kind;
+  // D-011 grade inputs (exact engine scalars when the row carries them)
+  const gi=row.grade_inputs||{};
+  document.getElementById('plSma5').value=gi.sma5!=null?gi.sma5:'';
+  document.getElementById('plUpClose').checked=gi.up_close_since_swing_low!==false;
+  document.getElementById('plRsi').value=gi.rsi14!=null?gi.rsi14:'';
+  document.getElementById('plScore').value=gi.quality_score!=null?gi.quality_score:'';
+  document.getElementById('plBreaker').value=gi.breaker_status||'';
+  document.getElementById('plRunway').value=gi.runway_sessions!=null?gi.runway_sessions:'';
   plSeedState={ticker:t,liveState:row.state,inputs:plInputs(),exact:!!si,
                gen:DATA&&DATA.generated_at};
   const chip=document.getElementById('plSeed');
@@ -840,11 +903,24 @@ function plSeedFromTicker(){
 }
 
 /* ===== Position Signals panel (1B engine) ===== */
-function psBadge(state){
+function psBadge(state,gradeGate){
   const map={HELD:'ps-held',EXIT_FIRED:'ps-exit-fired',WATCHING:'ps-watching',
              RE_ENTRY_ARMING:'ps-arming',RE_ENTRY_READY:'ps-ready',
              EXTENDED_HOLD:'ps-extended'};   // blocked, not "go" (PER-508 #20)
+  // D-011 Q4 hard gate: READY without A+ under Choppy renders BLOCKED —
+  // the EXTENDED_HOLD visual law (amber, not green), reasons in the title
+  if(gradeGate&&state==='RE_ENTRY_READY'){
+    return `<span class="ps-badge ps-extended" title="${String(gradeGate).replace(/"/g,'&quot;')}">READY — BLOCKED</span>`;
+  }
   return `<span class="ps-badge ${map[state]||'ps-watching'}">${(state||'?').replace(/_/g,' ')}</span>`;
+}
+function psGrade(g){
+  // D-011 setup grade badge: A+ green / B amber (reasons) / C red-dim
+  if(!g||!g.grade) return '';
+  const cls=g.grade==='A+'?'ps-grade-a':g.grade==='B'?'ps-grade-b':'ps-grade-c';
+  const tip=g.grade==='A+'?'A+ setup — all seven rows pass (D-011)'
+    :`Grade ${g.grade} — ${(g.reasons||'mechanical conditions / guard / approach fail').replace(/"/g,'&quot;')}`;
+  return `<span class="ps-grade ${cls}" title="${tip}">${g.grade}</span>`;
 }
 function psPips(conds){
   if(!conds) return '';
@@ -923,11 +999,12 @@ function renderPositionsPanel(){
   }
   for(const [t,x] of watchers){
     html+=`<div class="ps-row" data-ps="${t}">
-      <span class="ps-ticker">${t}</span>${psBadge(x.state)}
+      <span class="ps-ticker">${t}</span>${psBadge(x.state,x.grade_gate)}${psGrade(x.grade)}
       ${x.a_plus_only?`<span class="ps-flag" title="Regime is Risk-on / Choppy — conditional clearance">A+ ONLY</span>`:''}
       <span title="The 5 re-entry conditions">${psPips(x.conditions)}</span>
       <span class="ps-num"><b>$${x.close}</b> / SMA20 $${x.sma20}</span>
       ${psExt(x)}${psEr(x.days_to_earnings)}
+      ${x.weeks_in_universe!=null?`<span class="ps-er" style="background:rgba(88,166,255,.12);color:var(--blue);" title="Consecutive weekly rotations this group has been in the universe (observe-only, D-007 Phase 1)">${x.group||''} wk ${x.weeks_in_universe}</span>`:''}
     </div>`;
   }
   html+=`<div id="positionLabSlot"></div></div>`;

@@ -326,3 +326,60 @@ def build_group_map(universe_active):
         for t in (g.get("tickers") or []):
             out[t] = name
     return out
+
+
+def resolve_group_map(universe_active=None, signals=None):
+    """THE ticker -> GICS-group resolver (one implementation — R28 and the
+    position engine's condition 5 share it; D-007 Phase 1 forbids a second).
+
+    Layering, weakest first (later layers overwrite):
+      1. signals.json groups[].stocks[]      — dashboard fallback (can be a
+         week stale between a Saturday rotation and Monday's signal run)
+      2. universe ranking audit rows         — every scored candidate carries
+         its GICS group, INCLUDING groups that ranked below the top-15 (this
+         is what keeps an out-of-universe name honestly mapped — e.g. a
+         Biotechnology watcher after the group rotates out — instead of
+         letting it evaporate from signals.json and silently pass the gate)
+      3. universe selected groups            — the rotated top-15 (authoritative)
+
+    A manual "group" key on a positions.json row overrides all three
+    (caller-side, same as R28's holdings fill). Every load is best-effort:
+    a missing artifact contributes nothing, never raises.
+    """
+    # Defensive per-row: these are hand-committable/CI-written artifacts —
+    # a parseable-but-wrong-shaped row (null group, stocks-as-string, list
+    # top level) must contribute nothing, never raise out of the resolver
+    # (review finding: an AttributeError here aborted the whole framework
+    # run, where the old inline block could at worst degrade R28).
+    out = {}
+    if not isinstance(signals, dict):
+        signals = {}
+    if not isinstance(universe_active, dict):
+        universe_active = {}
+    for grp in signals.get("groups") or []:
+        if not isinstance(grp, dict):
+            continue
+        stocks = grp.get("stocks")
+        if not isinstance(stocks, list):
+            continue
+        for s in stocks:
+            if isinstance(s, dict) and s.get("ticker") and grp.get("name"):
+                out[s["ticker"]] = grp["name"]
+    for g in universe_active.get("ranking") or []:
+        if not isinstance(g, dict):
+            continue
+        tickers = g.get("tickers")
+        if not isinstance(tickers, list):
+            continue
+        for t in tickers:
+            if isinstance(t, dict) and t.get("ticker") and g.get("name"):
+                out[t["ticker"]] = g["name"]
+    groups = universe_active.get("groups")
+    if isinstance(groups, dict):
+        for name, g in groups.items():
+            if not isinstance(g, dict):
+                continue
+            for t in (g.get("tickers") or []):
+                if isinstance(t, str) and t:
+                    out[t] = name
+    return out

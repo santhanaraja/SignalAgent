@@ -418,6 +418,18 @@ def _load_subindustry_sector_map(cache_dir, aliases):
 # ----------------------------------------------------------------------
 # Metrics + qualification
 # ----------------------------------------------------------------------
+def _weeks_in_universe(name, prev_groups, prev_week, this_week):
+    """Consecutive weekly rotations `name` has been selected (D-007 Phase 1,
+    observe-only). Advances ONLY when the rotation week changed; a same-week
+    rebuild (--force, retry, dispatch) carries the previous value unchanged.
+    A group present last week without the field (pre-Phase-1 artifact) seeds
+    at 1 so the next new week reads 2; a newly selected group starts at 1."""
+    if name not in (prev_groups or {}):
+        return 1
+    prev = int((prev_groups[name] or {}).get("weeks_in_universe") or 1)
+    return prev if prev_week == this_week else prev + 1
+
+
 def _ticker_metrics(ticker, df, sp500_ytd=None):
     """Per-ticker returns + dashboard composite score, via signal_engine."""
     import signal_engine as se
@@ -694,6 +706,22 @@ def build_active_universe(write=True, verbose=True):
 
     sector_map = _load_subindustry_sector_map(DEFAULT_CACHE_DIR,
                                               uni_cfg.get("gics_aliases") or {})
+    # weeks_in_universe (D-007 Phase 1, OBSERVE ONLY — no persistence gate):
+    # consecutive weekly ROTATIONS a group has been selected. The counter
+    # advances only when the rotation week actually changed — a same-week
+    # rebuild (--force, flaky-fetch retry, manual dispatch) CARRIES the
+    # previous value unchanged (review finding: build-counting would let
+    # every --force re-run add a phantom week to the exact dataset the
+    # future persistence-gate decision observes). A group present last week
+    # without the field (pre-Phase-1 artifact) seeds at 1 so a new week
+    # reads 2.
+    prev_groups = {}
+    prev_week = None
+    prev_active = load_cached_active()
+    if prev_active:
+        prev_groups = prev_active.get("groups") or {}
+        prev_week = prev_active.get("week_key")
+    this_week = rotation_week_key()
     groups = {}
     for g in selected:
         chosen = [q["ticker"] for q in g["qualifiers"][:rot["max_tickers_per_group"]]]
@@ -702,6 +730,8 @@ def build_active_universe(write=True, verbose=True):
         # embedded here so signals.json (hourly) can never drift from the
         # rotation-week selection it was built with.
         entry["near_misses"] = _near_misses_from_ranking(g)
+        entry["weeks_in_universe"] = _weeks_in_universe(
+            g["name"], prev_groups, prev_week, this_week)
         groups[g["name"]] = entry
 
     total_selected = sum(len(g["tickers"]) for g in groups.values())

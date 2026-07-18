@@ -27,7 +27,7 @@ C = ticker_api.app.test_client()
 
 BASE = {"close": 66.0, "sma20": 65.0, "sma20_5d_ago": 64.0, "atr14": 4.0,
         "consecutive_closes_above": 3, "regime_state": "Risk-on / Trending",
-        "theme_qualified": True, "kind": "watching"}
+        "group_in_universe": True, "kind": "watching"}
 
 
 def _sim(**over):
@@ -92,12 +92,17 @@ def test_replay_committed_artifact():
         if not conds or row.get("insufficient_data"):
             continue
         c2, c4, c5 = conds["2_confirmation"], conds["4_slope"], conds["5_thesis"]
-        inputs = row.get("assess_inputs") or {
+        inputs = row.get("assess_inputs")
+        if inputs and "group_in_universe" not in inputs:
+            # pre-D-007 artifact: same bool, old key
+            inputs = dict(inputs)
+            inputs["group_in_universe"] = inputs.pop("theme_qualified")
+        inputs = inputs or {
             "close": row["close"], "sma20": row["sma20"],
             "sma20_5d_ago": row["sma20"] + (-1.0 if c4["met"] else 1.0),
             "atr14": c2.get("atr14"),
             "consecutive_closes_above": c2.get("consecutive_closes_above", 0),
-            "regime_state": regime, "theme_qualified": c5["met"],
+            "regime_state": regime, "group_in_universe": c5["met"],
             "kind": row.get("kind", "watching"),
         }
         got = assess_position(**inputs)
@@ -139,9 +144,57 @@ def test_validation():
     print("  validation: junk/kind/string/bool/list 400; null ATR degrades: OK")
 
 
+def test_legacy_alias_and_grade_endpoint():
+    # legacy key still accepted (alias)
+    body = dict(BASE); del body["group_in_universe"]; body["theme_qualified"] = True
+    r = C.post("/api/position/simulate", json=body)
+    assert r.status_code == 200 and r.get_json()["state"] == "RE_ENTRY_READY"
+
+    # grade block computes when grade keys present (law 1: same grade_setup)
+    d = _sim(sma5=65.5, up_close_since_swing_low=True, rsi14=60.0,
+             quality_score=86, breaker_status="clear", runway_sessions=31)
+    assert d["grade"]["grade"] == "A+", d["grade"]
+    assert not d["grade"]["failing"]
+
+    # B case through the endpoint: score 72 -> named reason
+    d = _sim(sma5=65.5, up_close_since_swing_low=True, rsi14=60.0,
+             quality_score=72, breaker_status="clear", runway_sessions=31)
+    assert d["grade"]["grade"] == "B"
+    assert "5_score" in d["grade"]["failing"]
+
+    # C-escalation through the endpoint: close below SMA5 (knife), Trending
+    d = _sim(sma5=70.0, up_close_since_swing_low=True, rsi14=60.0,
+             quality_score=86, breaker_status="clear", runway_sessions=31)
+    assert d["grade"]["grade"] == "C"          # blocked in EVERY regime
+
+    # Q4 hard-gate preview: Choppy READY + grade B -> grade_gate
+    d = _sim(regime_state="Risk-on / Choppy", sma5=65.5,
+             up_close_since_swing_low=True, rsi14=60.0, quality_score=72,
+             breaker_status="clear", runway_sessions=31)
+    assert d["state"] == "RE_ENTRY_READY" and d["a_plus_only"] is True
+    assert "READY blocked" in d.get("grade_gate", "")
+    # ...and A+ under Choppy is NOT gated
+    d = _sim(regime_state="Risk-on / Choppy", sma5=65.5,
+             up_close_since_swing_low=True, rsi14=60.0, quality_score=86,
+             breaker_status="clear", runway_sessions=31)
+    assert d["grade"]["grade"] == "A+" and "grade_gate" not in d
+
+    # grade-input validation: bad breaker / rsi out of range -> 400
+    assert C.post("/api/position/simulate",
+                  json=dict(BASE, breaker_status="fine")).status_code == 400
+    assert C.post("/api/position/simulate",
+                  json=dict(BASE, rsi14=140)).status_code == 400
+    # no grade keys -> no grade block (contract unchanged)
+    d = _sim()
+    assert "grade" not in d
+    print("  legacy alias + grade endpoint: A+/B/C-escalation/hard-gate/"
+          "validation: OK")
+
+
 if __name__ == "__main__":
     print("\n=== Position Lab tests (PER-508 #24b) ===")
     test_ticket_pins()
     test_replay_committed_artifact()
     test_validation()
+    test_legacy_alias_and_grade_endpoint()
     print("\nAll Position Lab tests passed.\n")

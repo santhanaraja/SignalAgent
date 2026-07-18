@@ -40,7 +40,7 @@ CONFIG = {
     },
 }
 
-UNMAPPED = {"met": True, "no_theme_mapping": True, "detail": "no mapping"}
+UNMAPPED = {"met": True, "no_group_mapping": True, "detail": "no mapping"}
 
 
 def _bars(closes, spread=1.0):
@@ -132,20 +132,33 @@ def test_slope_condition():
     print("  slope condition blocks READY under a falling SMA20: OK")
 
 
-def test_theme_status_variants():
+def test_group_status_variants():
     eng = _engine()
-    wl = {"Semis", "Biotech"}
-    s = eng._theme_status("Biotech", wl, ["Biotech"], {}, 2)
-    assert s["met"] and "active" in s["detail"]
-    s = eng._theme_status("Biotech", wl, [], {"Biotech": 2}, 2)
-    assert s["met"] and "#2" in s["detail"]
-    s = eng._theme_status("Biotech", wl, [], {"Biotech": 4}, 2)
-    assert not s["met"]
-    s = eng._theme_status("SmallCap/Broad", wl, [], {}, 2)
-    assert s["met"] and s.get("no_theme_mapping") is True
-    s = eng._theme_status("external:Uranium", wl, [], {}, 2)
-    assert s["met"] and s.get("no_theme_mapping") is True
-    print("  thesis condition: active / ranked / unqualified / unmapped: OK")
+    gm = {"AAA": "Semiconductors", "CCC": "Biotechnology"}
+    selected = {"Semiconductors"}
+    weeks = {"Semiconductors": 3}
+    # in-universe group: met, exact detail wording (D-007 spec), weeks
+    s = eng._group_status({"ticker": "AAA"}, gm, selected, weeks, 15)
+    assert s["met"] and s["detail"] == "group 'Semiconductors' in universe (top-15)"
+    assert s["weeks_in_universe"] == 3
+    # resolvable group NOT selected: honest fail
+    s = eng._group_status({"ticker": "CCC"}, gm, selected, weeks, 15)
+    assert not s["met"] and "not in current universe" in s["detail"]
+    # manual row override beats the map (R28 precedence)
+    s = eng._group_status({"ticker": "CCC", "group": "Semiconductors"},
+                          gm, selected, weeks, 15)
+    assert s["met"]
+    # universe unavailable: fail CLOSED with honest wording (outage never
+    # opens the entry gate, and never claims the group ranked out)
+    s = eng._group_status({"ticker": "AAA"}, gm, set(), {}, 15)
+    assert not s["met"] and "universe unavailable" in s["detail"]
+    # unmapped: passes but FLAGGED (the old no_theme_mapping convention)
+    s = eng._group_status({"ticker": "ZZZ", "theme": "SmallCap/Broad"},
+                          gm, selected, weeks, 15)
+    assert s["met"] and s.get("no_group_mapping") is True
+    assert "SmallCap/Broad" in s["detail"]
+    print("  condition 5 (group gate): in-universe / not-selected / manual "
+          "override / unmapped-flagged: OK")
 
 
 def test_stop_display():
@@ -345,6 +358,12 @@ def test_extension_guard_no_flapping_events():
         with open(os.path.join(state_dir, "positions.json"), "w") as f:
             json.dump({"holdings": [],
                        "watching": [{"ticker": "EXT", "theme": "X"}]}, f)
+        # condition-5 basis (post-D-007): EXT's group in the universe — an
+        # EMPTY data dir now fails the gate closed (total-outage guard), so
+        # the fixture must exist for READY/EXTENDED_HOLD to be reachable
+        with open(os.path.join(data_dir, "universe_active.json"), "w") as f:
+            json.dump({"groups": {"TestGroup": {"tickers": ["EXT"]}},
+                       "ranking": []}, f)
         import earnings_calendar
         old_gem = earnings_calendar.get_earnings_map
         earnings_calendar.get_earnings_map = lambda ts: {t: None for t in ts}
@@ -518,10 +537,20 @@ def test_compute_persists_and_emits():
                        "watching": [{"ticker": "BBB", "theme": "SmallCap/Broad"},
                                     {"ticker": "CCC", "theme": "Biotech"}]},
                       f)
-        # qualified_themes read from STATE_DIR — the framework_runner call
-        # path (no qualified_active argument)
+        # qualified_themes still written — proving the gate NO LONGER reads
+        # it (D-007 Phase 1: condition 5 is the universe, themes display-only)
         with open(os.path.join(state_dir, "qualified_themes.json"), "w") as f:
             json.dump({"active": [{"name": "Semis", "proxy": "SMH"}]}, f)
+        # condition-5 basis: the current universe + dashboard artifacts
+        with open(os.path.join(data_dir, "universe_active.json"), "w") as f:
+            json.dump({"groups": {"Semiconductors": {
+                           "tickers": ["AAA"], "weeks_in_universe": 3}},
+                       "ranking": [{"name": "Biotechnology",
+                                    "tickers": [{"ticker": "CCC"}]}]}, f)
+        with open(os.path.join(data_dir, "signals.json"), "w") as f:
+            json.dump({"groups": [{"name": "Semiconductors",
+                                   "breaker_status": "clear",
+                                   "stocks": [{"ticker": "AAA"}]}]}, f)
 
         def fetcher(ticker, period="6mo"):
             if ticker == "AAA":
@@ -552,14 +581,20 @@ def test_compute_persists_and_emits():
         assert "earnings_note" not in r1["tickers"]["BBB"]   # WATCHING + no date
         assert r1["tickers"]["AAA"]["state"] == HELD
         assert r1["tickers"]["AAA"]["stop"]["type"] == "sma20_close"
-        # thesis via the qualified_themes.json load path (Semis active)
+        # thesis via the UNIVERSE gate (D-007): group in current universe
         assert r1["tickers"]["AAA"]["conditions"]["5_thesis"]["met"]
-        assert "active" in r1["tickers"]["AAA"]["conditions"]["5_thesis"]["detail"]
+        assert "in universe" in r1["tickers"]["AAA"]["conditions"]["5_thesis"]["detail"]
+        assert r1["tickers"]["AAA"]["group"] == "Semiconductors"
+        assert r1["tickers"]["AAA"]["weeks_in_universe"] == 3
         assert r1["tickers"]["BBB"]["state"] == WATCHING
         assert "distance_to_sma20_pct" in r1["tickers"]["BBB"]
         assert r1["tickers"]["BBB"]["extension_pct"] < 0   # below SMA20
         assert r1["tickers"]["AAA"]["extension_pct"] > 0   # above SMA20
-        assert r1["tickers"]["BBB"]["conditions"]["5_thesis"].get("no_theme_mapping")
+        assert r1["tickers"]["BBB"]["conditions"]["5_thesis"].get("no_group_mapping")
+        # D-011: watchers carry the grade (BBB below SMA20 -> conditions fail -> C)
+        assert r1["tickers"]["BBB"]["grade"]["grade"] == "C"
+        assert r1["tickers"]["BBB"]["grade_inputs"] is not None
+        assert "grade" not in r1["tickers"]["AAA"]          # holdings ungraded
         # fetch failure: reported, but never seeds/poisons persisted state
         assert r1["tickers"]["CCC"].get("insufficient_data") is True
         assert len(r1["transitions"]) == 2   # AAA + BBB initialized, not CCC
@@ -605,13 +640,256 @@ def test_compute_persists_and_emits():
     print("  compute(): state persisted, events emitted once, earnings layer: OK")
 
 
+# ------------------------------------------------------------------
+# D-011 — the A+ grade (grade_setup fixtures from the decision record)
+# ------------------------------------------------------------------
+
+def test_runway_sessions():
+    from framework.position_signals import runway_sessions_before as rsb
+    # THE record's arithmetic (D-011 amendment 2): MRNA evaluated
+    # 2026-07-12 (Sun) / 07-13 (Mon) vs the 2026-07-31 print -> 14 sessions
+    # STRICTLY before the print day
+    assert rsb("2026-07-31", datetime.date(2026, 7, 13)) == 14
+    assert rsb("2026-07-31", datetime.date(2026, 7, 12)) == 14   # Sunday eval
+    # ARWR Jul-6 anatomy: ~31 days out -> comfortably >= 15
+    assert rsb("2026-08-18", datetime.date(2026, 7, 6)) == 31
+    # THE PRINT DAY: 0 sessions — must FAIL the bar, never read as
+    # "no known print" (review finding)
+    assert rsb("2026-07-13", datetime.date(2026, 7, 13)) == 0
+    # past print -> None (re-qualified); None/garbage -> None
+    assert rsb("2026-07-01", datetime.date(2026, 7, 13)) is None
+    assert rsb(None) is None
+    assert rsb("not-a-date") is None
+    print("  runway (amendment 2): MRNA=14 strictly-before-print, Sunday "
+          "eval, edges: OK")
+
+
+def test_grade_fixtures():
+    from framework.position_signals import grade_setup
+    ARWR = dict(all_conditions_met=True, extension_atr=1.64, close=76.0,
+                sma5=74.0, up_close_since_swing_low=True, rsi14=62.0,
+                quality_score=86, breaker_status="clear", runway_sessions=31)
+    MRNA = dict(all_conditions_met=True, extension_atr=0.43, close=68.27,
+                sma5=76.0, up_close_since_swing_low=True, rsi14=55.0,
+                quality_score=55, breaker_status="critical",
+                runway_sessions=14)
+
+    # ARWR Jul-6 anatomy (the A+ taken): all seven rows -> A+
+    g = grade_setup(**ARWR)
+    assert g["grade"] == "A+" and not g["failing"], g
+
+    # MRNA Jul-12 anatomy (the knife): approach fail ESCALATES to C
+    # (amendment 1) with score/breaker/runway as further named failures
+    g = grade_setup(**MRNA)
+    assert g["grade"] == "C", g
+    assert "3_approach" in g["failing"]
+    assert "5_score" in g["failing"] and "6_breaker" in g["failing"]
+    assert "7_runway" in g["failing"]
+    assert g["rows"]["4_rsi"]["met"]     # RSI 55 IS in the 45-70 band (record †)
+
+    # B case: all pass except score 72 -> B with the named reason
+    g = grade_setup(**dict(ARWR, quality_score=72))
+    assert g["grade"] == "B" and g["failing"] == ["5_score"], g
+    assert "72" in g["reasons"]
+
+    # runway boundary (strictly-before-print): 14 -> B named; 15 -> pass
+    g = grade_setup(**dict(ARWR, runway_sessions=14))
+    assert g["grade"] == "B" and g["failing"] == ["7_runway"]
+    g = grade_setup(**dict(ARWR, runway_sessions=15))
+    assert g["grade"] == "A+"
+
+    # C-escalation is regime-INDEPENDENT: the pure function has no regime
+    # input at all — a knife grades C everywhere (Trending included); the
+    # endpoint test proves it through a Trending simulate call
+    g = grade_setup(**dict(ARWR, close=70.0, sma5=74.0))
+    assert g["grade"] == "C" and "3_approach" in g["failing"]
+
+    # conditions fail -> C; guard fail -> C
+    g = grade_setup(**dict(ARWR, all_conditions_met=False))
+    assert g["grade"] == "C"
+    g = grade_setup(**dict(ARWR, extension_atr=2.1))
+    assert g["grade"] == "C"
+
+    # rsi boundaries inclusive: 45 and 70 pass, 44.9 / 70.1 fail (B)
+    assert grade_setup(**dict(ARWR, rsi14=45.0))["grade"] == "A+"
+    assert grade_setup(**dict(ARWR, rsi14=70.0))["grade"] == "A+"
+    assert grade_setup(**dict(ARWR, rsi14=44.9))["grade"] == "B"
+
+    # unavailable data can never be A+ (proven, not defaulted) — but the
+    # index-vehicle waiver passes the score row
+    g = grade_setup(**dict(ARWR, rsi14=None))
+    assert g["grade"] == "B" and "4_rsi" in g["failing"]
+    g = grade_setup(**dict(ARWR, quality_score=None, score_waived=True))
+    assert g["grade"] == "A+" and g["rows"]["5_score"].get("waived")
+    # no known print -> unbounded runway, passes
+    g = grade_setup(**dict(ARWR, runway_sessions=None))
+    assert g["grade"] == "A+"
+    # print DAY: runway 0 -> fails the bar (review finding)
+    g = grade_setup(**dict(ARWR, runway_sessions=0))
+    assert g["grade"] == "B" and "7_runway" in g["failing"]
+    # approach data unavailable -> B (named), NOT the C-escalation — the
+    # amendment escalates a PROVEN knife, not an unknown (review finding)
+    g = grade_setup(**dict(ARWR, sma5=None))
+    assert g["grade"] == "B" and "3_approach" in g["failing"]
+    print("  grade fixtures: ARWR A+ / MRNA C-escalation / B named / runway "
+          "14-15 boundary / RSI bounds / waiver / unknowns: OK")
+
+
+def test_grade_gate_choppy():
+    """Q4 enforcement through evaluate(): Choppy READY without A+ carries
+    grade_gate (renders blocked); Trending READY does not (advisory)."""
+    eng = _engine()
+    df = _bars(np.linspace(90, 110, 45), spread=4.0)   # READY-able series
+    ctx = {"breaker_status": "clear", "next_earnings_date": None,
+           "score_waived": True}                        # waive score (synthetic df)
+    r = eng.evaluate({}, "watching", df, CHOPPY, UNMAPPED, WATCHING,
+                     grade_ctx=ctx)
+    assert r["state"] == RE_ENTRY_READY and r["a_plus_only"] is True
+    assert "grade" in r
+    if r["grade"]["grade"] != "A+":
+        assert "READY blocked" in r["grade_gate"]
+    else:
+        assert "grade_gate" not in r
+    # Trending: advisory — same grade, never gated
+    r2 = eng.evaluate({}, "watching", df, TRENDING, UNMAPPED, WATCHING,
+                      grade_ctx=ctx)
+    assert r2["state"] == RE_ENTRY_READY
+    assert "grade_gate" not in r2
+    # holdings never carry a grade
+    r3 = eng.evaluate({}, "holding", df, CHOPPY, UNMAPPED, None,
+                      grade_ctx=ctx)
+    assert "grade" not in r3
+    print("  Q4 enforcement: Choppy hard gate (READY blocked without A+), "
+          "Trending advisory, holdings ungraded: OK")
+
+
+def test_review_hardening():
+    """Review-finding pins: weeks counter week-keyed; extension-boundary
+    consistency; malformed-aplus sanitize; resolver defensiveness."""
+    from universe_builder import _weeks_in_universe
+    prev = {"Semis": {"weeks_in_universe": 4}, "Old": {}}
+    # new week: present advances, field-less seeds 1->2, new group starts 1
+    assert _weeks_in_universe("Semis", prev, "2026-07-10", "2026-07-17") == 5
+    assert _weeks_in_universe("Old", prev, "2026-07-10", "2026-07-17") == 2
+    assert _weeks_in_universe("New", prev, "2026-07-10", "2026-07-17") == 1
+    # SAME-week rebuild (--force): carries unchanged — never a phantom week
+    assert _weeks_in_universe("Semis", prev, "2026-07-17", "2026-07-17") == 4
+    assert _weeks_in_universe("New", prev, "2026-07-17", "2026-07-17") == 1
+    # no previous artifact
+    assert _weeks_in_universe("Semis", {}, None, "2026-07-17") == 1
+
+    # extension boundary: guard (unrounded, strict >) and grade row 2 agree —
+    # 1.803xATR fires the guard AND fails row 2 (never EXTENDED_HOLD + A+)
+    from framework.position_signals import grade_setup
+    g = grade_setup(all_conditions_met=True, extension_atr=1.803, close=101.8,
+                    sma5=100.5, up_close_since_swing_low=True, rsi14=60.0,
+                    quality_score=86, breaker_status="clear",
+                    runway_sessions=31)
+    assert g["grade"] == "C" and "2_extension" in g["failing"]
+
+    # malformed aplus config sanitizes to ruled defaults (never crashes)
+    cfg = copy.deepcopy(CONFIG)
+    cfg["positions"]["aplus"] = {"rsi_min": None, "index_vehicles": None}
+    eng = PositionSignalEngine(cfg, lambda t, period="6mo": None)
+    assert eng.aplus_cfg["rsi_min"] == 45.0
+    assert "SPY" in eng.aplus_cfg["index_vehicles"]
+    df = _bars(np.linspace(90, 110, 45), spread=4.0)
+    r = eng.evaluate({}, "watching", df, CHOPPY, UNMAPPED, WATCHING,
+                     grade_ctx={"breaker_status": "clear",
+                                "next_earnings_date": None,
+                                "score_waived": True})
+    assert "grade" in r or "grade_error" in r      # never raises
+
+    # resolver: parseable-but-wrong shapes contribute nothing, never raise
+    from framework.portfolio_rules import resolve_group_map
+    assert resolve_group_map([], "junk") == {}
+    assert resolve_group_map({"ranking": [None, {"tickers": "x"}],
+                              "groups": "bad"},
+                             {"groups": [None, {"stocks": "y"}]}) == {}
+    print("  review hardening: week-keyed counter, guard/grade boundary "
+          "agreement, aplus sanitize, resolver shapes: OK")
+
+
+def test_watchers_replay_real_artifacts():
+    """THE Phase-1 license pin, on the REAL COMMITTED artifacts.
+
+    Reads framework.json + universe_active.json + signals.json from git HEAD
+    (not the working tree) so the pin is immune to sweep-order artifact
+    mutation (review finding: test_pipeline regenerates signals.json
+    mid-sweep) and always asserts against the genuinely recorded state.
+
+    The invariants pinned (rotation-proof, no dated time bomb):
+      - STATES replay identically through the rewired engine
+      - conditions 1-4 met-status identical
+      - condition 5 equals the shared resolver's verdict on the same
+        committed artifacts (data-driven, not hardcoded)
+    PLUS the dated exhibit, asserted only while it holds: the 2026-07-18
+    rotation dropped Biotechnology, so MRNA's c5 diverges (old True ->
+    honest False) — the first live D-007 divergence. If a later rotation
+    readmits Biotechnology, the sub-assertion self-retires with a note.
+    """
+    import subprocess
+    from framework.position_signals import assess_position
+    from framework.portfolio_rules import resolve_group_map
+
+    def _head(path):
+        out = subprocess.run(["git", "show", f"HEAD:{path}"],
+                             capture_output=True, text=True,
+                             cwd=os.path.dirname(os.path.abspath(__file__)))
+        assert out.returncode == 0, f"git show failed for {path}"
+        return json.loads(out.stdout)
+
+    fw = _head("public/framework.json")
+    universe = _head("data/universe_active.json")
+    signals = _head("data/signals.json")
+    rows = (fw.get("position_signals") or {}).get("tickers") or {}
+    assert "ARWR" in rows and "MRNA" in rows, "watchers missing from artifact"
+
+    gmap = resolve_group_map(universe, signals)
+    selected = set((universe.get("groups") or {}).keys())
+    eng = _engine()
+
+    for t in ("ARWR", "MRNA"):
+        row = rows[t]
+        si = dict(row["assess_inputs"])
+        old_c5 = si.pop("theme_qualified", None)
+        if old_c5 is None:
+            old_c5 = si.pop("group_in_universe")   # post-rewire artifact
+        thesis = eng._group_status({"ticker": t, "theme": row.get("theme")},
+                                   gmap, selected, {}, len(selected) or 15)
+        got = assess_position(
+            si["close"], si["sma20"], si["sma20_5d_ago"], si["atr14"],
+            si["consecutive_closes_above"], si["regime_state"],
+            thesis["met"], si["kind"], thesis_detail=thesis["detail"])
+        # states identical — the license
+        assert got["state"] == row["state"], \
+            f"{t}: {got['state']} != recorded {row['state']}"
+        # conditions 1-4 met-status identical
+        for k in ("1_trigger", "2_confirmation", "3_regime_gate", "4_slope"):
+            assert got["conditions"][k]["met"] == \
+                row["conditions"][k]["met"], f"{t}:{k}"
+        # condition 5 == the resolver's verdict (data-driven invariant)
+        assert got["conditions"]["5_thesis"]["met"] == thesis["met"], t
+
+    # the dated exhibit — self-retiring when Biotechnology rotates back in
+    if "Biotechnology" not in selected and gmap.get("MRNA") == "Biotechnology":
+        m = eng._group_status({"ticker": "MRNA", "theme": "Biotech"},
+                              gmap, selected, {}, len(selected) or 15)
+        assert m["met"] is False, "MRNA divergence exhibit regressed"
+        note = "MRNA divergence exhibit ACTIVE (Biotechnology out since 2026-07-18)"
+    else:
+        note = "divergence exhibit retired (Biotechnology back in universe)"
+    print(f"  REPLAY PIN (committed artifacts): ARWR+MRNA states + c1-c4 "
+          f"identical, c5 == resolver verdict; {note}: OK")
+
+
 if __name__ == "__main__":
     print("\n=== Position signal engine tests (Build 1B) ===")
     test_confirmation_consecutive_closes()
     test_confirmation_via_atr_break()
     test_regime_gate_modes()
     test_slope_condition()
-    test_theme_status_variants()
+    test_group_status_variants()
     test_stop_display()
     test_full_cycle_watcher()
     test_full_cycle_holding_returns_to_held()
@@ -625,4 +903,9 @@ if __name__ == "__main__":
     test_extension_guard_no_flapping_events()
     test_mrvl_june_replay()
     test_compute_persists_and_emits()
+    test_runway_sessions()
+    test_grade_fixtures()
+    test_grade_gate_choppy()
+    test_review_hardening()
+    test_watchers_replay_real_artifacts()
     print("\nAll position-signal tests passed.\n")

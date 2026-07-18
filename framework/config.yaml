@@ -199,6 +199,17 @@ themes:
 # ---------------------------------------------------------------------------
 positions:
   sma_period: 20
+  # D-011 A+ doctrine (ruled thresholds — do not tune outside a D-011
+  # revisit). approach_swing_lookback is the one implementation knob the
+  # ruling leaves open (swing-low window for the approach filter; Build 5
+  # retests variants). index_vehicles get the quality-score row waived.
+  aplus:
+    rsi_min: 45
+    rsi_max: 70
+    score_min: 75
+    runway_min_sessions: 15    # trading sessions STRICTLY before the print
+    approach_swing_lookback: 20
+    index_vehicles: ["SPY", "QQQ", "IWM", "DIA", "RSP"]
   confirmation_closes: 2       # consecutive closes above SMA20 to confirm
   atr_period: 14
   atr_mult: 0.5                # one close > SMA20 + 0.5*ATR(14) also confirms

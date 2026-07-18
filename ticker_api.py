@@ -327,6 +327,15 @@ def _regime_cfg():
                 "extension_guard_max": pos.get("extension_guard_max", 1.8),
                 "slope_lookback_days": pos.get("slope_lookback_days", 5),
             },
+            # D-011 A+ thresholds — same config values the engine grades
+            # with, so the lab can never drift from production (law 1)
+            "aplus": {
+                "rsi_min": (pos.get("aplus", {}) or {}).get("rsi_min", 45.0),
+                "rsi_max": (pos.get("aplus", {}) or {}).get("rsi_max", 70.0),
+                "score_min": (pos.get("aplus", {}) or {}).get("score_min", 75.0),
+                "runway_min_sessions": (pos.get("aplus", {}) or {}).get(
+                    "runway_min_sessions", 15),
+            },
         }
     return _REGIME_CFG
 
@@ -679,19 +688,74 @@ def position_simulate():
         regime_state = body.get("regime_state")
         if not isinstance(regime_state, str) or len(regime_state) > 50:
             raise ValueError("regime_state must be a string")
-        theme_qualified = body.get("theme_qualified")
-        if not isinstance(theme_qualified, bool):
-            raise ValueError("theme_qualified must be a boolean")
+        # D-007 Phase 1: canonical key is group_in_universe; the legacy
+        # theme_qualified key is accepted as an alias (same bool semantics)
+        group_in_universe = body.get("group_in_universe",
+                                     body.get("theme_qualified"))
+        if not isinstance(group_in_universe, bool):
+            raise ValueError("group_in_universe must be a boolean")
         kind = body.get("kind")
         if kind not in ("holding", "watching"):
             raise ValueError("kind must be 'holding' or 'watching'")
+
+        # Optional D-011 grade inputs — the grade section computes only
+        # when any of these keys is present (the lab's grade panel)
+        GRADE_KEYS = ("sma5", "up_close_since_swing_low", "rsi14",
+                      "quality_score", "score_waived", "breaker_status",
+                      "runway_sessions")
+        want_grade = any(k in body for k in GRADE_KEYS)
+        if want_grade:
+            sma5 = _num("sma5", 0.01, 1e6, allow_null=True)
+            rsi14 = _num("rsi14", 0.0, 100.0, allow_null=True)
+            quality_score = _num("quality_score", 0.0, 100.0, allow_null=True)
+            up_close = body.get("up_close_since_swing_low", False)
+            if not isinstance(up_close, bool):
+                raise ValueError("up_close_since_swing_low must be a boolean")
+            score_waived = body.get("score_waived", False)
+            if not isinstance(score_waived, bool):
+                raise ValueError("score_waived must be a boolean")
+            breaker_status = body.get("breaker_status")
+            if breaker_status is not None and breaker_status not in (
+                    "clear", "watch", "warning", "critical"):
+                raise ValueError("breaker_status must be clear/watch/warning/"
+                                 "critical or null")
+            runway = body.get("runway_sessions")
+            if runway is not None and (isinstance(runway, bool)
+                                       or not isinstance(runway, int)
+                                       or not (0 <= runway <= 1000)):
+                raise ValueError("runway_sessions must be an integer 0-1000 "
+                                 "or null")
     except ValueError as e:
         return jsonify({"status": "error", "error": str(e)}), 400
 
-    from framework.position_signals import assess_position
+    from framework.position_signals import assess_position, grade_setup
     result = assess_position(close, sma20, sma20_5d_ago, atr14, consec,
-                             regime_state, theme_qualified, kind,
+                             regime_state, group_in_universe, kind,
                              **_regime_cfg()["positions"])
+    if want_grade:
+        ap = _regime_cfg()["aplus"]
+        # row 2 uses the UNROUNDED extension (the guard's own comparison) —
+        # the rounded display field disagrees exactly at the 1.8 boundary
+        ext_raw = None if not atr14 else (close - sma20) / atr14
+        grade = grade_setup(
+            all_conditions_met=result["all_conditions_met"],
+            extension_atr=ext_raw,
+            close=close, sma5=sma5,
+            up_close_since_swing_low=up_close,
+            rsi14=rsi14, quality_score=quality_score,
+            score_waived=score_waived, breaker_status=breaker_status,
+            runway_sessions=runway,
+            extension_guard_max=_regime_cfg()["positions"].get(
+                "extension_guard_max", 1.8),
+            rsi_min=ap["rsi_min"], rsi_max=ap["rsi_max"],
+            score_min=ap["score_min"],
+            runway_min_sessions=ap["runway_min_sessions"])
+        result["grade"] = grade
+        # Q4 enforcement preview, same rule the engine applies
+        if result.get("a_plus_only") and grade["grade"] != "A+":
+            result["grade_gate"] = (
+                f"READY blocked — grade {grade['grade']} under Choppy "
+                f"(A+ required): {grade['reasons'] or 'see rows'}")
     return app.response_class(
         response=json.dumps({"status": "success", **result},
                             cls=NumpyEncoder),
@@ -1554,7 +1618,9 @@ def _assessment_positions(data):
             "days_to_earnings": x.get("days_to_earnings"),
         }
         for opt in ("earnings_note", "distance_to_sma20_pct", "a_plus_only",
-                    "extension_guard", "conditions_met", "insufficient_data"):
+                    "extension_guard", "conditions_met", "insufficient_data",
+                    "grade", "grade_gate", "grade_inputs", "group",
+                    "weeks_in_universe"):
             if x.get(opt) is not None:
                 row[opt] = x[opt]
         # conditions itemized only for non-HELD names (the re-entry ladder);

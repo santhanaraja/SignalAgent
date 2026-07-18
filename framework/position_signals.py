@@ -14,11 +14,21 @@ The re-entry rule — ALL FIVE conditions must hold:
                    Risk-on / Choppy   = conditional ("A+ only" flag);
                    Caution / Risk-off = blocked
   4. slope:        SMA20 flat-or-rising vs slope_lookback_days ago
-  5. thesis:       the ticker's theme still qualified (active, or ranked
-                   top-N) per the R4-fixed weekly qualification. Themes
-                   with no framework mapping (e.g. "SmallCap/Broad" or an
-                   explicit "external:" prefix) pass automatically but are
-                   flagged no_theme_mapping — never silently true.
+  5. thesis:       the ticker's GICS group is in the CURRENT active
+                   universe's selected groups (D-007 Phase 1 — the scanner
+                   is the thesis; replaces theme_qualified). Group resolves
+                   through the shared R28 resolver (universe mapping ->
+                   signals.json fallback -> manual row override). Tickers
+                   with NO resolvable group pass automatically but are
+                   flagged no_group_mapping — never silently true.
+
+The A+ grade (D-011, rides this build): grade_setup() computes the ruled
+seven-row setup grade beside the 5 conditions — A+ / B (named reasons) /
+C (mechanical-or-guard fail, or the approach-filter C-escalation clause:
+a knife is blocked in EVERY regime). Hard gate in Choppy (RE_ENTRY_READY
+without A+ renders blocked — the EXTENDED_HOLD visual law); advisory in
+Trending. The old theme layer keeps computing DISPLAY-ONLY in parallel
+(Phase 3 deletes it).
 
 State machine (close basis, evaluated daily):
   HELD -> EXIT_FIRED (close below SMA20; this IS the exit signal)
@@ -101,8 +111,8 @@ def next_state(prev, kind, above, all_five):
 
 
 def assess_position(close, sma20, sma20_5d_ago, atr14,
-                    consecutive_closes_above, regime_state, theme_qualified,
-                    kind, *, prev_state=None, theme_detail=None,
+                    consecutive_closes_above, regime_state, group_in_universe,
+                    kind, *, prev_state=None, thesis_detail=None,
                     confirmation_closes=2, atr_mult=0.5,
                     extension_guard_max=1.8, slope_lookback_days=5):
     """The 5 conditions + state + extension guard on scalar inputs.
@@ -154,9 +164,10 @@ def assess_position(close, sma20, sma20_5d_ago, atr14,
 
     c5 = {
         "name": "thesis",
-        "met": bool(theme_qualified),
-        "detail": theme_detail if theme_detail is not None else
-                  f"theme {'qualified' if theme_qualified else 'not qualified'}",
+        "met": bool(group_in_universe),
+        "detail": thesis_detail if thesis_detail is not None else
+                  f"group {'in' if group_in_universe else 'not in'} "
+                  f"current universe",
     }
 
     conditions = {"1_trigger": c1, "2_confirmation": c2,
@@ -197,6 +208,151 @@ def assess_position(close, sma20, sma20_5d_ago, atr14,
     return result
 
 
+# ---------------------------------------------------------------------------
+# The A+ setup grade as a pure function (D-011, PER-508 comment 11716 +
+# both amendments). The ONLY implementation of the seven-row checklist and
+# the grade algorithm — the engine and the Position Lab endpoint feed the
+# same function (Lab law 1, D-010).
+# ---------------------------------------------------------------------------
+
+def grade_setup(*, all_conditions_met, extension_atr, close, sma5,
+                up_close_since_swing_low, rsi14, quality_score,
+                score_waived=False, breaker_status=None, runway_sessions=None,
+                extension_guard_max=1.8, rsi_min=45.0, rsi_max=70.0,
+                score_min=75.0, runway_min_sessions=15):
+    """The D-011 seven-row setup grade on scalar inputs.
+
+    Rows: (1) five mechanical conditions · (2) extension <= guard ·
+    (3) approach filter: close > SMA5 AND >=1 up-close since the swing low ·
+    (4) RSI in [rsi_min, rsi_max] · (5) quality score >= score_min (waived
+    for index vehicles) · (6) group breaker clear · (7) earnings runway >=
+    runway_min_sessions TRADING sessions STRICTLY before the print day
+    (amendment 2 — the print is not runway; None runway = no known print =
+    unbounded, passes).
+
+    Grades: all seven -> "A+". Rows 1-2 fail -> "C" (mechanical/guard).
+    Row 3 fail -> "C" in EVERY regime (amendment 1, the C-escalation
+    clause: a B-graded knife would be a permitted knife in Trending,
+    contradicting the doctrine's founding case). Rows 4-6 fail (or their
+    data is unavailable — A+ must be PROVEN, never defaulted) -> "B" with
+    the failing rows named.
+
+    Returns {"grade", "rows": {seven row dicts}, "failing": [names],
+    "reasons": "; ".join}.
+    """
+    rows = {}
+
+    rows["1_conditions"] = {
+        "met": bool(all_conditions_met),
+        "detail": "five mechanical conditions "
+                  + ("met" if all_conditions_met else "not met"),
+    }
+
+    ext_ok = extension_atr is not None and extension_atr <= extension_guard_max
+    rows["2_extension"] = {
+        "met": bool(ext_ok),
+        "detail": (f"extension {extension_atr}×ATR <= {extension_guard_max}×"
+                   if ext_ok else
+                   f"extension {extension_atr}×ATR > {extension_guard_max}×"
+                   if extension_atr is not None else
+                   "extension unavailable (no ATR)"),
+    }
+
+    appr_unavailable = close is None or sma5 is None
+    appr_ok = (not appr_unavailable and close > sma5
+               and bool(up_close_since_swing_low))
+    if appr_unavailable:
+        appr_detail = "approach unavailable (no SMA5)"
+    elif not close > sma5:
+        appr_detail = f"close {close:.2f} below SMA5 {sma5:.2f} — arriving from above"
+    elif not up_close_since_swing_low:
+        appr_detail = "no up-close since the swing low — turn unconfirmed"
+    else:
+        appr_detail = f"close {close:.2f} > SMA5 {sma5:.2f} with up-close off the low"
+    rows["3_approach"] = {"met": bool(appr_ok), "detail": appr_detail}
+
+    rsi_ok = rsi14 is not None and rsi_min <= rsi14 <= rsi_max
+    rows["4_rsi"] = {
+        "met": bool(rsi_ok),
+        "detail": (f"RSI {rsi14:.0f} in [{rsi_min:.0f}, {rsi_max:.0f}]"
+                   if rsi_ok else
+                   f"RSI {rsi14:.0f} outside [{rsi_min:.0f}, {rsi_max:.0f}]"
+                   if rsi14 is not None else "RSI unavailable"),
+    }
+
+    if score_waived:
+        rows["5_score"] = {"met": True, "waived": True,
+                           "detail": "quality score waived (index vehicle)"}
+    else:
+        score_ok = quality_score is not None and quality_score >= score_min
+        rows["5_score"] = {
+            "met": bool(score_ok),
+            "detail": (f"score {quality_score:.0f} >= {score_min:.0f}"
+                       if score_ok else
+                       f"score {quality_score:.0f} < {score_min:.0f}"
+                       if quality_score is not None else "score unavailable"),
+        }
+
+    brk_ok = breaker_status == "clear"
+    rows["6_breaker"] = {
+        "met": bool(brk_ok),
+        "detail": (f"group breaker {breaker_status}" if breaker_status
+                   else "group breaker unknown (no group data)"),
+    }
+
+    if runway_sessions is None:
+        rows["7_runway"] = {"met": True,
+                            "detail": "no known earnings print — runway unbounded"}
+    else:
+        run_ok = runway_sessions >= runway_min_sessions
+        rows["7_runway"] = {
+            "met": bool(run_ok),
+            "detail": f"{runway_sessions} sessions before the print "
+                      f"({'≥' if run_ok else '<'} {runway_min_sessions})",
+        }
+
+    failing = [k for k, r in rows.items() if not r["met"]]
+    if not rows["1_conditions"]["met"] or not rows["2_extension"]["met"]:
+        grade = "C"
+    elif not rows["3_approach"]["met"] and not appr_unavailable:
+        # amendment 1 — C-escalation: a PROVEN knife is blocked in EVERY
+        # regime. Approach data merely unavailable follows the
+        # unavailable-data convention instead (B, row named) — amendment 1
+        # escalates the knife, not the unknown (review finding).
+        grade = "C"
+    elif failing:
+        grade = "B"
+    else:
+        grade = "A+"
+    reasons = "; ".join(rows[k]["detail"] for k in failing)
+    return {"grade": grade, "rows": rows, "failing": failing,
+            "reasons": reasons}
+
+
+def runway_sessions_before(print_date_iso, today=None):
+    """Trading sessions in [today, print) — the amendment-2 convention:
+    sessions strictly BEFORE the print day, counting today's (or the next)
+    session as runway. np.busday_count reproduces the record's arithmetic
+    exactly (MRNA evaluated 2026-07-12/13 vs a 2026-07-31 print -> 14).
+    Weekday approximation (no exchange-holiday calendar — same convention
+    as every other trading-day count in the repo). None in -> None out."""
+    if not print_date_iso:
+        return None
+    today = today or datetime.date.today()
+    try:
+        pd_date = datetime.date.fromisoformat(str(print_date_iso))
+    except (TypeError, ValueError):
+        return None
+    if pd_date < today:
+        return None            # past print — the name re-qualified
+    if pd_date == today:
+        # THE PRINT DAY: zero sessions of runway — the maximal binary
+        # straddle must FAIL the >=15 bar, never read as "no known print"
+        # (review finding)
+        return 0
+    return int(np.busday_count(today.isoformat(), pd_date.isoformat()))
+
+
 class PositionSignalEngine:
     """Evaluate the 5-condition re-entry rule per tracked ticker."""
 
@@ -213,6 +369,28 @@ class PositionSignalEngine:
         self.atr_mult = cfg.get("atr_mult", 0.5)
         self.slope_lookback = cfg.get("slope_lookback_days", 5)
         self.extension_guard_max = cfg.get("extension_guard_max", 1.8)
+        # D-011 A+ doctrine thresholds (ruled values; do not tune outside a
+        # D-011 revisit). approach_swing_lookback is the one implementation
+        # knob the ruling leaves open (Build 5 retests variants).
+        ap = cfg.get("aplus", {}) or {}
+
+        def _apnum(key, default):
+            # a null/garbage config value must degrade to the ruled default,
+            # never crash the grade (review finding: aplus.rsi_min: null
+            # raised TypeError out of evaluate)
+            v = ap.get(key, default)
+            return float(v) if isinstance(v, (int, float)) \
+                and not isinstance(v, bool) else float(default)
+        self.aplus_cfg = {
+            "rsi_min": _apnum("rsi_min", 45.0),
+            "rsi_max": _apnum("rsi_max", 70.0),
+            "score_min": _apnum("score_min", 75.0),
+            "runway_min_sessions": int(_apnum("runway_min_sessions", 15)),
+            "approach_swing_lookback": max(
+                2, int(_apnum("approach_swing_lookback", 20))),
+            "index_vehicles": set(ap.get("index_vehicles") or
+                                  ["SPY", "QQQ", "IWM", "DIA", "RSP"]),
+        }
         self.themes_cfg = config.get("themes", {}) or {}
         self.fetcher = fetcher
         os.makedirs(self.STATE_DIR, exist_ok=True)
@@ -222,14 +400,18 @@ class PositionSignalEngine:
     # ------------------------------------------------------------------
 
     def evaluate(self, entry: dict, kind: str, df, regime_state: str,
-                 theme_status: dict, prev_state: str) -> dict:
+                 thesis_status: dict, prev_state: str,
+                 grade_ctx: dict = None) -> dict:
         """
         Evaluate one ticker for the last bar of df.
 
         entry: the positions.json record. kind: "holding" | "watching".
         df: daily OHLC history up to and including the evaluation day.
-        theme_status: from _theme_status(). prev_state: persisted state or
-        None on first sight.
+        thesis_status: from _group_status() — condition 5's basis (D-007:
+        group in current universe). prev_state: persisted state or None on
+        first sight. grade_ctx (watchers): {breaker_status, next_earnings_date,
+        score_waived, today} — the non-df grade inputs; when given, the
+        D-011 grade is computed and attached.
 
         Pure: no I/O, no state writes — replay harnesses feed truncated
         windows day by day.
@@ -275,14 +457,14 @@ class PositionSignalEngine:
         # extras.
         result = assess_position(
             last_close, sma_now, sma_then, atr, consec_above, regime_state,
-            theme_status["met"], kind, prev_state=prev_state,
-            theme_detail=theme_status["detail"],
+            thesis_status["met"], kind, prev_state=prev_state,
+            thesis_detail=thesis_status["detail"],
             confirmation_closes=self.confirmation_closes,
             atr_mult=self.atr_mult,
             extension_guard_max=self.extension_guard_max,
             slope_lookback_days=self.slope_lookback)
-        if theme_status.get("no_theme_mapping"):
-            result["conditions"]["5_thesis"]["no_theme_mapping"] = True
+        if thesis_status.get("no_group_mapping"):
+            result["conditions"]["5_thesis"]["no_group_mapping"] = True
 
         state = result["state"]
         result.update({
@@ -304,12 +486,95 @@ class PositionSignalEngine:
             "atr14": atr,
             "consecutive_closes_above": consec_above,
             "regime_state": regime_state,
-            "theme_qualified": theme_status["met"],
+            "group_in_universe": thesis_status["met"],
             "kind": kind,
         }
         # Effective stop for held names (and the stop that just fired)
         if state in (HELD, EXIT_FIRED):
             result["stop"] = self._stop_for(entry, sma_now)
+
+        # --- D-011 A+ grade (watchers; entry doctrine) -------------------
+        # The ENTIRE grade block is guarded: a grade failure (malformed
+        # aplus config, degenerate df, scoring error) must degrade to
+        # grade-unavailable — it can never take down the state machine
+        # (review finding).
+        if grade_ctx is not None and kind == "watching":
+            try:
+                ap = self.aplus_cfg
+                # approach filter inputs: unrounded SMA5 + at least one
+                # up-close since the swing low (lowest close in the
+                # trailing lookback)
+                sma5_now = float(close.rolling(5).mean().iloc[-1])
+                look = min(len(close), ap["approach_swing_lookback"])
+                tail = close.iloc[-look:]
+                low_pos = int(np.argmin(tail.to_numpy(dtype=float)))
+                after = tail.iloc[low_pos:].to_numpy(dtype=float)
+                up_close = bool((np.diff(after) > 0).any())
+                # RSI-14 + quality score from the same df (deferred import —
+                # signal_engine is heavy; same pattern as sanitize_for_json)
+                rsi_v = None
+                score_v = None
+                try:
+                    import sys
+                    _parent = os.path.join(os.path.dirname(__file__), "..")
+                    if _parent not in sys.path:
+                        sys.path.insert(0, _parent)
+                    from signal_engine import compute_rsi, score_stock
+                    r = compute_rsi(close).iloc[-1]
+                    rsi_v = float(r) if np.isfinite(r) else None
+                    score_v, _sig, _det = score_stock(df)
+                except Exception:
+                    pass
+                runway = runway_sessions_before(
+                    grade_ctx.get("next_earnings_date"),
+                    grade_ctx.get("today"))
+                # extension for row 2: the UNROUNDED value the guard itself
+                # compares — the rounded display field can disagree with
+                # the guard exactly at the 1.8 boundary (review finding)
+                ext_raw = None if not atr else (last_close - sma_now) / atr
+                grade = grade_setup(
+                    all_conditions_met=result["all_conditions_met"],
+                    extension_atr=ext_raw,
+                    close=last_close, sma5=sma5_now,
+                    up_close_since_swing_low=up_close,
+                    rsi14=rsi_v, quality_score=score_v,
+                    score_waived=bool(grade_ctx.get("score_waived")),
+                    breaker_status=grade_ctx.get("breaker_status"),
+                    runway_sessions=runway,
+                    extension_guard_max=self.extension_guard_max,
+                    rsi_min=ap["rsi_min"], rsi_max=ap["rsi_max"],
+                    score_min=ap["score_min"],
+                    runway_min_sessions=ap["runway_min_sessions"])
+                result["grade"] = grade
+                # The EXACT grade inputs (lab seeding — parity by
+                # construction)
+                result["grade_inputs"] = {
+                    "sma5": sma5_now,
+                    "up_close_since_swing_low": up_close,
+                    "rsi14": rsi_v,
+                    "quality_score": score_v,
+                    "score_waived": bool(grade_ctx.get("score_waived")),
+                    "breaker_status": grade_ctx.get("breaker_status"),
+                    "runway_sessions": runway,
+                }
+                # D-011 Q4 enforcement: HARD GATE under the conditional
+                # regime (Choppy — READY already carries a_plus_only there;
+                # Caution blocks via condition 3). Trending: advisory, B
+                # permitted. No new machine state: READY *renders* blocked
+                # (the EXTENDED_HOLD visual law) via this field.
+                if result.get("a_plus_only") and grade["grade"] != "A+":
+                    result["grade_gate"] = (
+                        f"READY blocked — grade {grade['grade']} under "
+                        f"Choppy (A+ required): "
+                        f"{grade['reasons'] or 'see rows'}")
+            except Exception as exc:
+                result["grade_error"] = f"grade unavailable: {exc}"
+                # Q4 fail-safe: under the conditional regime an ungradeable
+                # READY must still BLOCK — A+ is proven, never presumed
+                if result.get("a_plus_only"):
+                    result["grade_gate"] = (
+                        "READY blocked — grade unavailable under Choppy "
+                        "(A+ required, cannot be proven)")
         return result
 
     def _next_state(self, prev, kind, above, all_five):
@@ -344,30 +609,61 @@ class PositionSignalEngine:
                     "detail": f"stop rule '{rule}' — level not computed by engine"}
         return {"type": None, "level": None, "detail": "no stop rule defined"}
 
-    def _theme_status(self, theme, watchlist_names, active_names, ranks, top_n):
-        """Condition 5 basis. Unmapped themes pass but are FLAGGED."""
-        if not theme or theme.startswith("external:") \
-                or theme not in watchlist_names:
-            return {"met": True, "no_theme_mapping": True,
-                    "detail": f"no framework theme mapping ('{theme}') — "
+    @staticmethod
+    def _group_status(entry, group_map, selected_groups, weeks_by_group,
+                      top_n=15):
+        """Condition 5 basis (D-007 Phase 1): the ticker's GICS group is in
+        the current active universe's selected groups. Resolution: manual
+        'group' key on the positions.json row overrides the shared resolver
+        map (same precedence as R28). Tickers with NO resolvable group pass
+        but are FLAGGED no_group_mapping — never silently true (the old
+        no_theme_mapping convention, carried forward)."""
+        ticker = entry.get("ticker")
+        group = entry.get("group") or group_map.get(ticker)
+        if not group:
+            if not group_map and not selected_groups:
+                # TOTAL data outage (no universe AND no signals): the gate
+                # must fail closed like the partial outage below, never
+                # masquerade as a benign never-mapped pass (review finding —
+                # the deeper outage must not OPEN the gate the shallower
+                # one closes)
+                return {"met": False, "group": None,
+                        "weeks_in_universe": None,
+                        "detail": "universe unavailable — thesis gate "
+                                  "fails closed"}
+            hint = entry.get("theme")
+            return {"met": True, "no_group_mapping": True, "group": None,
+                    "weeks_in_universe": None,
+                    "detail": f"no group mapping ('{hint}') — "
                               f"thesis gate not applicable"}
-        if theme in active_names:
-            return {"met": True,
-                    "detail": f"theme '{theme}' active (weekly qualification)"}
-        rank = ranks.get(theme)
-        if rank is not None and rank <= top_n:
-            return {"met": True,
-                    "detail": f"theme '{theme}' ranked #{rank} (top {top_n})"}
-        return {"met": False,
-                "detail": f"theme '{theme}' not qualified "
-                          f"(rank {rank if rank is not None else 'n/a'}, not active)"}
+        if not selected_groups:
+            # universe artifact missing/empty: fail CLOSED (an outage must
+            # not open the entry gate) — but say so honestly, never claim
+            # the group ranked out of a universe that wasn't there
+            return {"met": False, "group": group, "weeks_in_universe": None,
+                    "detail": "universe unavailable — thesis gate fails "
+                              "closed"}
+        if group in selected_groups:
+            return {"met": True, "group": group,
+                    "weeks_in_universe": weeks_by_group.get(group),
+                    "detail": f"group '{group}' in universe (top-{top_n})"}
+        return {"met": False, "group": group,
+                "weeks_in_universe": None,
+                "detail": f"group '{group}' not in current universe "
+                          f"(top-{top_n})"}
 
     # ------------------------------------------------------------------
     # Live compute: load positions + prior states, evaluate, persist, emit
     # ------------------------------------------------------------------
 
     def compute(self, regime_result: dict, theme_result: dict = None,
-                qualified_active: list = None, emit_events: bool = True) -> dict:
+                qualified_active: list = None, emit_events: bool = True,
+                universe_active: dict = None, group_map: dict = None) -> dict:
+        """theme_result / qualified_active are accepted for caller
+        back-compat but NO LONGER gate condition 5 (D-007 Phase 1) — the
+        theme layer runs display-only in parallel. universe_active /
+        group_map come from the runner (shared with R28); loaded from the
+        data artifacts when absent."""
         positions_path = os.path.join(self.STATE_DIR, "positions.json")
         if os.path.exists(positions_path):
             positions = self._load_json(positions_path, None)
@@ -388,16 +684,26 @@ class PositionSignalEngine:
         prev_states = self._load_json(
             os.path.join(self.STATE_DIR, "position_state.json"), {})
 
-        if qualified_active is None:
-            qualified = self._load_json(
-                os.path.join(self.STATE_DIR, "qualified_themes.json"),
-                {"active": []})
-            qualified_active = [a["name"] if isinstance(a, dict) else a
-                                for a in qualified.get("active", [])]
-        ranks = {t["name"]: t.get("rank")
-                 for t in (theme_result or {}).get("ranked_themes", [])}
-        top_n = self.themes_cfg.get("entry_rule", {}).get("requires_top_n_rank", 2)
-        watchlist_names = {t["name"] for t in self.themes_cfg.get("watchlist", [])}
+        # --- Condition-5 basis (D-007 Phase 1): the current universe ----
+        if universe_active is None:
+            universe_active = self._load_json(
+                os.path.join(self.DATA_DIR, "universe_active.json"), {}) or {}
+        signals = self._load_json(
+            os.path.join(self.DATA_DIR, "signals.json"), {}) or {}
+        if group_map is None:
+            from .portfolio_rules import resolve_group_map
+            group_map = resolve_group_map(universe_active, signals)
+        selected_groups = set((universe_active.get("groups") or {}).keys())
+        weeks_by_group = {
+            name: g.get("weeks_in_universe")
+            for name, g in (universe_active.get("groups") or {}).items()}
+        # Group breakers (grade row 6) from the dashboard artifact — may lag
+        # a Saturday rotation until Monday's signal run; unknown groups
+        # grade honestly as "breaker unknown" (B-blocking, never A+).
+        breaker_by_group = {
+            g.get("name"): g.get("breaker_status")
+            for g in signals.get("groups", []) or [] if g.get("name")}
+        top_n = len(selected_groups) or 15
         regime_state = (regime_result or {}).get("regime", "Unknown")
 
         tickers, transitions = {}, []
@@ -412,13 +718,18 @@ class PositionSignalEngine:
         earnings_map = {}
         try:
             import sys
-            sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+            _parent = os.path.join(os.path.dirname(__file__), "..")
+            if _parent not in sys.path:
+                sys.path.insert(0, _parent)
             from earnings_calendar import get_earnings_map, days_to_earnings
             earnings_map = get_earnings_map(
                 [e.get("ticker") for e, _ in entries if e.get("ticker")])
+            from earnings_calendar import _today_et
+            grade_today = _today_et()
         except Exception as e:
             print(f"[framework] earnings calendar unavailable: {e}")
             days_to_earnings = lambda d: None
+            grade_today = None
 
         seen = set()
         for entry, kind in entries:
@@ -433,13 +744,30 @@ class PositionSignalEngine:
                 continue
             seen.add(ticker)
             df = self._strip_synthetic_last_bar(self.fetcher(ticker, period="6mo"))
-            theme_status = self._theme_status(entry.get("theme"), watchlist_names,
-                                              qualified_active, ranks, top_n)
+            thesis_status = self._group_status(entry, group_map,
+                                               selected_groups,
+                                               weeks_by_group, top_n)
             prev = (prev_states.get(ticker) or {}).get("state")
-            result = self.evaluate(entry, kind, df, regime_state, theme_status, prev)
+            grade_ctx = None
+            if kind == "watching":
+                grade_ctx = {
+                    "breaker_status": breaker_by_group.get(
+                        thesis_status.get("group")),
+                    "next_earnings_date": earnings_map.get(ticker),
+                    "score_waived": (ticker in self.aplus_cfg["index_vehicles"]
+                                     or entry.get("vehicle") == "index"),
+                    # ET calendar — the same clock days_to_earnings uses on
+                    # the same row (review finding: date.today() on a UTC
+                    # host counts runway from tomorrow between 8pm-midnight)
+                    "today": grade_today,
+                }
+            result = self.evaluate(entry, kind, df, regime_state,
+                                   thesis_status, prev, grade_ctx=grade_ctx)
             result["ticker"] = ticker
             result["kind"] = kind
             result["theme"] = entry.get("theme")
+            result["group"] = thesis_status.get("group")
+            result["weeks_in_universe"] = thesis_status.get("weeks_in_universe")
             result["note"] = entry.get("note")
             result["next_earnings_date"] = earnings_map.get(ticker)
             result["days_to_earnings"] = days_to_earnings(earnings_map.get(ticker))
@@ -505,7 +833,7 @@ class PositionSignalEngine:
             "timestamp": _utcnow().isoformat(),
             "type": "position_state_change",
             "severity": _SEVERITY.get(state, "medium"),
-            "group": entry.get("theme"),
+            "group": result.get("group") or entry.get("theme"),
             "ticker": ticker,
             "description": f"{ticker}: {desc_from} → {state}",
             "detail": detail,
