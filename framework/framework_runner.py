@@ -139,6 +139,46 @@ def fetch_next_earnings(ticker: str):
     return None
 
 
+def build_universe_leadership(universe_active, signals_data):
+    """The Layer-2 GICS leadership block (D-007 Phase 2): the current
+    universe's selected groups joined with their ranking stats and the
+    dashboard's breaker state. Pure + defensive — malformed artifacts
+    contribute nothing. weeks_in_universe is None on pre-Phase-1 artifacts
+    (the counter starts accruing at the 2026-07-25 rotation; the page says
+    so honestly rather than faking history)."""
+    if not isinstance(universe_active, dict):
+        return []
+    selected = universe_active.get("groups")
+    if not isinstance(selected, dict) or not selected:
+        return []
+    rank_by_name = {}
+    for g in universe_active.get("ranking") or []:
+        if isinstance(g, dict) and g.get("name"):
+            rank_by_name[g["name"]] = g
+    breaker_by_name = {}
+    if isinstance(signals_data, dict):
+        for g in signals_data.get("groups") or []:
+            if isinstance(g, dict) and g.get("name"):
+                breaker_by_name[g["name"]] = g.get("breaker_status")
+    rows = []
+    for name, g in selected.items():
+        if not isinstance(g, dict):
+            continue
+        r = rank_by_name.get(name) or {}
+        rows.append({
+            "name": name,
+            "rank": r.get("rank"),
+            "composite": r.get("composite"),
+            "median_ytd": r.get("median_ytd"),
+            "sector": g.get("sector"),
+            "tickers": len(g.get("tickers") or []),
+            "weeks_in_universe": g.get("weeks_in_universe"),
+            "breaker_status": breaker_by_name.get(name),
+        })
+    rows.sort(key=lambda x: (x["rank"] is None, x["rank"] or 0, x["name"]))
+    return rows
+
+
 def load_regime_history() -> list:
     """Load regime_history.json."""
     path = os.path.join(STATE_DIR, "regime_history.json")
@@ -294,9 +334,8 @@ def run_framework(force_fetch: bool = False) -> dict:
     # Active groups = the REAL holdings' GICS groups (D-007 Phase 2: the
     # rule engine's active-state trigger). Manual row 'group' overrides the
     # map; unmapped holdings bucket as "TICKER (ungrouped)" — R28's own
-    # convention. [] = proven flat; None = UNKNOWN (positions unreadable —
-    # an outage must never render as a confident flat book).
-    active_groups = None
+    # convention. Flat book -> [] (reminders idle).
+    active_groups = None      # None = unknown (outage); [] = proven flat
     try:
         with open(os.path.join(BASE_DIR, "state", "positions.json")) as f:
             _pos = json.load(f)
@@ -403,6 +442,11 @@ def run_framework(force_fetch: bool = False) -> dict:
         "framework_version": config.get("framework", {}).get("version", "1.0"),
         "regime": regime_result,
         "themes": theme_result,
+        # Layer 2 primary content (D-007 Phase 2): the GICS leadership view;
+        # the themes block above is the legacy display-only strip until
+        # Phase 3 deletes it
+        "universe_leadership": build_universe_leadership(universe_active,
+                                                         signals_data),
         "theme_leaders": theme_leaders,
         "position_signals": position_signals,
         "r28": r28_result,

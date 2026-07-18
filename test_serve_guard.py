@@ -230,6 +230,47 @@ def test_chassis_artifact_stale_under_parliament():
           "(reverse direction): OK")
 
 
+def test_universe_leadership_block():
+    """D-007 Phase 2: the Layer-2 GICS leadership block — rank-ordered join
+    of selected groups + ranking stats + breaker; defensive on malformed
+    artifacts; weeks None on pre-Phase-1 artifacts (honest, no fake history);
+    and the artifact serves fine with the new optional block present."""
+    from framework.framework_runner import build_universe_leadership
+    ua = {"groups": {"Biotechnology": {"tickers": ["C"], "sector": "Health Care"},
+                     "Semiconductors": {"tickers": ["A", "B"], "sector": "IT",
+                                        "weeks_in_universe": 2}},
+          "ranking": [{"name": "Semiconductors", "rank": 1, "composite": 20.5,
+                       "median_ytd": 31.2},
+                      {"name": "Biotechnology", "rank": 2, "composite": 16.2,
+                       "median_ytd": 12.0}]}
+    sig = {"groups": [{"name": "Semiconductors", "breaker_status": "clear"}]}
+    rows = build_universe_leadership(ua, sig)
+    assert [r["name"] for r in rows] == ["Semiconductors", "Biotechnology"]
+    assert rows[0]["rank"] == 1 and rows[0]["tickers"] == 2
+    assert rows[0]["weeks_in_universe"] == 2
+    assert rows[0]["breaker_status"] == "clear"
+    assert rows[1]["weeks_in_universe"] is None      # pre-Phase-1 artifact
+    assert rows[1]["breaker_status"] is None         # no dashboard row
+    # malformed shapes contribute nothing, never raise
+    assert build_universe_leadership(None, None) == []
+    assert build_universe_leadership({"groups": "bad"}, []) == []
+    assert build_universe_leadership({"groups": {"X": None},
+                                      "ranking": "bad"}, {"groups": [None]}) == []
+    # serving tolerates the optional block
+    env = _Env()
+    try:
+        p = _current_payload()
+        p["universe_leadership"] = rows
+        env.write(p)
+        r = env.client.get(GUARDED[1])
+        assert r.status_code == 200
+        assert r.get_json()["universe_leadership"][0]["name"] == "Semiconductors"
+    finally:
+        env.close()
+    print("  universe leadership block: rank-ordered join, honest Nones, "
+          "malformed-safe, serves: OK")
+
+
 def test_missing_file_still_404():
     env = _Env()
     try:
@@ -248,5 +289,6 @@ if __name__ == "__main__":
     test_valid_but_old_200_with_stale_flag()
     test_parliament_artifact_stale_under_chassis()
     test_chassis_artifact_stale_under_parliament()
+    test_universe_leadership_block()
     test_missing_file_still_404()
     print("\nAll serve-guard tests passed.\n")

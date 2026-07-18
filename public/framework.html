@@ -1153,10 +1153,48 @@ function render(){
 
   html+=`
   <div class="section">
-    <div class="section-title">Layer 2: Theme Rotation
+    <div class="section-title">Layer 2: GICS Leadership
+      <span style="font-size:11px;color:var(--dim);">the current universe's selected groups — the thesis (D-007)</span>
       ${themes.regime_allows_entry?'<span class="badge" style="background:rgba(63,185,80,.15);color:var(--green);">Entries Allowed</span>':'<span class="badge" style="background:rgba(248,81,73,.15);color:var(--red);">Entries Blocked</span>'}
-    </div>
-    <div style="overflow-x:auto;">
+    </div>`;
+
+  // ===== PRIMARY: the universe's top-15 selected groups (D-007 Phase 2) =====
+  const lead=DATA.universe_leadership||[];
+  if(lead.length){
+    const anyWeeks=lead.some(g=>g.weeks_in_universe!=null);
+    html+=`<div style="overflow-x:auto;">
+    <table class="theme-table">
+      <thead><tr>
+        <th>Rank</th><th>Group</th><th>Sector</th><th>Composite</th><th>Median YTD</th><th>Tickers</th><th>Weeks</th><th>Breaker</th>
+      </tr></thead><tbody>`;
+    for(const g of lead){
+      const brk=g.breaker_status;
+      const brkChip=brk?`<span class="ps-er" style="background:${brk==='clear'?'rgba(63,185,80,.12)':brk==='critical'?'rgba(248,81,73,.18)':'rgba(210,153,34,.15)'};color:${brk==='clear'?'var(--green)':brk==='critical'?'var(--red)':'var(--yellow)'};">${brk}</span>`:'<span style="color:var(--dim);font-size:11px;">—</span>';
+      html+=`<tr>
+        <td class="rank-cell">${g.rank!=null?'#'+g.rank:'—'}</td>
+        <td class="name-cell">${g.name}</td>
+        <td style="font-size:11px;color:var(--dim);">${g.sector||'—'}</td>
+        <td class="return-cell">${g.composite!=null?g.composite.toFixed(1):'—'}</td>
+        <td class="return-cell ${g.median_ytd!=null?(g.median_ytd>=0?'pos':'neg'):''}">${g.median_ytd!=null?g.median_ytd.toFixed(1)+'%':'—'}</td>
+        <td class="return-cell">${g.tickers}</td>
+        <td class="return-cell">${g.weeks_in_universe!=null?g.weeks_in_universe:'—'}</td>
+        <td>${brkChip}</td>
+      </tr>`;
+    }
+    html+=`</tbody></table></div>`;
+    if(!anyWeeks){
+      html+=`<div style="margin-top:6px;font-size:11px;color:var(--dim);">Weeks-in-universe tracking starts at the 2026-07-25 rotation (observe-only, D-007 Phase 1) — no history is faked.</div>`;
+    }
+  }else{
+    html+=`<div class="ps-note">Universe leadership unavailable (pre-Phase-2 artifact — regenerates on the next framework run).</div>`;
+  }
+  // R28 reality replaces the retired static theme caps (hardening item H2)
+  html+=`<div style="margin-top:8px;font-size:11px;color:var(--dim);">Group caps: ≤20% / ≤3 positions per GICS group (R28, computed) &middot; aggregate ceiling regime-scaled 90/50/25/5 (D-008 Q4) &middot; see Layer 3</div>`;
+
+  // ===== LEGACY: the theme table, demoted (parallel-run until Phase 3) ====
+  html+=`<details style="margin-top:14px;">
+    <summary style="cursor:pointer;font-size:11px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Legacy themes — display only, retiring (D-007 Phase 3)</summary>
+    <div style="overflow-x:auto;margin-top:8px;">
     <table class="theme-table">
       <thead><tr>
         <th>Rank</th><th>Theme</th><th>Proxy</th><th>4W Return</th><th>12W Return</th><th>Composite</th><th>Status</th>
@@ -1193,13 +1231,10 @@ function render(){
       html+=`<tr id="${rowId}" style="display:none;"><td colspan="7" style="padding:0;">${renderLeaders(entry)}</td></tr>`;
     }
   }
-  html+=`</tbody></table></div>`;
-
-  // Concentration limits
-  const concNotes=themes.concentration_limits||[];
-  if(concNotes.length){
-    html+=`<div style="margin-top:10px;font-size:11px;color:var(--dim);">${concNotes.join(' &middot; ')}</div>`;
-  }
+  html+=`</tbody></table></div></details>`;
+  // (the legacy "Max per theme 15% / total 25%" concentration line died
+  // here — hardening item H2, comment 11717: R28's computed caps are the
+  // only concentration authority now, stated above the legacy strip)
   html+=`</div>`;
 
   // ===== ACTIONS SECTION =====
