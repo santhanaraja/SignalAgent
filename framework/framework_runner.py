@@ -268,10 +268,10 @@ def run_framework(force_fetch: bool = False) -> dict:
     # block is best-effort (an unreadable/misshapen artifact degrades the
     # gate and R28, never the run — the old block lived inside R28's try).
     universe_active = {}
+    signals_data = {}
     group_map = {}
     try:
         from .portfolio_rules import resolve_group_map
-        signals_data = {}
         try:
             with open(os.path.join(BASE_DIR, "..", "data",
                                    "universe_active.json")) as f:
@@ -289,7 +289,42 @@ def run_framework(force_fetch: bool = False) -> dict:
         group_map = resolve_group_map(universe_active, signals_data)
     except Exception as e:
         print(f"[framework] group resolution unavailable: {e}")
-        universe_active, group_map = {}, {}
+        universe_active, signals_data, group_map = {}, {}, {}
+
+    # Active groups = the REAL holdings' GICS groups (D-007 Phase 2: the
+    # rule engine's active-state trigger). Manual row 'group' overrides the
+    # map; unmapped holdings bucket as "TICKER (ungrouped)" — R28's own
+    # convention. [] = proven flat; None = UNKNOWN (positions unreadable —
+    # an outage must never render as a confident flat book).
+    active_groups = None
+    try:
+        with open(os.path.join(BASE_DIR, "state", "positions.json")) as f:
+            _pos = json.load(f)
+        holdings = _pos.get("holdings")
+        if not isinstance(holdings, list):
+            if holdings not in (None, []):
+                raise ValueError("positions.json holdings is not a list")
+            holdings = []
+        seen_groups = set()
+        for h in holdings:
+            if not isinstance(h, dict) or not isinstance(h.get("ticker"), str) \
+                    or not h.get("ticker"):
+                continue
+            t = h["ticker"]
+            # str() coercion: a hand-typo'd non-string manual group must
+            # never crash the join downstream (review finding). Multi-lot
+            # rows with CONFLICTING groups union deliberately — any group
+            # with active money elevates the reminders (R28 aggregates
+            # lots first-wins for the CAPS; different question).
+            seen_groups.add(str(h.get("group") or group_map.get(t)
+                                or f"{t} (ungrouped)"))
+        active_groups = sorted(seen_groups)
+        print(f"[framework] Active groups (real holdings): "
+              f"{', '.join(active_groups) or 'none — flat book'}")
+    except Exception as e:
+        active_groups = None
+        print(f"[framework] active-group resolution unavailable: {e} — "
+              f"rules will report active state UNKNOWN, not flat")
 
     # --- Layer 2.75: Position signal engine (exit / re-entry state machine) ---
     print("[framework] Evaluating position signals...")
@@ -312,7 +347,8 @@ def run_framework(force_fetch: bool = False) -> dict:
     # --- Layer 3: Rules ---
     print("[framework] Evaluating rules...")
     rule_engine = RuleEngine(config)
-    rules_result = rule_engine.evaluate(regime_result, theme_result)
+    rules_result = rule_engine.evaluate(regime_result, theme_result,
+                                        active_groups=active_groups)
     summary = rules_result["summary"]
     print(f"[framework] Rules: {summary['compliant']} compliant, "
           f"{summary['action_needed']} action needed, {summary['violations']} violations")
