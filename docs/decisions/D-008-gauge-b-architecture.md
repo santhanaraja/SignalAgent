@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | D-008 |
 | **Date** | 2026-07-12 (proposed and ruled same day — session parts 1 and 2) |
-| **Status** | **Ruled** · amended 2026-07-13 (harness campaign complete; throttle calibration locked — PER-508 comment 11724) |
+| **Status** | **Ruled** · amended 2026-07-13 (throttle locked) · **IMPLEMENTED 2026-07-17** (`debf12f`) |
 
 ## Context
 
@@ -129,11 +129,14 @@ edge is narrower. The honest claim is **not** "dominates the benchmark out-of-sa
 drawdown; best risk-adjusted point available." The choice optimizes for survivable
 drawdown (the stated goal), not benchmark-relative CAGR.
 
-**Build status:** every Gauge B parameter — chassis, credit shape, hysteresis,
-ladder, throttle — is now evidence-chosen. The Fable Ultracode build (post-Friday)
-implements exactly this config, under the Build 4 step-0 extraction-pin discipline
-(the `compute_regime` replay must reproduce recorded production history on unchanged
-inputs). No open parameters remain.
+**Build status: IMPLEMENTED — the chassis cut over to production 2026-07-17**
+(`debf12f`), under the extraction-pin discipline: the production transcription
+reproduces the validated backtest on all 2,896 trading days 2015→2026-07-10
+(the full-replay pin in `test_gauge_chassis.py`). Both engines agreed at
+cutover (Risk-on / Trending, 90% ceiling); the N=2 upgrade hysteresis
+completed live on cutover day. The Build-1A parliament remains behind
+`regime.engine` (revert lever). Perf follow-up `9641a07` (Gauge Lab
+zero-fetch simulate).
 
 ## Evidence
 

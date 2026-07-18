@@ -98,49 +98,51 @@ authority ([D-007](decisions/D-007-theme-layer-retirement.md),
 ## R4 — Theme exit conditions
 
 - **Documented in [docs/regime.md](regime.md).** Summary: `_eval_r4`
-  (lines 191–225) reports `exit_signals` — `"EXIT SIGNAL"` →
+  reports `exit_signals` — `"EXIT SIGNAL"` →
   `action_needed`, `"Warning"` → `compliant`. The rule-engine report is
   ADVISORY, but the underlying theme_ranker **HARD-mutates**
   `qualified_themes.json` on a *confirmed* (2 degraded weekly closes)
   regime-degradation or 3-weekly-close rank exit. Enforcement class
   overall: HARD (state mutation) + ADVISORY (rule-engine surface).
 
-## R5 — Maximum 2 themes active
+## R5 — RETIRED → R28 per-group caps (D-007 Phase 2, 2026-07-18)
 
-- **Text:** "Maximum 2 themes active. Cash is the default."
-- **Code (`_eval_r5`, lines 227–242):** `max_themes =
-  themes.ranking.max_active_themes` (=2). `len(active_themes) >
-  max_themes` → `violation`; else `compliant` ("N/2 active themes. Cash
-  is the default.").
-- **Enforcement:** **HARD.** theme_ranker's `_update_active_state` (line
-  ~426) breaks out of the entry loop at `len(updated) >= max_active`,
-  so a 3rd theme is physically never persisted to `qualified_themes.json`.
-  R5's `violation` branch is a defensive backstop for a hand-edited state
-  file — practically unreachable through the pipeline.
-- **This is the only hard-enforced numeric limit in the entire
-  sizing/deployment family** (see Table 1).
+- **Text (historical):** "Maximum 2 themes active. Cash is the default."
+- **Code (`_eval_r5`):** always `compliant` with a supersession pointer —
+  "Superseded → R28 per-group caps: ≤20% / ≤3 positions per GICS group
+  (computed, Layer 3)." No count logic and **no violation branch remain**
+  (the same pointer treatment R17/R18 received). Concentration is
+  enforced in dollars by R28, not theme counts.
+- The theme_ranker still caps its own display-only active list at 2
+  (legacy layer, retiring in Phase 3) — that cap no longer has rule
+  status.
 
 ---
 
 ## R6–R27 — Behavioral / structural rules
 
-All 22 route through one function, `_eval_behavioral` (lines 244–288).
-Each returns either `elevated` (with `message = "{reason} {text}"`) or
-`compliant` (with `message = text`). **None reads real portfolio state**
-— elevation is driven purely by two conditions:
+All 22 route through one function, `_eval_behavioral`. Each returns
+`elevated` ("{reason} {text}"), idle-`compliant` ("No active positions.
+{text}" on a proven-flat book), unknown-`compliant` ("Positions
+unavailable — active state unknown. {text}" when positions.json is
+unreadable — an outage never renders as a confident flat book), or plain
+`compliant`. **Since D-007 Phase 2 (2026-07-18) the active trigger reads
+REAL portfolio state** — the holdings\' GICS groups from positions.json
+via the shared resolver (unmapped holdings bucket as "TICKER
+(ungrouped)", R28\'s convention):
 
 ```
 elevated_in_defensive = {R10, R13, R15, R16, R17, R18, R26}
     → elevated when regime in ("Risk-off", "Caution")   # both defensive regimes
 elevated_when_active  = {R6, R7, R8, R10, R11, R12, R13, R15,
                          R19, R21, R23, R24, R25}
-    → elevated when len(active_themes) > 0
+    → elevated when len(active_groups) > 0   # REAL holdings\' groups
 ```
 
-Order: the defensive branch is checked first (`if`), the active-themes
+Order: the defensive branch is checked first (`if`), the active-groups
 branch second (`elif`). So a rule in both sets, in Risk-off/Caution with
-active themes, reports the "Elevated — regime is X" reason, not the
-active-themes reason (affects R10, R13, R15).
+holdings, reports the "Elevated — regime is X" reason, not the
+active-groups reason (affects R10, R13, R15).
 
 **Enforcement class for all of R6–R27: ADVISORY at best, DISPLAY-ONLY for
 several** (see per-rule table). Every one of these is a reminder string;
@@ -247,7 +249,7 @@ concentration, with the actual numbers and whether code enforces them.
 
 | Rule | Limit (from text) | Where the number lives | Computed against real $? | Enforcement |
 |---|---|---|---|---|
-| **R5** | ≤ 2 active themes | `themes.ranking.max_active_themes: 2` | Yes — theme *count* | **HARD** (theme_ranker won't persist a 3rd) |
+| **R5** | *(retired)* theme count | superseded → R28 per-group caps (D-007 Phase 2) | **Yes — R28** (≤20% / ≤3 per group) | **COMPUTED (R28)** |
 | **R15** | Single position 5–8% of account | rule text + `portfolio_rules.py` | **Yes — R28** (warning >7.2%, violation >8%) | **COMPUTED (R28)** |
 | **R16** | Single theme ≤ 15% of book | `portfolio_rules.py` per-GICS-group caps (config `r28:`) | **Yes — R28** (≤20% AND ≤3 positions/group, amended 2026-07-13) | **COMPUTED (R28)** |
 | **R17** | All themes ≤ 25% of book | `portfolio_rules.py` regime-scaled ceiling ([D-008](decisions/D-008-gauge-b-architecture.md) Q4: 90/50/25/5) | **Yes — R28** | **COMPUTED (R28)** — supersedes the static 25% |
@@ -263,9 +265,10 @@ Q4) against actual dollars every run — enforcement class COMPUTED
 (reporting-hard): it reports violations and downshift action_needed
 statuses with dollar numbers, but cannot block a broker order and does
 not pretend to. A downshift breach is an advisory to derisk via normal
-exit discipline (stops/R11), never a same-day forced liquidation. The
-single HARD constraint remains R5's two-theme cap (until D-007 Phase 2
-retires it into R28's per-group caps).
+exit discipline (stops/R11), never a same-day forced liquidation. R5\'s
+two-theme cap — formerly the single HARD constraint — retired into
+R28\'s per-group caps on 2026-07-18 (D-007 Phase 2); every numeric
+concentration limit is now COMPUTED in dollars.
 
 ---
 
@@ -276,14 +279,14 @@ State: 3 HELD positions (IWM $6,890 + ARWR $6,061 + BIIB $5,764 ≈
 book), today = **Monday 2026-07-06**. Values below are the actual latest
 committed `framework.json` run (20:23 UTC).
 
-**First, the load-bearing caveat:** the rule engine does not see your
-positions. What actually drives every elevation below is
-`active_themes = ["Semis", "Biotech"]` from `qualified_themes.json`.
-IWM's theme ("SmallCap/Broad") is not a framework theme; ARWR/BIIB map to
-Biotech, which is already active in the theme layer independent of
-whether you hold the names. **These same 13 rules would fire with zero
-positions held**, as long as Semis + Biotech stay qualified. Nothing
-reads the $18.7K or the $81K.
+**The caveat above is HISTORY as of D-007 Phase 2 (2026-07-18):** the
+rule engine now DOES see your positions. The elevations below were
+driven by `active_themes` in the era this table records; today the same
+book drives them as `active_groups = ["Biotechnology", "IWM
+(ungrouped)"]` — real holdings\' GICS groups via the shared resolver —
+and a flat book idles all 13 with "No active positions." (the live state
+at the Phase-2 ship). The dollar amounts themselves are read by R28
+(Layer 3), not this layer.
 
 Current tally: **14 compliant · 13 action_needed · 0 violations.**
 
@@ -292,19 +295,20 @@ Current tally: **14 compliant · 13 action_needed · 0 violations.**
 | **R6, R7, R8, R11, R12, R19, R21, R23, R24, R25** | elevated | `elevated_when_active` and 2 themes are active. Pure reminders — invalidation written down, size-from-stop, catalyst caution, close-based decisions, exit-timeframe, cost-basis cap, no same-day re-entry, conviction-via-stop, target=sell, add-only-on-pullbacks. |
 | **R10, R13, R15** | elevated | In both `elevated_when_active` and `elevated_in_defensive`; here the active-themes branch fires (regime is Trending, not Risk-off/Caution). Stop-up-only, never-override-stop, single-position-size reminders. |
 | **R1** | compliant | Monday, not Sunday. Flips to `action_needed` this coming Sunday (Jul 12) — which is also the first live weekly-review mutation under the R4 fix. |
-| **R2, R3, R4, R5** | compliant | Trending (R2 not triggered); no entry/exit signals this run (R3/R4); 2/2 themes (R5 at the cap but not over). |
+| **R2, R3, R4, R5** | compliant | Trending (R2 not triggered); no entry/exit signals this run (R3/R4); R5 now a superseded→R28 pointer (era note: it read "2/2 themes"). |
 | **R9, R14, R16, R17, R18, R20, R22, R26, R27** | compliant | Not in any live elevation set for the current Trending regime. R16/R17/R18/R26 would elevate if regime degrades to Caution/Risk-off; R9/R14/R20/R22/R27 never elevate at all. |
 
 **What would change the picture:**
 - Regime → Caution/Risk-off adds **R16, R17, R18, R26** to the elevated
   set (+ re-labels R10/R13/R15 to the regime reason) → 17 action_needed.
 - A Sunday run flips **R1** to action_needed.
-- None of these is a violation; the only way to reach a `violation` is
-  R5 with a hand-edited 3-theme state file (R2 no longer has a violation
-  branch as of the 2026-07-09 cleanup).
+- None of these is a violation; since D-007 Phase 2 NO R1-R27 rule has a
+  violation branch at all (R5\'s was retired with it; R2\'s went in the
+  2026-07-09 cleanup) — violations now live exclusively in R28\'s
+  computed dollar rows.
 
-**Bottom line for tonight's read:** nothing is blocking or forcing
-anything. All 13 firing items are advisory reminders triggered by having
-any active theme at all; your actual deployment level, per-name sizes,
-and 19%-deployed / 81%-cash posture are invisible to this layer and
-un-checked by any rule.
+**Bottom line (as updated for the group era):** nothing here blocks or
+forces anything. The 13 reminder items fire on REAL holdings\' groups
+now; deployment level, per-name sizes, and the cash posture are checked
+by R28\'s computed dollar rows on Layer 3 — this layer carries the
+behavioral discipline, R28 carries the numbers.

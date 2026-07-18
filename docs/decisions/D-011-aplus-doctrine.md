@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | D-011 |
 | **Date** | 2026-07-12 (proposed and ruled same day — session part 3, final) |
-| **Status** | **Ruled** |
+| **Status** | **Ruled** · **IMPLEMENTED 2026-07-18** (`04e5964`, rode D-007 Phase 1) |
 
 ## Context
 
@@ -137,6 +137,19 @@ beside `assess_position`), landing after R28 (Phase 0 of
 condition-5 rewire. The doctrine is a **hypothesis until the Build 5
 replay reports** — enforcement ships, but its edge is unproven until
 graded history exists.
+
+## Implementation record
+
+Shipped 2026-07-18 (`04e5964`) as ruled: pure `grade_setup` beside
+`assess_position` (seven rows, both amendments — C-escalation
+regime-independent, runway strictly-before-print with the print day counting
+0 sessions), hard gate in Choppy via a `grade_gate` render field (the
+EXTENDED_HOLD visual law, no new machine state; an UNGRADEABLE Choppy READY
+also blocks — A+ is proven, never presumed), advisory in Trending, grade +
+reasons in signals/assessment/panel/Position Lab (Lab law 1). At ship time
+both live watchers graded C below their SMA20s — the honest exhibit. The
+approach-filter swing-low lookback (20, config) and the index-vehicle waiver
+list are the two approved implementation knobs (Build-5 retest queued).
 
 ## Revisit triggers (per the ruling)
 

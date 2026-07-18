@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | D-007 |
 | **Date** | 2026-07-12 |
-| **Status** | Ruled |
+| **Status** | Ruled — **Phases 0-2 implemented** (Phase 3 pending) |
 
 ## Context
 
@@ -80,6 +80,26 @@ ranking, theme counts as concentration discipline.
 R28 becomes the flagship build before any retirement step. Until Phase 3
 completes, themes run display-only in parallel — divergence between the
 two gates is observable, not harmful.
+
+## Implementation record
+
+- **Phase 0 (R28)**: shipped 2026-07-13, `ba811a0` (caps amended to 20%/3
+  same day; real capital $97,500 set in `7b7812a`).
+- **Phase 1 (condition-5 rewire + weeks_in_universe)**: shipped 2026-07-18,
+  `04e5964`, riding D-011's grade. THE FIRST LIVE DIVERGENCE EXHIBIT fired
+  at ship time: the 2026-07-18 rotation dropped Biotechnology (rank 29,
+  outranked) while the legacy theme layer still ranked Biotech #1 ACTIVE —
+  MRNA's condition 5 honestly fails where the theme gate passed, exactly
+  the "observable, not harmful" divergence this ruling anticipated. The
+  replay pin asserts it data-driven and self-retires if the group rotates
+  back in. weeks_in_universe counting starts at the 2026-07-25 rotation
+  (week-keyed — same-week rebuilds carry unchanged).
+- **Phase 2 (rule-engine rewire + GICS Layer 2)**: shipped 2026-07-18 —
+  active state = real holdings' groups via the ONE shared resolver
+  (`resolve_group_map`), R5 → superseded R28 pointer, Layer 2 renders the
+  universe's selected groups with breaker chips; legacy themes demoted to
+  a visibly-deprecated strip.
+- **Phase 3 (decommission)**: pending.
 
 ## Revisit triggers
 

@@ -238,31 +238,15 @@ def compute_put_call_proxy():
 # 5. Market Internals — % of the active universe above its 50-day MA
 #    (D-012: replaces the 2nd VIX transform; genuine breadth, no new fetch)
 # ------------------------------------------------------------------
-# above_50dma derivation from the score `ma` component — TEMPORARY FALLBACK.
-# The universe ranking stores each ticker's `ma` score-component points
-# (score_stock: +4 price>MA20, +6 price>MA50, +4 MA20>MA50). The +6 term
-# (price>MA50) is uniquely recoverable from the component TOTAL by set
-# membership — all 8 sign combinations enumerated, and the sum determines the
-# +6 sign unambiguously. Used only for tickers lacking the explicit
-# above_50dma field (rows built before the field shipped).
-# REMOVE this fallback once the 2026-07-18 rotation confirms above_50dma
-# populates across the universe artifact.
-_MA_ABOVE_50 = frozenset({14, 6, -2})    # ma totals whose price>MA50 (+6) term is set
-_MA_BELOW_50 = frozenset({2, -6, -14})   # ma totals whose price<MA50 (-6) term is set
-
-
 def _ticker_above_50dma(t):
-    """One universe-ranking ticker -> True / False / None. Explicit field first
-    (honest source), else derive from the `ma` component (temporary fallback)."""
+    """One universe-ranking ticker -> True / False / None (excluded).
+    Reads the explicit above_50dma field the universe builder emits (D-012).
+    The temporary derive-from-`ma`-component fallback was REMOVED 2026-07-18
+    per its expiry note: the 07-18 rotation confirmed the field populates
+    (529/532 ranking tickers; the 3 without are no_valid_data rows the
+    derivation could not map either)."""
     v = t.get("above_50dma")
-    if isinstance(v, bool):
-        return v
-    ma = (t.get("components") or {}).get("ma")
-    if ma in _MA_ABOVE_50:
-        return True
-    if ma in _MA_BELOW_50:
-        return False
-    return None
+    return v if isinstance(v, bool) else None
 
 
 def compute_market_internals(path=None):

@@ -2,8 +2,8 @@
 """
 Fear & Greed engine tests (D-012 rebuild). Covers:
 - per-component raw->0-100 score-curve pins (endpoints from docs/sentiment.md)
-- Market Internals breadth: the explicit above_50dma field AND the ma-component
-  derive-fallback must AGREE on the same input, against a fixture universe
+- Market Internals breadth: explicit above_50dma field only (the derive
+  fallback was removed 2026-07-18 per its expiry note), fixture universe
 - daily persistence: once-per-day upsert / new-day append matrix
 
 No network: pure score maps + a fixture file + injected readings.
@@ -30,49 +30,34 @@ def test_score_curves():
     print("  score curves: momentum/put-call/internals/safe-haven/junk endpoints + clamp: OK")
 
 
-def test_above_50dma_derivation():
-    # every ma-component total maps deterministically via the +6 (price>MA50) term
-    for ma in (14, 6, -2):
-        assert fg._ticker_above_50dma({"components": {"ma": ma}}) is True, ma
-    for ma in (2, -6, -14):
-        assert fg._ticker_above_50dma({"components": {"ma": ma}}) is False, ma
-    # missing / None component -> None (excluded from breadth)
-    assert fg._ticker_above_50dma({"components": {}}) is None
-    assert fg._ticker_above_50dma({"components": {"ma": None}}) is None
+def test_above_50dma_field_only():
+    # the derive-fallback was removed 2026-07-18 per its expiry note (the
+    # rotation confirmed the field populates) — the EXPLICIT field is the
+    # only source; anything else is excluded from the breadth count
+    assert fg._ticker_above_50dma({"above_50dma": True}) is True
+    assert fg._ticker_above_50dma({"above_50dma": False}) is False
+    # ma components alone no longer map (the fallback is gone)
+    assert fg._ticker_above_50dma({"components": {"ma": 14}}) is None
+    assert fg._ticker_above_50dma({"components": {"ma": -14}}) is None
+    # non-bool / missing -> None (excluded)
+    assert fg._ticker_above_50dma({"above_50dma": 1}) is None
     assert fg._ticker_above_50dma({}) is None
-    print("  above-50DMA derive: all 6 ma totals map by set membership, unknown->None: OK")
-
-
-def test_explicit_field_and_derive_agree():
-    # explicit above_50dma and the derive-from-ma path encode the SAME price>MA50,
-    # so they must agree on the same ticker; the field is authoritative when present.
-    cases = [
-        ({"above_50dma": True,  "components": {"ma": 14}}, True),
-        ({"above_50dma": True,  "components": {"ma": 6}}, True),
-        ({"above_50dma": False, "components": {"ma": -14}}, False),
-        ({"above_50dma": False, "components": {"ma": -6}}, False),
-    ]
-    for t, expected in cases:
-        assert fg._ticker_above_50dma(t) is expected, t
-        assert fg._ticker_above_50dma({"components": t["components"]}) is expected, t  # derive agrees
-    # field precedence: honoured even if it hypothetically disagreed with the component
-    assert fg._ticker_above_50dma({"above_50dma": True, "components": {"ma": -14}}) is True
-    print("  explicit field == derive on same input; field precedence honoured: OK")
+    print("  above-50DMA: explicit field only (fallback removed per expiry), "
+          "non-bool excluded: OK")
 
 
 def test_market_internals_fixture():
-    # mixed fixture: some tickers carry the explicit field, some only the ma
-    # component (pre-field rows). Both must count toward the same breadth %.
+    # field-only counting: rows without the explicit field are EXCLUDED
     fixture = {"ranking": [
         {"tickers": [
-            {"ticker": "A", "above_50dma": True,  "components": {"ma": 14}},   # above (field)
-            {"ticker": "B", "components": {"ma": 6}},                          # above (derive)
-            {"ticker": "C", "above_50dma": False, "components": {"ma": -14}},  # below (field)
-            {"ticker": "D", "components": {"ma": -6}},                         # below (derive)
+            {"ticker": "A", "above_50dma": True},              # above (field)
+            {"ticker": "B", "components": {"ma": 6}},          # field-less -> EXCLUDED
+            {"ticker": "C", "above_50dma": False},             # below (field)
+            {"ticker": "D", "above_50dma": False},             # below (field)
         ]},
         {"tickers": [
-            {"ticker": "E", "components": {"ma": None}},                       # unknown -> excluded
-            {"ticker": "F", "above_50dma": True, "components": {"ma": 6}},     # above
+            {"ticker": "E", "components": {"ma": None}},       # excluded
+            {"ticker": "F", "above_50dma": True},              # above
         ]},
     ]}
     p = os.path.join(tempfile.gettempdir(), "fg_uni_fixture.json")
@@ -82,13 +67,13 @@ def test_market_internals_fixture():
         r = fg.compute_market_internals(path=p)
     finally:
         os.remove(p)
-    # above = A,B,F = 3 of 5 valid (E excluded) = 60%
-    assert r["score"] == 60, r
-    assert r["value"] == "3/5 (60%)", r
-    assert r["label"] == "Greed", r
+    # above = A,F = 2 of 4 valid (B and E excluded — no field) = 50%
+    assert r["score"] == 50, r
+    assert r["value"] == "2/4 (50%)", r
+    assert r["label"] == "Neutral", r
     # missing file degrades to neutral, never crashes
     assert fg.compute_market_internals(path="/nonexistent/uni.json")["score"] == 50
-    print("  market internals: field+derive tickers both counted, 3/5=60% Greed, missing->neutral: OK")
+    print("  market internals: field-only counting, 2/4=50%, missing->neutral: OK")
 
 
 def test_persistence_once_per_day():
@@ -136,8 +121,7 @@ def test_persistence_once_per_day():
 if __name__ == "__main__":
     print("\n=== Fear & Greed engine tests (D-012 rebuild) ===")
     test_score_curves()
-    test_above_50dma_derivation()
-    test_explicit_field_and_derive_agree()
+    test_above_50dma_field_only()
     test_market_internals_fixture()
     test_persistence_once_per_day()
     print("\nAll Fear & Greed tests passed.")

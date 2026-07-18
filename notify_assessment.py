@@ -113,7 +113,13 @@ def build_message(data, now_et):
         ext = (f"{'+' if (x.get('extension_pct') or 0) > 0 else ''}"
                f"{x.get('extension_pct')}% ({x.get('extension_atr')}×ATR)")
         guard = f" — {x['extension_guard']}" if x.get("extension_guard") else ""
-        lines.append(f"• {t} *{x.get('state', '?')}* — ext {ext}{guard}")
+        # D-011 grade chip ("MRNA WATCHING [C]"); gate note when Choppy
+        # blocks a READY without A+
+        g = (x.get("grade") or {}).get("grade")
+        g_txt = f" [{g}]" if g else ""
+        gate = " ⛔ grade-blocked" if x.get("grade_gate") else ""
+        lines.append(f"• {t} *{x.get('state', '?')}*{g_txt} — ext {ext}"
+                     f"{guard}{gate}")
 
     bits = [f"{tr['ticker']} {tr.get('from_state') or '—'}→{tr['to_state']}"
             for tr in (changes or {}).get("position_transitions", [])
