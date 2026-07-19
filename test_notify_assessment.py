@@ -205,6 +205,58 @@ def test_message_no_changes_day():
     print("  formatting: no-changes day renders cleanly: OK")
 
 
+def test_message_candidates_line():
+    """D-017 close-report line: era-aware (no block -> no line), A+ names
+    spelled out, B/C counted, ungradeable counted never dropped."""
+    env = _Env()
+    try:
+        def _annotate_signals(block):
+            p = os.path.join(ticker_api.PUBLIC_DIR, "signals.json")
+            with open(p) as f:
+                sig = json.load(f)
+            if block is None:
+                sig.pop("candidate_grades", None)
+            else:
+                sig["candidate_grades"] = block
+            with open(p, "w") as f:
+                json.dump(sig, f)
+
+        pay = _framework_payload()
+        msg = notify.build_message(pay, _et(NOW))
+        assert "Candidates:" not in msg      # pre-emission artifact: no line
+        block = {
+            "HPQ": {"grade": "A+", "reasons": "", "group": "Tech Hardware"},
+            "AAA": {"grade": "A+", "reasons": "", "group": "Tech Hardware"},
+            "BBB": {"grade": "B", "reasons": "RSI unavailable", "group": "T"},
+            "CC1": {"grade": "C", "reasons": "conditions", "group": "T"},
+            "CC2": {"grade": "C", "reasons": "conditions", "group": "T"},
+            "NUL": {"grade": None, "reasons": "inputs unavailable",
+                    "group": "T"},
+        }
+        pay["candidate_grades"] = block
+        # FRESHNESS GUARD: framework carries the block but signals.json
+        # is un-annotated (engine rewrote after a failed framework run)
+        # -> no line — stale grades never presented as the close verdict
+        msg = notify.build_message(pay, _et(NOW))
+        assert "Candidates:" not in msg
+        _annotate_signals(block)
+        msg = notify.build_message(pay, _et(NOW))
+        assert "Candidates: 2 A+ (AAA, HPQ) · 1 B · 2 C · 1 ungraded" in msg
+        pay["candidate_grades"] = {"BBB": {"grade": "B"},
+                                   "CC1": {"grade": "C"}}
+        _annotate_signals(pay["candidate_grades"])
+        msg = notify.build_message(pay, _et(NOW))
+        assert "Candidates: 0 A+ · 1 B · 1 C" in msg   # zero-A+: no parens
+        assert "0 A+ (" not in msg
+        pay["candidate_grades"] = {}
+        msg = notify.build_message(pay, _et(NOW))
+        assert "Candidates:" not in msg      # empty block: nothing to say
+    finally:
+        env.close()
+    print("  formatting: D-017 candidates line (era-aware, freshness-"
+          "guarded, A+ named, ungraded counted): OK")
+
+
 def test_marker_gating_once_per_trading_day():
     env = _Env()
     try:
@@ -312,6 +364,7 @@ if __name__ == "__main__":
     test_message_formatting_normal_day()
     test_message_exit_fired_leads_with_alarm()
     test_message_no_changes_day()
+    test_message_candidates_line()
     test_marker_gating_once_per_trading_day()
     test_absent_secret_exits_cleanly()
     test_webhook_failure_never_fails_never_leaks()

@@ -154,6 +154,17 @@
   .gl2-caret{display:inline-block;font-size:10px;color:var(--dim);width:12px;transition:transform .15s;}
   tr.gl2-open .gl2-caret{transform:rotate(90deg);}
   .gl2-xall{font-size:10px;color:var(--blue);cursor:pointer;font-weight:600;margin-left:8px;text-transform:none;letter-spacing:0;}
+  /* D-017 candidates: +watch affordance + copy-the-prompt modal */
+  .gl2-watch{cursor:pointer;color:var(--dim);border:1px solid var(--border);border-radius:10px;padding:0 7px;font-size:10px;font-weight:600;line-height:16px;white-space:nowrap;}
+  .gl2-watch:hover{color:var(--text);border-color:var(--dim);}
+  #cwModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10001;align-items:center;justify-content:center;padding:16px;}
+  .cw-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;max-width:560px;width:100%;padding:16px 18px;}
+  .cw-head{font-weight:700;font-size:14px;margin-bottom:8px;}
+  .cw-note{font-size:12px;color:var(--dim);margin-bottom:10px;}
+  .cw-box textarea{width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;font-family:'SF Mono',monospace;font-size:11px;padding:8px;resize:vertical;}
+  .cw-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;}
+  .cw-btns button{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer;}
+  .cw-btns button:hover{border-color:var(--dim);}
   @media(max-width:600px){
     /* two-line wrap: symbol+signal, then metrics (Position Signals pattern) */
     .gl2-tick{gap:8px;}
@@ -448,6 +459,12 @@ async function loadData(){
     if(j.status==='success'){
       fwRetryDelay=2000;
       DATA=j;
+      // D-017: a fresh framework artifact is a RUN BOUNDARY — drop the
+      // signals cache so re-expanded sub-rows (and the +watch add-time
+      // context copied from them) refetch the artifact this run
+      // annotated, never a prior generation (review finding). Within
+      // one generation, concurrent expansions still share one fetch.
+      GL2_SIG_PROMISE=null;
       // Position Signals panel data: same artifact, same sentinel — if we
       // got here, assessment should succeed too; degrade the panel alone
       // if it doesn't.
@@ -930,15 +947,26 @@ function plSeedFromTicker(){
 /* ===== Layer 2 expandable ticker sub-rows (pure presentation) =====
    Consumes the SAME signals.json the dashboard reads — fetched lazily
    ONCE on first expansion (static same-origin file, no API compute). */
-let GL2_SIGNALS=null, GL2_FETCHED=false;
+let GL2_SIG_PROMISE=null;
 async function gl2Signals(){
-  if(GL2_FETCHED) return GL2_SIGNALS;
-  GL2_FETCHED=true;
-  try{
-    const r=await fetch('/signals.json?t='+Date.now());
-    if(r.ok) GL2_SIGNALS=await r.json();
-  }catch(e){ GL2_SIGNALS=null; }
-  return GL2_SIGNALS;
+  // cache the PROMISE, not the result: concurrent first expansions
+  // (expand-all fires 15 fills in one tick) must all await the ONE
+  // in-flight fetch — caching the result returned undefined to every
+  // caller after the first and rendered honest-gap notes for rows the
+  // artifact actually covers (review finding)
+  if(!GL2_SIG_PROMISE){
+    GL2_SIG_PROMISE=(async()=>{
+      try{
+        const r=await fetch('/signals.json?t='+Date.now());
+        if(r.ok) return await r.json();
+      }catch(e){}
+      // failed fetch is NOT cached — the next expansion retries instead
+      // of freezing every sub-row on one transient error (review finding)
+      GL2_SIG_PROMISE=null;
+      return null;
+    })();
+  }
+  return GL2_SIG_PROMISE;
 }
 function gl2TsClass(ts){            // the dashboard's exact chip mapping
   if(!ts) return 'ts-hold';
@@ -963,23 +991,31 @@ function gl2Tracked(){
   }
   return out;
 }
-function gl2TickRow(s,tracked){
+function gl2TickRow(s,tracked,cand,gbrk){
   const vs=(s.price!=null&&s.ma20)?((s.price-s.ma20)/s.ma20*100):null;
   const vsTxt=vs==null?'—':`${vs>0?'+':''}${vs.toFixed(1)}%`;
   const vsCol=vs==null?'var(--dim)':vs>=0?'var(--green)':'var(--red)';
   // Tracked names inline the watchlist row's components via the EXACT
   // same renderers the Position Signals panel uses (psBadge/psGrade/
   // psPips/psExt — shared functions, never copies; pinned by test).
-  // Un-tracked rows are unchanged: no fake grades, no empty pip shells.
-  // SEAM (do not build yet): when the Candidates feature is ruled, the
-  // D-011 A+ grade chip for UN-tracked names slots here, after the
-  // trade-signal chip:  ${s.grade?psGrade(s.grade):''}
+  // D-017 Candidates tier (the 9b239f5 seam, built — ruling 11725):
+  // un-tracked rows carry the machine's OPINION only — the D-011 grade
+  // chip + failing-reasons hover through the SAME psGrade renderer, and
+  // a +watch affordance. Chip-only is the visual law: no state badge (no
+  // state exists) and no pips (pips are the state machine's face — a
+  // five-pip un-tracked row would read as READY). Tracked rows keep the
+  // full enrichment: chip+badge+pips = the machine's COMMITMENT.
   const tr=tracked?`<span class="gl2-break"></span>${psBadge(tracked.state,tracked.grade_gate)}${psGrade(tracked.grade)}<span title="The 5 re-entry conditions">${psPips(tracked.conditions)}</span>${psExt(tracked)}`:'';
+  let cd='';
+  if(!tracked&&cand&&cand.grade){
+    GL2CAND[s.ticker]={s:s,c:cand,b:gbrk||null};
+    cd=`${psGrade(cand)}<span class="gl2-watch" title="Copy the appointment prompt — positions.json stays human-curated (D-003)" onclick="cwOpen('${s.ticker}')">+watch</span>`;
+  }
   return `<div class="gl2-tick${tracked?' gl2-tracked':''}">
     <span class="gl2-sym">${s.ticker}</span>
     ${s.score!=null?`<span class="gl2-score" style="color:${gl2ScoreColor(s.score)}">${s.score}</span>`:''}
     ${s.trade_signal?`<span class="ts-badge ${gl2TsClass(s.trade_signal)}">${s.trade_signal}</span>`:''}
-    ${tr}
+    ${cd}${tr}
     <span class="gl2-break"></span>
     <span class="gl2-num" title="price vs SMA20">$${s.price!=null?s.price.toFixed(2):'—'} <b style="color:${vsCol}">${vsTxt}</b> vs SMA20</span>
     ${s.rsi!=null?`<span class="gl2-num" title="RSI-14">RSI ${s.rsi.toFixed(0)}</span>`:''}
@@ -1009,8 +1045,14 @@ async function gl2Fill(rid,groupName){
     cell.innerHTML='<div class="gl2-note">tickers unavailable this run (signals.json has no rows for this group yet)</div>';
     return;
   }
+  // D-017: candidate grades come from the SAME signals artifact as the
+  // rows (the runner annotates it after grading) — a signal run without
+  // a grade pass has no block and the chips honestly don't render
+  const cands=(sig&&sig.candidate_grades&&typeof sig.candidate_grades==='object')?sig.candidate_grades:null;
+  const gbrk=grp?grp.breaker_status:null;
   cell.innerHTML=stocks.concat(extras)
-    .map(s=>gl2TickRow(s,tracked[s.ticker]||null)).join('');
+    .map(s=>gl2TickRow(s,tracked[s.ticker]||null,
+      (cands&&!tracked[s.ticker])?cands[s.ticker]:null,gbrk)).join('');
 }
 function gl2Toggle(rid,groupName){
   const sub=document.getElementById(rid);
@@ -1030,6 +1072,43 @@ function gl2All(open){
   });
   event&&event.stopPropagation&&event.stopPropagation();
 }
+
+/* ===== D-017 +watch: the COPY-THE-PROMPT appointment =====
+   HONEST CONSTRAINT (ruled with the build): positions.json is a
+   COMMITTED, hand-curated artifact (D-003) and the serving dyno's disk
+   is ephemeral with no push credentials — there is no durable one-click
+   write from this page. So the one click COPIES the appointment prompt
+   (with add-time context auto-filled, the fe1de42 note pattern); the
+   human pastes it into Claude Code. The machine nominates loudly; the
+   human appoints. */
+const GL2CAND={};   // ticker -> {s: signals row, c: candidate grade, b: group breaker}
+function cwOpen(t){
+  const e=GL2CAND[t]; if(!e) return;
+  const s=e.s,c=e.c;
+  const vs=(s.price!=null&&s.ma20)?((s.price-s.ma20)/s.ma20*100):null;
+  const bits=[];
+  if(s.score!=null) bits.push(`score ${s.score}${s.trade_signal?' '+s.trade_signal:''}`);
+  if(vs!=null) bits.push(`${vs>0?'+':''}${vs.toFixed(1)}% vs SMA20`);
+  if(s.rsi!=null) bits.push(`RSI ${s.rsi.toFixed(0)}`);
+  bits.push(`group '${c.group||'?'}'${e.b?` (breaker ${e.b})`:''}`);
+  bits.push(`grade ${c.grade}${c.reasons?` — ${c.reasons}`:''}`);
+  document.getElementById('cwTicker').textContent=t;
+  document.getElementById('cwText').value=
+    `Add ${t} to the watchlist (watch_entry) in positions.json — commit, push. `+
+    `Add-time context for the note: ${bits.join(', ')}.`;
+  document.getElementById('cwModal').style.display='flex';
+  window.event&&window.event.stopPropagation&&window.event.stopPropagation();
+}
+function cwCopy(){
+  const ta=document.getElementById('cwText');
+  ta.select();ta.setSelectionRange(0,99999);
+  const done=()=>{const b=document.getElementById('cwCopyBtn');b.textContent='copied ✓';setTimeout(()=>{b.textContent='copy prompt';},1600);};
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(ta.value).then(done,()=>{document.execCommand('copy');done();});
+  }else{document.execCommand('copy');done();}
+}
+function cwClose(){document.getElementById('cwModal').style.display='none';}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')cwClose();});
 
 /* ===== Position Signals panel (1B engine) ===== */
 function psBadge(state,gradeGate){
@@ -1631,6 +1710,15 @@ async function loadHistory(){
 // Initial load
 loadData();
 </script>
+<!-- D-017 +watch modal: copy-the-prompt appointment (see cwOpen) -->
+<div id="cwModal" onclick="if(event.target===this)cwClose()">
+  <div class="cw-box">
+    <div class="cw-head">+watch — <span id="cwTicker"></span></div>
+    <div class="cw-note">positions.json is the human-curated committed set (D-003) — the machine nominates, you appoint. Paste this into Claude Code (or hand-edit the file) to add the watcher with add-time context:</div>
+    <textarea id="cwText" readonly rows="5"></textarea>
+    <div class="cw-btns"><button id="cwCopyBtn" onclick="cwCopy()">copy prompt</button><button onclick="cwClose()">close</button></div>
+  </div>
+</div>
 <script src="chat-widget.js"></script>
 </body>
 </html>

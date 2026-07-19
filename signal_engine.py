@@ -1136,6 +1136,32 @@ def score_stock(df, group_info=None):
     return score, signal, details
 
 
+def compute_grade_inputs(df):
+    """
+    D-017 emission: the per-row scalars the framework runner feeds to the
+    D-011 grade (grade_setup) for un-tracked candidates. Computed on the
+    synthetic-bar-STRIPPED df — the watcher path's close-basis law — by
+    the SAME shared helpers the position engine uses, so a candidate and
+    a watcher graded on the same day cannot drift. rsi14/quality_score
+    are added here from the same stripped df (compute_rsi + score_stock
+    without group_info — the exact watcher recipe; the row's display
+    score may differ when a live-quote bar is present, and that is
+    honest: grades are on confirmed closes). Deferred import — the
+    framework package imports this module the other way, also deferred.
+    """
+    from framework.position_signals import (grade_inputs_from_df,
+                                            strip_synthetic_last_bar)
+    sdf = strip_synthetic_last_bar(df)
+    gi = grade_inputs_from_df(sdf)
+    if gi is None:
+        return None
+    r = compute_rsi(sdf["Close"]).iloc[-1]
+    gi["rsi14"] = float(r) if np.isfinite(r) else None
+    s, _sig, _det = score_stock(sdf)
+    gi["quality_score"] = None if s is None else float(s)
+    return gi
+
+
 def compute_trade_signal(details, breaker_status="clear"):
     """
     Compute an actionable trade signal and reasoning for position trading.
@@ -2008,6 +2034,15 @@ def run_engine():
         stage = compute_stage_analysis(details, df)
         details["stage_analysis"] = stage
 
+        # D-017: emit the D-011 grade's per-row inputs (stripped-df
+        # scalars). Failure only costs this row its candidate grade
+        # (unavailable-data rule) — it can never block the signal run.
+        try:
+            details["grade_inputs"] = compute_grade_inputs(df)
+        except Exception as e:
+            details["grade_inputs"] = None
+            print(f"  {ticker}: grade-input emission failed ({e})")
+
         ticker_signals[ticker] = {
             "score": score,
             "signal": signal,
@@ -2041,6 +2076,7 @@ def run_engine():
                     "score": sig["score"],
                     "score_components": d.get("score_components"),
                     "score_inputs": d.get("score_inputs"),
+                    "grade_inputs": d.get("grade_inputs"),
                     "signal": sig["signal"],
                     "ytd_return": d.get("ytd_return", 0),
                     "price": d.get("price", 0),

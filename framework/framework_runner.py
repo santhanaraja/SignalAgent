@@ -454,6 +454,17 @@ def run_framework(force_fetch: bool = False) -> dict:
         "standing_rules_text": config.get("standing_rules", {}),
     }
 
+    # D-017: hoist the candidates block to a top-level artifact key (the
+    # assessment/notify/page consumers are era-aware — key absent on
+    # pre-emission signals artifacts, so nothing renders until the first
+    # graded run).
+    _cand_ts = None
+    if isinstance(position_signals, dict):
+        _cand = position_signals.pop("candidate_grades", None)
+        _cand_ts = position_signals.pop("candidate_signals_timestamp", None)
+        if _cand is not None:
+            output["candidate_grades"] = _cand
+
     # --- Write output ---
     # NaN/Inf -> null guard on the full payload (same policy as every
     # signals.json write). Deferred import mirrors universe_builder.py and
@@ -483,6 +494,49 @@ def run_framework(force_fetch: bool = False) -> dict:
         with open(public_path, "w") as f:
             json.dump(output, f, indent=2, default=str)
         print(f"[framework] Written to {public_path}")
+
+    # D-017: RECONCILE the signals artifacts with this run's candidates
+    # block (review findings, three-in-one):
+    #   with a block  -> annotate BOTH copies (grades travel with the rows
+    #                    that produced their inputs) — but ONLY if the file
+    #                    on disk is still the SAME signals generation the
+    #                    grades were computed from (the serving process
+    #                    re-runs the engine on its own thread; grading a
+    #                    fresh rewrite's rows would be a lie);
+    #   without one   -> STRIP any stale annotation, so the page can never
+    #                    render grades this framework.json does not carry;
+    #   every write   -> atomic tmp+os.replace (a concurrent reader must
+    #                    see the old file or the new one, never a torn one).
+    # Best-effort throughout: reconciliation failure never fails the run.
+    _cand_out = output.get("candidate_grades")
+    for sig_path in (os.path.join(BASE_DIR, "..", "data", "signals.json"),
+                     os.path.join(BASE_DIR, "..", "public", "signals.json")):
+        try:
+            with open(sig_path) as f:
+                sig = json.load(f)
+            if not isinstance(sig, dict):
+                continue
+            if _cand_out is not None:
+                if _cand_ts is not None and sig.get("timestamp") != _cand_ts:
+                    print(f"[framework] candidate annotation skipped "
+                          f"({sig_path}): signals generation changed "
+                          f"since grading")
+                    continue
+                sig["candidate_grades"] = _cand_out
+                action = "annotated into"
+            elif "candidate_grades" in sig:
+                sig.pop("candidate_grades")
+                action = "stale block stripped from"
+            else:
+                continue
+            tmp = sig_path + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(sig, f, indent=2, default=str)
+            os.replace(tmp, sig_path)
+            print(f"[framework] candidate_grades {action} {sig_path}")
+        except Exception as e:
+            print(f"[framework] signals reconciliation skipped "
+                  f"({sig_path}): {e}")
 
     print(f"[framework] Framework run complete.")
     return output

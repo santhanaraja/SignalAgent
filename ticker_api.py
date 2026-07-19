@@ -1631,6 +1631,14 @@ def _assessment_positions(data):
     return out
 
 
+def _assessment_candidates(data):
+    """D-017 candidates tier passthrough: {ticker: {grade, reasons,
+    failing, group}} for every un-tracked signals.json name. None on a
+    pre-emission artifact (era-aware — the section renders null, never a
+    fabricated empty tier)."""
+    return data.get("candidate_grades")
+
+
 def _assessment_technicals(data):
     """Full technicals per HOLDING, merged from the hourly engine's
     signals.json stock block + the position engine's own values
@@ -1833,6 +1841,7 @@ def assessment_json():
            "framework_generated_at": data.get("generated_at")}
     for key, fn in (("regime", _assessment_regime),
                     ("positions", _assessment_positions),
+                    ("candidates", _assessment_candidates),
                     ("r28", _assessment_r28),
                     ("technicals", _assessment_technicals),
                     ("vol_complex", _assessment_vol),

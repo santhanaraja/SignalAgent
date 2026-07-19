@@ -883,6 +883,261 @@ def test_watchers_replay_real_artifacts():
           f"identical, c5 == resolver verdict; {note}: OK")
 
 
+# ------------------------------------------------------------------
+# D-017 Candidates tier: shared input helpers, emission parity, the
+# stateless grade pass, and THE parity pin (stateless == watcher path
+# on the same inputs)
+# ------------------------------------------------------------------
+
+def test_grade_inputs_helpers():
+    """The extracted helpers + grade_inputs_from_df: same values the
+    watcher path derives, None on unusable history, and the emission
+    (signal_engine.compute_grade_inputs) strips the synthetic bar."""
+    from framework.position_signals import (
+        grade_inputs_from_df, atr_mean, consec_closes_above,
+        up_close_off_swing_low, strip_synthetic_last_bar)
+
+    closes = [100 + 0.4 * i for i in range(40)]      # steady uptrend
+    closes[-3] = closes[-4] - 2.0                     # dip -> swing low
+    df = _bars(closes)
+    gi = grade_inputs_from_df(df)
+    assert gi is not None
+    close = df["Close"]
+    sma = close.rolling(20).mean()
+    assert gi["close"] == float(close.iloc[-1])
+    assert gi["sma20"] == float(sma.iloc[-1])
+    assert gi["sma20_5d_ago"] == float(sma.iloc[-6])
+    assert gi["sma5"] == float(close.rolling(5).mean().iloc[-1])
+    assert gi["atr14"] == atr_mean(df, 14) == PositionSignalEngine._atr(df, 14)
+    assert gi["consecutive_closes_above"] == consec_closes_above(close, sma)
+    assert gi["up_close_since_swing_low"] == \
+        up_close_off_swing_low(close, 20) is True
+    assert gi["params"] == {"sma_period": 20, "slope_lookback": 5,
+                            "atr_period": 14, "swing_lookback": 20}
+    # unusable history -> None (the unavailable-data convention starts here)
+    assert grade_inputs_from_df(None) is None
+    assert grade_inputs_from_df(_bars(closes[:10])) is None
+
+    # emission: rsi/score added, synthetic live-quote bar stripped (the
+    # close-basis law — grades are on confirmed closes)
+    from signal_engine import compute_grade_inputs
+    emitted = compute_grade_inputs(df)
+    for k, v in gi.items():
+        assert emitted[k] == v, f"emission drift on {k}"
+    assert emitted["rsi14"] is not None
+    assert emitted["quality_score"] is not None
+    syn = df.iloc[-1].copy()
+    px = float(df["Close"].iloc[-1]) + 3.0
+    syn_row = pd.DataFrame({"Open": [px], "High": [px], "Low": [px],
+                            "Close": [px], "Volume": [0]},
+                           index=[df.index[-1] + pd.Timedelta(days=1)])
+    df_syn = pd.concat([df, syn_row])
+    assert strip_synthetic_last_bar(df_syn).equals(df)
+    assert compute_grade_inputs(df_syn) == emitted
+    print("  D-017 grade-input helpers + emission (synthetic bar stripped): OK")
+
+
+def _cand_gi(eng, **over):
+    """A+-shaped grade_inputs under Trending + in-universe (each test
+    breaks one thing)."""
+    gi = {"close": 25.0, "sma20": 24.0, "sma20_5d_ago": 23.5, "sma5": 24.8,
+          "atr14": 1.0, "consecutive_closes_above": 2,
+          "up_close_since_swing_low": True, "rsi14": 55.0,
+          "quality_score": 84.0,
+          "params": {"sma_period": eng.sma_period,
+                     "slope_lookback": eng.slope_lookback,
+                     "atr_period": eng.atr_period,
+                     "swing_lookback": eng.aplus_cfg["approach_swing_lookback"]}}
+    gi.update(over)
+    return gi
+
+
+def test_candidates_tier():
+    """grade_candidates: the stateless grade pass over un-tracked signals
+    rows — tracked excluded, era-aware None on pre-emission artifacts,
+    honest nulls, c5 from the current universe, outage fails closed."""
+    eng = _engine()
+    today = datetime.date(2026, 7, 18)
+    ned = "2026-09-10"                       # runway >> 15 sessions
+    signals = {"groups": [
+        {"name": "Tech Hardware", "stocks": [
+            {"ticker": "HPQ", "next_earnings_date": ned,
+             "grade_inputs": _cand_gi(eng)},
+            {"ticker": "NOGI", "next_earnings_date": ned},   # no emission
+            {"ticker": "TRK", "next_earnings_date": ned,
+             "grade_inputs": _cand_gi(eng)},                  # tracked
+            {"ticker": "KNIFE", "next_earnings_date": ned,
+             "grade_inputs": _cand_gi(eng, sma5=25.5)},       # close < SMA5
+            {"ticker": "BADP", "next_earnings_date": ned,
+             "grade_inputs": _cand_gi(eng, params={"sma_period": 50})},
+        ]},
+        {"name": "Soft", "stocks": [
+            {"ticker": "SFT", "next_earnings_date": ned,
+             "grade_inputs": _cand_gi(eng)},                  # breaker unknown
+            {"ticker": "RSIU", "next_earnings_date": ned,
+             "grade_inputs": _cand_gi(eng, rsi14=None)},      # rsi unavailable
+            {"ticker": "SC0", "next_earnings_date": ned,
+             "grade_inputs": _cand_gi(eng, quality_score=None)},
+            {"ticker": "AP0", "next_earnings_date": ned,
+             "grade_inputs": _cand_gi(eng, sma5=None)},       # approach unavail
+        ]},
+        {"name": "Outside", "stocks": [
+            {"ticker": "OUT1", "next_earnings_date": ned,
+             "grade_inputs": _cand_gi(eng)},                  # c5 fails
+        ]},
+    ]}
+    selected = {"Tech Hardware", "Soft"}
+    breakers = {"Tech Hardware": "clear", "Outside": "clear"}
+    out = eng.grade_candidates(signals, selected, breakers, TRENDING,
+                               tracked={"TRK"}, today=today)
+    assert "TRK" not in out, "tracked names must be EXCLUDED"
+    assert out["HPQ"]["grade"] == "A+" and out["HPQ"]["group"] == "Tech Hardware"
+    assert out["NOGI"]["grade"] is None and "not emitted" in out["NOGI"]["reasons"]
+    # amendment 1 via the candidate path: a proven knife is C in EVERY regime
+    assert out["KNIFE"]["grade"] == "C" and "3_approach" in out["KNIFE"]["failing"]
+    assert out["BADP"]["grade"] is None and "parameters" in out["BADP"]["reasons"]
+    assert out["SFT"]["grade"] == "B" and "6_breaker" in out["SFT"]["failing"]
+    # unavailable-data-never-A+ per FIELD (review finding): unknowns grade
+    # honest-B with the row named — never A+ (defaulted) and never C
+    # (the amendment escalates the proven knife, not the unknown)
+    assert out["RSIU"]["grade"] == "B" and "4_rsi" in out["RSIU"]["failing"] \
+        and "RSI unavailable" in out["RSIU"]["reasons"]
+    assert out["SC0"]["grade"] == "B" and "5_score" in out["SC0"]["failing"]
+    assert out["AP0"]["grade"] == "B" and "3_approach" in out["AP0"]["failing"] \
+        and "approach unavailable" in out["AP0"]["reasons"]
+    # c5 failure names its REAL basis in the reasons (review finding)
+    assert out["OUT1"]["grade"] == "C" and \
+        "1_conditions" in out["OUT1"]["failing"] and \
+        "not in current universe" in out["OUT1"]["reasons"]
+    # era-aware: NO row emitted -> None (block omitted, never fabricated)
+    bare = {"groups": [{"name": "Tech Hardware",
+                        "stocks": [{"ticker": "HPQ"}]}]}
+    assert eng.grade_candidates(bare, selected, breakers, TRENDING,
+                                tracked=set(), today=today) is None
+    # universe outage: c5 fails CLOSED -> C, and the reasons say OUTAGE,
+    # never a generic "conditions not met" masquerading as a weak tape
+    out2 = eng.grade_candidates(signals, set(), breakers, TRENDING,
+                                tracked=set(), today=today)
+    assert out2["HPQ"]["grade"] == "C" and "1_conditions" in out2["HPQ"]["failing"]
+    assert "universe unavailable" in out2["HPQ"]["reasons"]
+    # regime threads through the candidate path (review finding): blocked
+    # regime -> conditions fail -> C; Choppy (conditional) -> grade stands
+    outC = eng.grade_candidates(signals, selected, breakers, CAUTION,
+                                tracked=set(), today=today)
+    assert outC["HPQ"]["grade"] == "C" and "1_conditions" in outC["HPQ"]["failing"]
+    outCh = eng.grade_candidates(signals, selected, breakers, CHOPPY,
+                                 tracked=set(), today=today)
+    assert outCh["HPQ"]["grade"] == "A+"
+    print("  D-017 candidates tier fixtures (exclusion, honest nulls + "
+          "per-field unknowns, c5 reasons, outage, regime threading): OK")
+
+
+def test_candidate_watcher_parity():
+    """THE D-017 pin: the stateless candidate path and the stateful
+    watcher path produce the SAME grade from the SAME inputs. Era-aware:
+    replays every watcher in the live artifact that carries grade +
+    grade_inputs + assess_inputs + group; skips honestly otherwise."""
+    import yaml
+    from framework.position_signals import runway_sessions_before
+    art_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "framework", "output", "latest.json")
+    if not os.path.exists(art_path):
+        print("  D-017 PARITY PIN: no framework artifact — skipped")
+        return
+    with open(art_path) as f:
+        art = json.load(f)
+    ps = art.get("position_signals") or {}
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "framework", "config.yaml")) as f:
+        cfg = yaml.safe_load(f)
+    eng = PositionSignalEngine(cfg, lambda t, period="6mo": None)
+    base_day = None
+    try:
+        base_day = datetime.date.fromisoformat(
+            str(art.get("generated_at", ""))[:10])
+    except ValueError:
+        pass
+    if base_day is None:
+        print("  D-017 PARITY PIN: artifact has no parsable generated_at "
+              "— skipped")
+        return
+    checked = []
+    eligible = []
+    for t, row in (ps.get("tickers") or {}).items():
+        ai, gi, g = (row.get("assess_inputs"), row.get("grade_inputs"),
+                     row.get("grade"))
+        grp = row.get("group")
+        if not (isinstance(ai, dict) and isinstance(gi, dict)
+                and isinstance(g, dict) and grp
+                and row.get("kind") == "watching"):
+            continue
+        eligible.append(t)
+        if bool(gi.get("score_waived")) != (t in eng.aplus_cfg["index_vehicles"]):
+            continue          # per-row vehicle override — not reconstructable
+        # recover the evaluation day so the stateless runway matches the
+        # recorded one (data-driven, no dated assertion)
+        today = None
+        ned = row.get("next_earnings_date")
+        rec_runway = gi.get("runway_sessions")
+        if ned is None or rec_runway is None:
+            today = base_day
+            if runway_sessions_before(ned, today) != rec_runway:
+                continue
+        else:
+            for delta in (0, -1, 1, -2, 2):
+                d = base_day + datetime.timedelta(days=delta)
+                if runway_sessions_before(ned, d) == rec_runway:
+                    today = d
+                    break
+            if today is None:
+                continue
+        cand_row = {"ticker": t, "next_earnings_date": ned,
+                    "grade_inputs": {
+                        "close": ai["close"], "sma20": ai["sma20"],
+                        "sma20_5d_ago": ai["sma20_5d_ago"],
+                        "atr14": ai["atr14"],
+                        "consecutive_closes_above":
+                            ai["consecutive_closes_above"],
+                        "sma5": gi["sma5"],
+                        "up_close_since_swing_low":
+                            gi["up_close_since_swing_low"],
+                        "rsi14": gi["rsi14"],
+                        "quality_score": gi["quality_score"],
+                        "params": {
+                            "sma_period": eng.sma_period,
+                            "slope_lookback": eng.slope_lookback,
+                            "atr_period": eng.atr_period,
+                            "swing_lookback":
+                                eng.aplus_cfg["approach_swing_lookback"]}}}
+        signals_fx = {"groups": [{"name": grp, "stocks": [cand_row]}]}
+        selected = {grp} if ai.get("group_in_universe") else {"__other__"}
+        out = eng.grade_candidates(
+            signals_fx, selected, {grp: gi.get("breaker_status")},
+            ai.get("regime_state"), tracked=set(), today=today)
+        got = out[t]["grade"]
+        want = g.get("grade")
+        assert got == want, (
+            f"D-017 PARITY BROKEN for {t}: candidate path graded {got}, "
+            f"watcher path graded {want} on identical inputs")
+        checked.append(f"{t}={want}")
+    # RATCHET (review finding): era-skip is honest only while the artifact
+    # is genuinely ungraded. Once graded watcher rows EXIST, replaying
+    # zero of them means the pin quietly disengaged (renamed field,
+    # broken today-recovery) — that must FAIL, never skip-green.
+    if eligible:
+        assert checked, (
+            f"D-017 parity pin DISENGAGED: {len(eligible)} graded watcher "
+            f"rows in the artifact ({', '.join(eligible)}) but 0 replayed")
+        print(f"  D-017 PARITY PIN (stateless == watcher on same inputs): "
+              f"{', '.join(checked)}"
+              + (f"; {len(eligible) - len(checked)} skipped honestly"
+                 if len(checked) < len(eligible) else "")
+              + ": OK")
+    else:
+        print("  D-017 PARITY PIN: no graded watcher rows in artifact "
+              "(pre-grade era) — skipped")
+
+
 if __name__ == "__main__":
     print("\n=== Position signal engine tests (Build 1B) ===")
     test_confirmation_consecutive_closes()
@@ -908,4 +1163,7 @@ if __name__ == "__main__":
     test_grade_gate_choppy()
     test_review_hardening()
     test_watchers_replay_real_artifacts()
+    test_grade_inputs_helpers()
+    test_candidates_tier()
+    test_candidate_watcher_parity()
     print("\nAll position-signal tests passed.\n")

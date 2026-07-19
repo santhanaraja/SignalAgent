@@ -121,6 +121,32 @@ def build_message(data, now_et):
         lines.append(f"• {t} *{x.get('state', '?')}*{g_txt} — ext {ext}"
                      f"{guard}{gate}")
 
+    # D-017 close-report line: A+ names spelled out (rare by construction
+    # — when the line names one, it earns eyes), B/C stay counts. Absent
+    # block (pre-emission artifact) -> no line (era-aware); ungradeable
+    # rows are counted, never silently dropped. FRESHNESS GUARD (review
+    # finding): the line renders only while the served signals.json still
+    # carries the runner's annotation — an engine rewrite after a failed
+    # framework run strips it, so stale grades can never be presented as
+    # the close verdict (the page chips vanish on the same token).
+    cand = data.get("candidate_grades")
+    sig_annotated = False
+    try:
+        with open(os.path.join(api.PUBLIC_DIR, "signals.json")) as f:
+            sig_annotated = bool((json.load(f) or {}).get("candidate_grades"))
+    except Exception:
+        sig_annotated = False
+    if isinstance(cand, dict) and cand and sig_annotated:
+        graded = {t: c for t, c in cand.items()
+                  if isinstance(c, dict) and c.get("grade")}
+        ap = sorted(t for t, c in graded.items() if c["grade"] == "A+")
+        nb = sum(1 for c in graded.values() if c["grade"] == "B")
+        nc = sum(1 for c in graded.values() if c["grade"] == "C")
+        nu = len(cand) - len(graded)
+        ap_txt = f"{len(ap)} A+ ({', '.join(ap)})" if ap else "0 A+"
+        lines.append(f"Candidates: {ap_txt} · {nb} B · {nc} C"
+                     + (f" · {nu} ungraded" if nu else ""))
+
     bits = [f"{tr['ticker']} {tr.get('from_state') or '—'}→{tr['to_state']}"
             for tr in (changes or {}).get("position_transitions", [])
             if isinstance(tr, dict) and tr.get("ticker")]

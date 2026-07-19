@@ -353,6 +353,117 @@ def runway_sessions_before(print_date_iso, today=None):
     return int(np.busday_count(today.isoformat(), pd_date.isoformat()))
 
 
+# ---------------------------------------------------------------------------
+# Grade-input derivations as module-level pure helpers (D-017). These are
+# the ONE implementation of each scalar the D-011 grade consumes from price
+# history: the watcher path (evaluate) and signal_engine's per-row emission
+# (compute_grade_inputs) both call these, so a candidate graded from the
+# emitted scalars and a watcher graded from the df cannot drift.
+# ---------------------------------------------------------------------------
+
+def atr_mean(df, period):
+    """ATR as the simple mean of the last `period` True Ranges."""
+    if len(df) < period + 1:
+        return None
+    high = df["High"].to_numpy(dtype=float)[-(period + 1):]
+    low = df["Low"].to_numpy(dtype=float)[-(period + 1):]
+    close = df["Close"].to_numpy(dtype=float)[-(period + 1):]
+    prev_close = close[:-1]
+    tr = np.maximum(high[1:] - low[1:],
+                    np.maximum(np.abs(high[1:] - prev_close),
+                               np.abs(low[1:] - prev_close)))
+    return float(tr.mean())
+
+
+def consec_closes_above(close, sma):
+    """Count of consecutive closes above their SAME-DAY SMA, ending at the
+    last bar (condition 2's confirmation counter)."""
+    n = 0
+    for i in range(1, len(close) + 1):
+        s = sma.iloc[-i]
+        if np.isnan(s) or not float(close.iloc[-i]) > float(s):
+            break
+        n += 1
+    return n
+
+
+def up_close_off_swing_low(close, lookback):
+    """>=1 up-close since the swing low (lowest close in the trailing
+    `lookback` window) — the D-011 approach filter's turn check."""
+    look = min(len(close), int(lookback))
+    tail = close.iloc[-look:]
+    low_pos = int(np.argmin(tail.to_numpy(dtype=float)))
+    after = tail.iloc[low_pos:].to_numpy(dtype=float)
+    return bool((np.diff(after) > 0).any())
+
+
+def strip_synthetic_last_bar(df):
+    """
+    Drop fetch_data's live-quote append (Volume 0, O==H==L==C): the
+    state machine AND the grade are CLOSE-basis (R11 — never intraday
+    wicks). Intraday callers therefore evaluate the last COMPLETED daily
+    bar; the post-close run sees today's real bar.
+    """
+    if df is None or len(df) == 0:
+        return df
+    last = df.iloc[-1]
+    try:
+        if float(last["Volume"]) == 0 and \
+                float(last["Open"]) == float(last["High"]) \
+                == float(last["Low"]) == float(last["Close"]):
+            return df.iloc[:-1]
+    except (KeyError, TypeError, ValueError):
+        pass
+    return df
+
+
+def grade_inputs_from_df(df, *, sma_period=20, slope_lookback=5,
+                         atr_period=14, swing_lookback=20):
+    """
+    The D-011 grade's df-derived scalars for one ticker (D-017 emission):
+    signal_engine calls this per stock row (on the synthetic-bar-STRIPPED
+    df) and the framework runner grades candidates from the result —
+    already-computed inputs, zero new fetches. Keys mirror the watcher
+    path's assess_inputs/grade_inputs names (sma20/sma20_5d_ago are the
+    conventional names even though the periods are parameters — `params`
+    records what was actually used, and the grader refuses inputs computed
+    under different knobs rather than grade confidently under the wrong
+    doctrine).
+
+    rsi14 / quality_score are NOT computed here — they need signal_engine's
+    compute_rsi/score_stock (importing them at this layer would cycle), so
+    the emitter adds them from the same stripped df.
+
+    Returns None when the history can't support the scalars (insufficient
+    bars / non-finite window) — the unavailable-data convention starts here.
+    """
+    min_bars = max(sma_period + slope_lookback, atr_period + 1) + 1
+    if df is None or len(df) < min_bars:
+        return None
+    close = df["Close"]
+    sma = close.rolling(sma_period).mean()
+    last_close = float(close.iloc[-1])
+    sma_now = float(sma.iloc[-1])
+    sma_then = float(sma.iloc[-1 - slope_lookback])
+    if not (np.isfinite(last_close) and np.isfinite(sma_now)
+            and np.isfinite(sma_then)):
+        return None
+    return {
+        "close": last_close,
+        "sma20": sma_now,
+        "sma20_5d_ago": sma_then,
+        "sma5": float(close.rolling(5).mean().iloc[-1]),
+        "atr14": atr_mean(df, atr_period),
+        "consecutive_closes_above": consec_closes_above(close, sma),
+        "up_close_since_swing_low": up_close_off_swing_low(
+            close, swing_lookback),
+        "params": {"sma_period": sma_period,
+                   "slope_lookback": slope_lookback,
+                   "atr_period": atr_period,
+                   "swing_lookback": swing_lookback},
+    }
+
+
 class PositionSignalEngine:
     """Evaluate the 5-condition re-entry rule per tracked ticker."""
 
@@ -443,13 +554,9 @@ class PositionSignalEngine:
         atr = self._atr(df, self.atr_period)
 
         above_now = last_close > sma_now
-        # consecutive closes above their same-day SMA20
-        consec_above = 0
-        for i in range(1, len(close) + 1):
-            s = sma.iloc[-i]
-            if np.isnan(s) or not float(close.iloc[-i]) > float(s):
-                break
-            consec_above += 1
+        # consecutive closes above their same-day SMA20 (shared helper —
+        # the D-017 emission counts with the same implementation)
+        consec_above = consec_closes_above(close, sma)
 
         # All condition/state/guard decisions live in assess_position
         # (module-level pure, PER-508 item 24b) — evaluate only computes
@@ -502,14 +609,11 @@ class PositionSignalEngine:
             try:
                 ap = self.aplus_cfg
                 # approach filter inputs: unrounded SMA5 + at least one
-                # up-close since the swing low (lowest close in the
-                # trailing lookback)
+                # up-close since the swing low (shared helper — same
+                # implementation the D-017 emission uses)
                 sma5_now = float(close.rolling(5).mean().iloc[-1])
-                look = min(len(close), ap["approach_swing_lookback"])
-                tail = close.iloc[-look:]
-                low_pos = int(np.argmin(tail.to_numpy(dtype=float)))
-                after = tail.iloc[low_pos:].to_numpy(dtype=float)
-                up_close = bool((np.diff(after) > 0).any())
+                up_close = up_close_off_swing_low(
+                    close, ap["approach_swing_lookback"])
                 # RSI-14 + quality score from the same df (deferred import —
                 # signal_engine is heavy; same pattern as sanitize_for_json)
                 rsi_v = None
@@ -587,17 +691,8 @@ class PositionSignalEngine:
 
     @staticmethod
     def _atr(df, period):
-        """ATR as the simple mean of the last `period` True Ranges."""
-        if len(df) < period + 1:
-            return None
-        high = df["High"].to_numpy(dtype=float)[-(period + 1):]
-        low = df["Low"].to_numpy(dtype=float)[-(period + 1):]
-        close = df["Close"].to_numpy(dtype=float)[-(period + 1):]
-        prev_close = close[:-1]
-        tr = np.maximum(high[1:] - low[1:],
-                        np.maximum(np.abs(high[1:] - prev_close),
-                                   np.abs(low[1:] - prev_close)))
-        return float(tr.mean())
+        """Delegates to the module-level pure helper (item 24b pattern)."""
+        return atr_mean(df, period)
 
     def _stop_for(self, entry, sma_now):
         rule = entry.get("stop_on_entry")
@@ -651,6 +746,134 @@ class PositionSignalEngine:
                 "weeks_in_universe": None,
                 "detail": f"group '{group}' not in current universe "
                           f"(top-{top_n})"}
+
+    # ------------------------------------------------------------------
+    # D-017 Candidates tier: the D-011 grade for every un-tracked
+    # signals.json stock row — a GRADE without a STATE
+    # ------------------------------------------------------------------
+
+    def grade_candidates(self, signals, selected_groups, breaker_by_group,
+                         regime_state, tracked, today=None):
+        """
+        Grade every un-tracked stock row in the signals artifact through
+        the SAME pure functions the watcher path uses (assess_position +
+        grade_setup — Lab law 1), fed from the grade_inputs scalars
+        signal_engine emitted per row (computed on the synthetic-bar-
+        stripped df by grade_inputs_from_df + compute_rsi/score_stock —
+        the exact watcher recipe). Stateless by design: no persistence,
+        no state machine, recomputed each run (ruling 11725: candidates
+        carry the machine's OPINION, tracked names its COMMITMENT).
+
+        Returns None on a pre-emission artifact (NO row carries
+        grade_inputs) so era-aware consumers omit the block entirely,
+        else {ticker: {grade, reasons, failing, group}} with tracked
+        names EXCLUDED and dual-listed tickers first-wins. A row that
+        cannot be graded honestly carries grade: null + the reason —
+        never a defaulted letter (`rows` detail is deliberately omitted:
+        the chip hover needs reasons; the Lab re-derives from
+        grade_inputs).
+        """
+        rows = []
+        for g in (signals or {}).get("groups") or []:
+            if not isinstance(g, dict):
+                continue
+            gname = g.get("name")
+            for s in g.get("stocks") or []:
+                if isinstance(s, dict) and s.get("ticker"):
+                    rows.append((gname, s))
+        if not any(isinstance(s.get("grade_inputs"), dict) for _, s in rows):
+            return None      # pre-emission signals artifact — no block
+        out = {}
+        tracked = tracked or set()
+        for gname, s in rows:
+            t = s["ticker"]
+            if t in tracked or t in out:
+                continue
+            try:
+                out[t] = self._grade_one_candidate(
+                    gname, s, selected_groups, breaker_by_group,
+                    regime_state, today)
+            except Exception as exc:
+                out[t] = {"grade": None, "group": gname,
+                          "reasons": f"grade unavailable: {exc}"}
+        return out
+
+    def _grade_one_candidate(self, gname, row, selected_groups,
+                             breaker_by_group, regime_state, today):
+        gi = row.get("grade_inputs")
+        if not isinstance(gi, dict):
+            return {"grade": None, "group": gname,
+                    "reasons": "grade inputs not emitted for this row"}
+        ap = self.aplus_cfg
+
+        def _num(v):
+            return v if isinstance(v, (int, float)) \
+                and not isinstance(v, bool) else None
+        # inputs computed under different knobs would grade confidently
+        # under the wrong doctrine — refuse instead (honest null)
+        p = gi.get("params") or {}
+        want = {"sma_period": self.sma_period,
+                "slope_lookback": self.slope_lookback,
+                "atr_period": self.atr_period,
+                "swing_lookback": ap["approach_swing_lookback"]}
+        if p and any(p.get(k) != v for k, v in want.items()):
+            return {"grade": None, "group": gname,
+                    "reasons": f"grade inputs computed under different "
+                               f"parameters ({p})"}
+        close = _num(gi.get("close"))
+        sma20 = _num(gi.get("sma20"))
+        sma20_then = _num(gi.get("sma20_5d_ago"))
+        if close is None or sma20 is None or sma20_then is None:
+            return {"grade": None, "group": gname,
+                    "reasons": "grade inputs missing/non-finite"}
+        # condition 5 — same basis as _group_status's core branches: the
+        # row's group vs the current universe; an outage fails CLOSED
+        if not selected_groups:
+            c5_met = False
+            c5_det = "universe unavailable — thesis gate fails closed"
+        elif gname in selected_groups:
+            c5_met = True
+            c5_det = f"group '{gname}' in universe"
+        else:
+            c5_met = False
+            c5_det = f"group '{gname}' not in current universe"
+        atr = _num(gi.get("atr14"))
+        res = assess_position(
+            close, sma20, sma20_then, atr,
+            int(gi.get("consecutive_closes_above") or 0),
+            regime_state, c5_met, "watching",
+            prev_state=None, thesis_detail=c5_det,
+            confirmation_closes=self.confirmation_closes,
+            atr_mult=self.atr_mult,
+            extension_guard_max=self.extension_guard_max,
+            slope_lookback_days=self.slope_lookback)
+        # row 2 compares the UNROUNDED extension (the watcher-path law)
+        ext_raw = None if not atr else (close - sma20) / atr
+        runway = runway_sessions_before(row.get("next_earnings_date"), today)
+        grade = grade_setup(
+            all_conditions_met=res["all_conditions_met"],
+            extension_atr=ext_raw,
+            close=close, sma5=_num(gi.get("sma5")),
+            up_close_since_swing_low=gi.get("up_close_since_swing_low"),
+            rsi14=_num(gi.get("rsi14")),
+            quality_score=_num(gi.get("quality_score")),
+            score_waived=(row["ticker"] in ap["index_vehicles"]),
+            breaker_status=breaker_by_group.get(gname),
+            runway_sessions=runway,
+            extension_guard_max=self.extension_guard_max,
+            rsi_min=ap["rsi_min"], rsi_max=ap["rsi_max"],
+            score_min=ap["score_min"],
+            runway_min_sessions=ap["runway_min_sessions"])
+        # condition-5 failures surface their REAL basis in the hover/API
+        # reasons — an outage-C must read as the outage, and a rotation-C
+        # as the rotation, never as generic "conditions not met" (review
+        # finding: the watcher path shows this detail on its thesis pip;
+        # the candidate tier must be equally honest)
+        reasons = grade["reasons"]
+        if not c5_met:
+            reasons = f"{reasons}; {c5_det}" if reasons else c5_det
+        return {"grade": grade["grade"], "reasons": reasons,
+                "failing": grade["failing"], "group": gname}
 
     # ------------------------------------------------------------------
     # Live compute: load positions + prior states, evaluate, persist, emit
@@ -800,7 +1023,28 @@ class PositionSignalEngine:
         if emit_events and transitions:
             self.emit_history_events(transitions)
 
-        return {
+        # --- D-017 Candidates tier: grade every un-tracked signals row ---
+        # Whole block guarded — candidates can never take down the
+        # tracked-name engine. None = pre-emission signals artifact (the
+        # key is omitted; era-aware consumers show nothing).
+        candidate_grades = None
+        try:
+            candidate_grades = self.grade_candidates(
+                signals, selected_groups, breaker_by_group, regime_state,
+                tracked, today=grade_today)
+            if candidate_grades is not None:
+                graded = [c.get("grade") for c in candidate_grades.values()]
+                aplus = sorted(t for t, c in candidate_grades.items()
+                               if c.get("grade") == "A+")
+                print(f"[framework] candidates graded: "
+                      f"{len(candidate_grades)} — "
+                      f"{len(aplus)} A+ ({', '.join(aplus) or 'none'}) · "
+                      f"{graded.count('B')} B · {graded.count('C')} C · "
+                      f"{graded.count(None)} ungradeable")
+        except Exception as e:
+            print(f"[framework] candidate grading unavailable: {e}")
+
+        result = {
             "generated_at": _utcnow().isoformat(),
             "account": positions.get("account"),
             "schema_version": positions.get("schema_version"),
@@ -808,6 +1052,14 @@ class PositionSignalEngine:
             "tickers": tickers,
             "transitions": transitions,
         }
+        if candidate_grades is not None:
+            result["candidate_grades"] = candidate_grades
+            # the signals generation these grades were computed FROM — the
+            # runner refuses to annotate a signals.json that has been
+            # rewritten since (review finding: the serving process re-runs
+            # the engine on its own thread)
+            result["candidate_signals_timestamp"] = signals.get("timestamp")
+        return result
 
     def _transition_event(self, ticker, entry, prev, result):
         state = result["state"]
@@ -862,23 +1114,8 @@ class PositionSignalEngine:
 
     @staticmethod
     def _strip_synthetic_last_bar(df):
-        """
-        Drop fetch_data's live-quote append (Volume 0, O==H==L==C): the
-        state machine is CLOSE-basis (R11 — never intraday wicks). Intraday
-        runs therefore evaluate the last COMPLETED daily bar; the post-close
-        run sees today's real bar and advances the machine.
-        """
-        if df is None or len(df) == 0:
-            return df
-        last = df.iloc[-1]
-        try:
-            if float(last["Volume"]) == 0 and \
-                    float(last["Open"]) == float(last["High"]) \
-                    == float(last["Low"]) == float(last["Close"]):
-                return df.iloc[:-1]
-        except (KeyError, TypeError, ValueError):
-            pass
-        return df
+        """Delegates to the module-level pure helper (item 24b pattern)."""
+        return strip_synthetic_last_bar(df)
 
     # ------------------------------------------------------------------
 

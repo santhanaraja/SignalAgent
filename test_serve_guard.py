@@ -405,6 +405,87 @@ def test_layer2_enrichment_shared_renderers():
           f"{note}: OK")
 
 
+def test_candidates_page_contract():
+    """D-017 page law (ruling 11725 Q2/Q3): un-tracked candidate rows get
+    the D-011 grade chip + reasons hover through the SAME psGrade renderer
+    and a +watch copy-the-prompt affordance — and NOTHING else. Chip-only
+    is the visual grammar: no state badge, no pips (a five-pip un-tracked
+    row would read as READY). Plus the artifact contract, era-aware."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    html = open(os.path.join(here, "public", "framework.html")).read()
+
+    # the seam was built — the placeholder comment must be gone
+    assert "SEAM (do not build yet)" not in html, "seam comment left behind"
+
+    # candidate branch: chip + watch only, through the shared renderer
+    tick_row = html[html.index("function gl2TickRow"):
+                    html.index("async function gl2Fill")]
+    assert "!tracked&&cand&&cand.grade" in tick_row, \
+        "candidate chip must require un-tracked AND a non-null grade"
+    cand_branch = tick_row[tick_row.index("!tracked&&cand&&cand.grade"):
+                           tick_row.index("return `")]
+    assert "psGrade(cand)" in cand_branch, "chip must go through psGrade"
+    assert "psPips(" not in cand_branch and "psBadge(" not in cand_branch, \
+        "chip-ONLY law: no pips/badge on candidates"
+    assert "ps-grade-" not in cand_branch, "inline grade markup — use psGrade"
+    assert "gl2-watch" in cand_branch and "cwOpen(" in cand_branch
+    # the row TEMPLATE carries the candidate slot exactly once, adjacent
+    # to the tracked slot — markup added in the template itself (outside
+    # the guarded branch) cannot evade the chip-only law (review finding)
+    assert "${cd}${tr}" in tick_row, "candidate slot moved/duplicated"
+    assert tick_row.count("${cd}") == 1
+
+    # grades come from the SAME signals artifact as the rows, and only
+    # for un-tracked names
+    fill = html[html.index("async function gl2Fill"):
+                html.index("function gl2Toggle")]
+    assert "sig.candidate_grades" in fill
+    assert "!tracked[s.ticker])?cands[s.ticker]:null" in fill.replace("\n", "")
+
+    # the lazy fetch caches the PROMISE (review finding: caching the
+    # result returned undefined to every concurrent caller after the
+    # first — expand-all rendered honest-gap notes for covered rows)
+    assert "GL2_SIG_PROMISE" in html and "GL2_FETCHED" not in html
+
+    # the copy-the-prompt appointment (Q3: promotion NEVER automatic; no
+    # fake durable write from an ephemeral dyno)
+    for needle in ("function cwOpen(", "function cwCopy(",
+                   "function cwClose(", 'id="cwModal"', "const GL2CAND"):
+        assert needle in html, f"missing {needle}"
+    assert "human-curated committed set (D-003)" in html, \
+        "the modal must state the honest constraint"
+    assert html.count("function cwOpen(") == 1
+
+    # artifact contract (era-aware): when a signals artifact carries the
+    # block, every key is un-tracked and every value has the chip's shape
+    sig_path = os.path.join(here, "public", "signals.json")
+    fw_path = os.path.join(here, "public", "framework.json")
+    sig = json.load(open(sig_path))
+    fw = json.load(open(fw_path))
+    cand = sig.get("candidate_grades")
+    if isinstance(cand, dict) and cand:
+        rows = (fw.get("position_signals") or {}).get("tickers") or {}
+        tracked = set(rows.keys())
+        overlap = tracked & set(cand.keys())
+        assert not overlap, f"tracked names graded as candidates: {overlap}"
+        for t, c in cand.items():
+            assert isinstance(c, dict) and "grade" in c and "group" in c, t
+            assert c["grade"] in ("A+", "B", "C", None), (t, c["grade"])
+            if c["grade"] != "A+":
+                assert c.get("reasons"), f"{t}: non-A+ needs reasons (hover)"
+        aplus = sorted(t for t, c in cand.items() if c["grade"] == "A+")
+        note = (f"{len(cand)} candidates in artifact — {len(aplus)} A+ "
+                f"({', '.join(aplus) or 'none'})")
+        # the framework artifact carries the same block for notify/API
+        assert isinstance(fw.get("candidate_grades"), dict), \
+            "signals annotated but framework.json missing the block"
+    else:
+        note = ("no candidate block yet (pre-emission artifact — "
+                "activates on the first post-ship run)")
+    print(f"  D-017 candidates page contract: chip-only via psGrade, "
+          f"+watch prompt, honest constraint; {note}: OK")
+
+
 def test_missing_file_still_404():
     env = _Env()
     try:
@@ -426,5 +507,6 @@ if __name__ == "__main__":
     test_universe_leadership_block()
     test_layer2_ticker_expansion_contract()
     test_layer2_enrichment_shared_renderers()
+    test_candidates_page_contract()
     test_missing_file_still_404()
     print("\nAll serve-guard tests passed.\n")
