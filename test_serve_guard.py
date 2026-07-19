@@ -271,6 +271,72 @@ def test_universe_leadership_block():
           "malformed-safe, serves: OK")
 
 
+def test_layer2_ticker_expansion_contract():
+    """Layer-2 expandable ticker rows (pure presentation): the page joins
+    universe_leadership.name against signals.json groups[].name and renders
+    each stock's score/trade_signal/price-vs-ma20/rsi with the dashboard's
+    chip vocabulary. Pins the DATA CONTRACT on the real committed artifacts
+    (the render is client JS — verified live via DOM + screenshots):
+      - the join key works for the current artifacts (most selected groups
+        have signals rows; absent groups are the honest-gap path)
+      - every stock row carries the fields the sub-row renders
+      - every live trade_signal value maps into the dashboard's 6 chip
+        classes (the gl2TsClass vocabulary)"""
+    import subprocess
+    here = os.path.dirname(os.path.abspath(__file__))
+
+    def _head(path):
+        out = subprocess.run(["git", "show", f"HEAD:{path}"],
+                             capture_output=True, text=True, cwd=here)
+        assert out.returncode == 0, path
+        return json.loads(out.stdout)
+
+    ua = _head("data/universe_active.json")
+    sig = _head("data/signals.json")
+    from framework.framework_runner import build_universe_leadership
+    lead = build_universe_leadership(ua, sig)
+    assert len(lead) >= 10, "leadership block unexpectedly small"
+    sig_groups = {g["name"]: g for g in sig.get("groups", [])
+                  if isinstance(g, dict) and g.get("name")}
+    joined = [g["name"] for g in lead if g["name"] in sig_groups]
+    assert len(joined) >= 10, \
+        f"join broken: only {len(joined)} of {len(lead)} groups match"
+
+    def ts_class(ts):                    # mirrors the page's gl2TsClass
+        if not ts:
+            return "ts-hold"
+        t = ts.upper()
+        if t == "BUY NOW":
+            return "ts-buy-now"
+        if "WAIT" in t:
+            return "ts-wait"
+        if "ACCUMULATE" in t:
+            return "ts-accumulate"
+        if "HOLD" in t:
+            return "ts-hold"
+        if "REDUCE" in t:
+            return "ts-reduce"
+        if t == "AVOID":
+            return "ts-avoid"
+        return "ts-hold"
+
+    known = {"ts-buy-now", "ts-wait", "ts-accumulate", "ts-hold",
+             "ts-reduce", "ts-avoid"}
+    checked = 0
+    for name in joined:
+        for s in sig_groups[name].get("stocks", []) or []:
+            assert s.get("ticker"), name
+            for f in ("score", "price", "ma20", "rsi"):
+                assert f in s, (name, s.get("ticker"), f)
+            assert ts_class(s.get("trade_signal")) in known, \
+                (name, s.get("ticker"), s.get("trade_signal"))
+            checked += 1
+    assert checked >= 30, f"only {checked} stock rows checked"
+    print(f"  Layer-2 expansion contract: {len(joined)}/{len(lead)} groups "
+          f"join, {checked} stock rows field-complete, all trade signals "
+          f"map to the 6 dashboard chips: OK")
+
+
 def test_missing_file_still_404():
     env = _Env()
     try:
@@ -290,5 +356,6 @@ if __name__ == "__main__":
     test_parliament_artifact_stale_under_chassis()
     test_chassis_artifact_stale_under_parliament()
     test_universe_leadership_block()
+    test_layer2_ticker_expansion_contract()
     test_missing_file_still_404()
     print("\nAll serve-guard tests passed.\n")

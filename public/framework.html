@@ -135,6 +135,31 @@
   .ps-arming{background:rgba(210,153,34,.15);color:var(--yellow);}
   .ps-ready{background:rgba(63,185,80,.15);color:var(--green);}
   .ps-extended{background:rgba(240,136,62,.2);color:var(--orange);border:1px solid rgba(240,136,62,.5);}
+  /* Layer 2 expandable ticker sub-rows (dashboard-consistent chips) */
+  .ts-badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.3px;white-space:nowrap;}
+  .ts-buy-now{background:rgba(63,185,80,.2);color:#3fb950;border:1px solid rgba(63,185,80,.3);}
+  .ts-wait{background:rgba(210,153,34,.15);color:#d29922;border:1px solid rgba(210,153,34,.25);}
+  .ts-accumulate{background:rgba(88,166,255,.12);color:#58a6ff;border:1px solid rgba(88,166,255,.25);}
+  .ts-hold{background:rgba(139,148,158,.1);color:#8b949e;border:1px solid rgba(139,148,158,.2);}
+  .ts-reduce{background:rgba(240,136,62,.15);color:#f0883e;border:1px solid rgba(240,136,62,.25);}
+  .ts-avoid{background:rgba(248,81,73,.18);color:#f85149;border:1px solid rgba(248,81,73,.3);}
+  .gl2-sub{background:rgba(88,166,255,.03);}
+  .gl2-sub td{padding:6px 12px 6px 40px;}
+  .gl2-tick{display:flex;align-items:center;gap:12px;padding:4px 0;font-size:12px;flex-wrap:wrap;border-bottom:1px solid rgba(48,54,61,.4);}
+  .gl2-tick:last-child{border-bottom:none;}
+  .gl2-sym{font-family:'SF Mono',monospace;font-weight:800;width:52px;}
+  .gl2-score{font-family:'SF Mono',monospace;font-weight:700;width:28px;text-align:right;}
+  .gl2-num{font-family:'SF Mono',monospace;font-size:11px;color:var(--dim);}
+  .gl2-note{font-size:11px;color:var(--dim);font-style:italic;padding:4px 0;}
+  .gl2-caret{display:inline-block;font-size:10px;color:var(--dim);width:12px;transition:transform .15s;}
+  tr.gl2-open .gl2-caret{transform:rotate(90deg);}
+  .gl2-xall{font-size:10px;color:var(--blue);cursor:pointer;font-weight:600;margin-left:8px;text-transform:none;letter-spacing:0;}
+  @media(max-width:600px){
+    /* two-line wrap: symbol+signal, then metrics (Position Signals pattern) */
+    .gl2-tick{gap:8px;}
+    .gl2-tick .gl2-break{flex-basis:100%;height:0;}
+    .gl2-sub td{padding-left:20px;}
+  }
   /* D-011 setup grade chips */
   .ps-grade{display:inline-block;padding:1px 8px;border-radius:4px;font-size:10px;font-weight:800;font-family:'SF Mono',monospace;letter-spacing:.3px;}
   .ps-grade-a{background:rgba(63,185,80,.2);color:var(--green);border:1px solid rgba(63,185,80,.5);}
@@ -902,6 +927,82 @@ function plSeedFromTicker(){
   plSimulate();
 }
 
+/* ===== Layer 2 expandable ticker sub-rows (pure presentation) =====
+   Consumes the SAME signals.json the dashboard reads — fetched lazily
+   ONCE on first expansion (static same-origin file, no API compute). */
+let GL2_SIGNALS=null, GL2_FETCHED=false;
+async function gl2Signals(){
+  if(GL2_FETCHED) return GL2_SIGNALS;
+  GL2_FETCHED=true;
+  try{
+    const r=await fetch('/signals.json?t='+Date.now());
+    if(r.ok) GL2_SIGNALS=await r.json();
+  }catch(e){ GL2_SIGNALS=null; }
+  return GL2_SIGNALS;
+}
+function gl2TsClass(ts){            // the dashboard's exact chip mapping
+  if(!ts) return 'ts-hold';
+  const t=ts.toUpperCase();
+  if(t==='BUY NOW') return 'ts-buy-now';
+  if(t.includes('WAIT')) return 'ts-wait';
+  if(t.includes('ACCUMULATE')) return 'ts-accumulate';
+  if(t.includes('HOLD')) return 'ts-hold';
+  if(t.includes('REDUCE')) return 'ts-reduce';
+  if(t==='AVOID') return 'ts-avoid';
+  return 'ts-hold';
+}
+function gl2ScoreColor(s){return s>=70?'var(--green)':s>=55?'var(--yellow)':'var(--red)';}
+function gl2TickRow(s){
+  const vs=(s.price!=null&&s.ma20)?((s.price-s.ma20)/s.ma20*100):null;
+  const vsTxt=vs==null?'—':`${vs>0?'+':''}${vs.toFixed(1)}%`;
+  const vsCol=vs==null?'var(--dim)':vs>=0?'var(--green)':'var(--red)';
+  // SEAM (do not build yet): when the Candidates feature is ruled, the
+  // D-011 A+ grade chip slots here, after the trade-signal chip:
+  //   ${s.grade?psGrade(s.grade):''}
+  return `<div class="gl2-tick">
+    <span class="gl2-sym">${s.ticker}</span>
+    <span class="gl2-score" style="color:${gl2ScoreColor(s.score)}">${s.score!=null?s.score:'—'}</span>
+    <span class="ts-badge ${gl2TsClass(s.trade_signal)}">${s.trade_signal||'—'}</span>
+    <span class="gl2-break"></span>
+    <span class="gl2-num" title="price vs SMA20">$${s.price!=null?s.price.toFixed(2):'—'} <b style="color:${vsCol}">${vsTxt}</b> vs SMA20</span>
+    <span class="gl2-num" title="RSI-14">RSI ${s.rsi!=null?s.rsi.toFixed(0):'—'}</span>
+  </div>`;
+}
+async function gl2Fill(rid,groupName){
+  const cell=document.querySelector('#'+rid+' td');
+  if(!cell||cell.dataset.filled) return;
+  cell.innerHTML='<div class="gl2-note">loading tickers…</div>';
+  const sig=await gl2Signals();
+  const grp=((sig&&sig.groups)||[]).find(g=>g.name===groupName);
+  const stocks=grp&&Array.isArray(grp.stocks)?grp.stocks:[];
+  cell.dataset.filled='1';
+  if(!stocks.length){
+    // honest gap — never an empty silent expansion (a group can be in
+    // the rotated universe before the next signals.json run covers it)
+    cell.innerHTML='<div class="gl2-note">tickers unavailable this run (signals.json has no rows for this group yet)</div>';
+    return;
+  }
+  cell.innerHTML=stocks.map(gl2TickRow).join('');
+}
+function gl2Toggle(rid,groupName){
+  const sub=document.getElementById(rid);
+  const row=document.getElementById(rid+'-row');
+  if(!sub) return;
+  const open=sub.style.display!=='none';
+  sub.style.display=open?'none':'';
+  if(row) row.classList.toggle('gl2-open',!open);
+  if(!open) gl2Fill(rid,groupName);
+}
+function gl2All(open){
+  document.querySelectorAll('tr.gl2-sub').forEach(sub=>{
+    const row=document.getElementById(sub.id+'-row');
+    const isOpen=sub.style.display!=='none';
+    if(open&&!isOpen) gl2Toggle(sub.id,row?row.dataset.g:'');
+    if(!open&&isOpen){ sub.style.display='none'; if(row)row.classList.remove('gl2-open'); }
+  });
+  event&&event.stopPropagation&&event.stopPropagation();
+}
+
 /* ===== Position Signals panel (1B engine) ===== */
 function psBadge(state,gradeGate){
   const map={HELD:'ps-held',EXIT_FIRED:'ps-exit-fired',WATCHING:'ps-watching',
@@ -1165,21 +1266,24 @@ function render(){
     html+=`<div style="overflow-x:auto;">
     <table class="theme-table">
       <thead><tr>
-        <th>Rank</th><th>Group</th><th>Sector</th><th>Composite</th><th>Median YTD</th><th>Tickers</th><th>Weeks</th><th>Breaker</th>
+        <th>Rank</th><th>Group <span class="gl2-xall" onclick="gl2All(true)">expand all</span><span class="gl2-xall" onclick="gl2All(false)">collapse all</span></th><th>Sector</th><th>Composite</th><th>Median YTD</th><th>Tickers</th><th>Weeks</th><th>Breaker</th>
       </tr></thead><tbody>`;
+    let gl2Idx=0;
     for(const g of lead){
       const brk=g.breaker_status;
       const brkChip=brk?`<span class="ps-er" style="background:${brk==='clear'?'rgba(63,185,80,.12)':brk==='critical'?'rgba(248,81,73,.18)':'rgba(210,153,34,.15)'};color:${brk==='clear'?'var(--green)':brk==='critical'?'var(--red)':'var(--yellow)'};">${brk}</span>`:'<span style="color:var(--dim);font-size:11px;">—</span>';
-      html+=`<tr>
+      const rid='gl2-'+(gl2Idx++);
+      html+=`<tr id="${rid}-row" style="cursor:pointer;" onclick="gl2Toggle('${rid}',this.dataset.g)" data-g="${g.name.replace(/"/g,'&quot;')}">
         <td class="rank-cell">${g.rank!=null?'#'+g.rank:'—'}</td>
-        <td class="name-cell">${g.name}</td>
+        <td class="name-cell"><span class="gl2-caret">&#9656;</span>${g.name}</td>
         <td style="font-size:11px;color:var(--dim);">${g.sector||'—'}</td>
         <td class="return-cell">${g.composite!=null?g.composite.toFixed(1):'—'}</td>
         <td class="return-cell ${g.median_ytd!=null?(g.median_ytd>=0?'pos':'neg'):''}">${g.median_ytd!=null?g.median_ytd.toFixed(1)+'%':'—'}</td>
         <td class="return-cell">${g.tickers}</td>
         <td class="return-cell">${g.weeks_in_universe!=null?g.weeks_in_universe:'—'}</td>
         <td>${brkChip}</td>
-      </tr>`;
+      </tr>
+      <tr id="${rid}" class="gl2-sub" style="display:none;"><td colspan="8"></td></tr>`;
     }
     html+=`</tbody></table></div>`;
     if(!anyWeeks){
