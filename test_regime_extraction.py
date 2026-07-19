@@ -32,6 +32,13 @@ from framework.regime_calculator import (breadth_ratio_vote, compute_regime,
 
 REPO = os.path.dirname(os.path.abspath(__file__))
 CUTOVER = "2026-07-05"   # Build 1A: 3-voter ladder shipped (466637e)
+# Gauge B chassis cut over 2026-07-17 evening (debf12f, D-008): entries/
+# artifacts from 2026-07-18 on are chassis-authored — their regime no longer
+# derives from the 3-voter ladder, so the 1A replay stops here BY DESIGN.
+# This is a frozen PAST-era boundary (the extraction corpus this pin
+# licenses), not a future-firing assertion; chassis-era output replays
+# under test_gauge_chassis's own pins.
+CHASSIS_CUTOVER = "2026-07-18"
 
 
 def _replay_ladder(entry):
@@ -51,8 +58,21 @@ def test_corpus_a_regime_history():
     rh = json.load(open(os.path.join(REPO, "framework", "state",
                                      "regime_history.json")))
     entries = [e for e in rh
-               if e.get("date", "") >= CUTOVER and e.get("gauges")]
-    assert entries, "no post-cutover entries with gauges"
+               if CUTOVER <= e.get("date", "") < CHASSIS_CUTOVER
+               and e.get("gauges")]
+    chassis_era = [e.get("date") for e in rh
+                   if e.get("date", "") >= CHASSIS_CUTOVER]
+    if not entries:
+        # regime_history is a ROLLING file — the fixed 1A-era window ages
+        # out of it (~Sept 2026). That is corpus retirement, not failure:
+        # the era lives on in git history and corpus B still replays the
+        # committed artifacts (review finding: the empty-corpus assert was
+        # a delayed suite bomb).
+        assert chassis_era, "regime_history has no entries at all — load failure"
+        print(f"  corpus A: 1A-era window has aged out of the rolling "
+              f"history file ({len(chassis_era)} chassis-era entries "
+              f"remain) — corpus retired; corpus B still replays: OK")
+        return
     for e in entries:
         g = e["gauges"]
         # component votes where the recorded basis is unambiguous
@@ -67,7 +87,10 @@ def test_corpus_a_regime_history():
         sigs = [x.get("signal") for x in g.values()]
         assert sigs.count("risk_on") == e["risk_on_count"], e["date"]
         assert sigs.count("risk_off") == e["risk_off_count"], e["date"]
-    print(f"  corpus A: {len(entries)} regime_history entries replay exactly: OK")
+    era_note = (f" ({len(chassis_era)} chassis-era entries excluded — "
+                f"replay under test_gauge_chassis)" if chassis_era else "")
+    print(f"  corpus A: {len(entries)} regime_history entries replay "
+          f"exactly{era_note}: OK")
 
 
 def _committed_artifacts():
@@ -83,14 +106,23 @@ def _committed_artifacts():
             fw = json.loads(raw.replace(": NaN", ": null"))
         except json.JSONDecodeError:
             continue
+        # data-driven era guard: chassis-authored artifacts declare their
+        # schema (Gauge B serve sentinel) — their regime is not the
+        # ladder's output and replays under test_gauge_chassis instead
+        if fw.get("schema") == "regime-b-chassis":
+            yield sha[:9], None
+            continue
         r = fw.get("regime") or {}
         if r.get("date", "") >= CUTOVER and r.get("gauges"):
             yield sha[:9], r
 
 
 def test_corpus_b_committed_artifacts():
-    n = comp = 0
+    n = comp = skipped = 0
     for sha, r in _committed_artifacts():
+        if r is None:
+            skipped += 1
+            continue
         g, gate = r["gauges"], r.get("backdrop_gate") or {}
         # ladder + gate replay (every artifact)
         signals = [x.get("signal") for x in g.values()]
@@ -127,8 +159,10 @@ def test_corpus_b_committed_artifacts():
                 assert g_open == gate.get("open"), f"{sha}: gate"
         n += 1
     assert n >= 10, f"only {n} committed artifacts found — corpus too thin"
+    era_note = (f" ({skipped} chassis-schema artifacts excluded)"
+                if skipped else "")
     print(f"  corpus B: {n} committed artifacts, {comp} component votes "
-          f"replay exactly: OK")
+          f"replay exactly{era_note}: OK")
 
 
 def test_compute_regime_edges():
