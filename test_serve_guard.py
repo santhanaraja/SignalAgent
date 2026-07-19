@@ -486,6 +486,37 @@ def test_candidates_page_contract():
           f"+watch prompt, honest constraint; {note}: OK")
 
 
+def test_signal_refresh_chases_framework():
+    """D-017 live-serving law: an engine rewrite strips the candidate
+    annotation (grades must travel with the rows that produced their
+    inputs), so every SUCCESSFUL engine refresh must chase with a
+    framework pass — the CI ordering — or the live chips vanish for the
+    whole refresh interval. A FAILED engine run must NOT kick (nothing
+    new to grade)."""
+    import ticker_api as ta
+    calls = []
+    old_engine, old_kick = ta.run_engine, ta._kick_framework_refresh
+    ta.run_engine = lambda: calls.append("engine")
+    ta._kick_framework_refresh = lambda: calls.append("kick")
+    try:
+        ok, _ = ta._run_signal_refresh()
+        assert ok and calls == ["engine", "kick"], calls
+        calls.clear()
+
+        def boom():
+            calls.append("engine")
+            raise RuntimeError("fetch died")
+        ta.run_engine = boom
+        ok, _ = ta._run_signal_refresh()
+        assert not ok and calls == ["engine"], calls
+    finally:
+        ta.run_engine = old_engine
+        ta._kick_framework_refresh = old_kick
+        ta._refresh_status["running"] = False
+    print("  D-017 refresh chase: engine success -> framework kick, "
+          "engine failure -> no kick: OK")
+
+
 def test_missing_file_still_404():
     env = _Env()
     try:
@@ -508,5 +539,6 @@ if __name__ == "__main__":
     test_layer2_ticker_expansion_contract()
     test_layer2_enrichment_shared_renderers()
     test_candidates_page_contract()
+    test_signal_refresh_chases_framework()
     test_missing_file_still_404()
     print("\nAll serve-guard tests passed.\n")

@@ -1071,6 +1071,14 @@ def _run_signal_refresh():
             _refresh_status["running"] = False
             # Clear ticker cache so individual lookups also get fresh data
             _cache.clear()
+            # D-017: the engine rewrite just produced a signals.json whose
+            # rows carry fresh grade_inputs but NO candidate annotation —
+            # chase it with a framework pass (the same engine->framework
+            # ordering CI uses) so the candidate chips re-grade against
+            # the fresh rows instead of honestly vanishing for the whole
+            # refresh interval. Fire-and-forget; its own running guard
+            # dedupes overlapping kicks.
+            _kick_framework_refresh()
             print(f"  REFRESH COMPLETED in {duration:.1f}s")
             return True, f"Refresh completed in {duration:.1f}s"
         except Exception as e:
