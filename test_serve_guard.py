@@ -337,6 +337,74 @@ def test_layer2_ticker_expansion_contract():
           f"map to the 6 dashboard chips: OK")
 
 
+def test_layer2_enrichment_shared_renderers():
+    """Layer-2 sub-row enrichment: tracked names inline the watchlist row's
+    components via the SAME renderers the Position Signals panel uses.
+    Source-structure pin: the enriched row must CALL psBadge/psGrade/psPips/
+    psExt, and the page must define each renderer exactly ONCE — a copied
+    or forked renderer is a test failure (Lab-law spirit: one implementation).
+    Plus the join contract on artifacts: every assessment-tracked ticker
+    carries the fields the enrichment renders, and the both-direction join
+    stays additive (tracked-not-in-signals resolvable via the row's group)."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    html = open(os.path.join(here, "public", "framework.html")).read()
+
+    # exactly one definition of each shared renderer
+    for fn in ("psBadge", "psGrade", "psPips", "psExt"):
+        assert html.count(f"function {fn}(") == 1, \
+            f"{fn} defined {html.count(f'function {fn}(')} times — fork!"
+    # the enriched sub-row calls all four (no inline re-implementations)
+    tick_row = html[html.index("function gl2TickRow"):
+                    html.index("async function gl2Fill")]
+    for fn in ("psBadge(", "psGrade(", "psPips(", "psExt("):
+        assert fn in tick_row, f"gl2TickRow does not call {fn}"
+    # no duplicate pip/chip drawing inside the sub-row template
+    assert "class=\"pip" not in tick_row, "inline pip markup — use psPips"
+    assert "ps-grade-" not in tick_row, "inline grade markup — use psGrade"
+    # the join sources: gl2Fill reads ASSESS-tracked rows + signals stocks,
+    # additive both directions
+    fill = html[html.index("async function gl2Fill"):
+                html.index("function gl2Toggle")]
+    assert "gl2Tracked()" in fill and "extras" in fill
+    assert "x.group===groupName" in fill, "tracked-not-in-signals join leg"
+
+    # artifact contract: tracked watchers carry what the enrichment renders
+    fw_path = os.path.join(here, "public", "framework.json")
+    fw = json.load(open(fw_path))
+    rows = (fw.get("position_signals") or {}).get("tickers") or {}
+    watchers = {t: x for t, x in rows.items()
+                if isinstance(x, dict) and x.get("kind") == "watching"
+                and not x.get("insufficient_data")}
+    assert watchers, "no watchers in artifact"
+    graded = any(isinstance(x.get("grade"), dict) for x in watchers.values())
+    for t, x in watchers.items():
+        assert x.get("state"), t
+        assert isinstance(x.get("conditions"), dict) and \
+            "5_thesis" in x["conditions"], t
+        assert "extension_atr" in x, t
+        if graded:
+            # post-Phase-1 artifact: every watcher must be graded + grouped
+            assert isinstance(x.get("grade"), dict) and \
+                x["grade"].get("grade"), t
+            assert "group" in x, t
+    if not graded:
+        # pre-Phase-1 committed artifact (before the first post-ship cron):
+        # the strict grade/group assertions activate with the next artifact
+        print("  (note: artifact predates Phase 1 — grade/group assertions "
+              "activate on the next committed run)")
+    # the ruled exhibit, asserted when present (self-activates once the
+    # artifact includes the 2026-07-18 adds): CRWD tracked with a grade
+    if "CRWD" in watchers:
+        c = watchers["CRWD"]
+        assert c["grade"]["grade"] in ("A+", "B", "C")
+        note = f"CRWD tracked: {c['state']} [{c['grade']['grade']}]"
+    else:
+        note = "CRWD not yet in this artifact (activates after next run)"
+    print(f"  Layer-2 enrichment: renderers defined once + all four called, "
+          f"join legs present, {len(watchers)} watchers field-complete; "
+          f"{note}: OK")
+
+
 def test_missing_file_still_404():
     env = _Env()
     try:
@@ -357,5 +425,6 @@ if __name__ == "__main__":
     test_chassis_artifact_stale_under_parliament()
     test_universe_leadership_block()
     test_layer2_ticker_expansion_contract()
+    test_layer2_enrichment_shared_renderers()
     test_missing_file_still_404()
     print("\nAll serve-guard tests passed.\n")

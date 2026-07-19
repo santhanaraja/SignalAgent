@@ -952,20 +952,37 @@ function gl2TsClass(ts){            // the dashboard's exact chip mapping
   return 'ts-hold';
 }
 function gl2ScoreColor(s){return s>=70?'var(--green)':s>=55?'var(--yellow)':'var(--red)';}
-function gl2TickRow(s){
+function gl2Tracked(){
+  // ticker -> assessment positions row (watchlist + holdings) — the SAME
+  // block the Position Signals panel renders from
+  const out={};
+  if(ASSESS&&ASSESS.positions&&!ASSESS.positions.error){
+    for(const [t,x] of Object.entries(ASSESS.positions)){
+      if(x&&(x.kind==='watching'||x.kind==='holding')) out[t]=x;
+    }
+  }
+  return out;
+}
+function gl2TickRow(s,tracked){
   const vs=(s.price!=null&&s.ma20)?((s.price-s.ma20)/s.ma20*100):null;
   const vsTxt=vs==null?'—':`${vs>0?'+':''}${vs.toFixed(1)}%`;
   const vsCol=vs==null?'var(--dim)':vs>=0?'var(--green)':'var(--red)';
+  // Tracked names inline the watchlist row's components via the EXACT
+  // same renderers the Position Signals panel uses (psBadge/psGrade/
+  // psPips/psExt — shared functions, never copies; pinned by test).
+  // Un-tracked rows are unchanged: no fake grades, no empty pip shells.
   // SEAM (do not build yet): when the Candidates feature is ruled, the
-  // D-011 A+ grade chip slots here, after the trade-signal chip:
-  //   ${s.grade?psGrade(s.grade):''}
-  return `<div class="gl2-tick">
+  // D-011 A+ grade chip for UN-tracked names slots here, after the
+  // trade-signal chip:  ${s.grade?psGrade(s.grade):''}
+  const tr=tracked?`<span class="gl2-break"></span>${psBadge(tracked.state,tracked.grade_gate)}${psGrade(tracked.grade)}<span title="The 5 re-entry conditions">${psPips(tracked.conditions)}</span>${psExt(tracked)}`:'';
+  return `<div class="gl2-tick${tracked?' gl2-tracked':''}">
     <span class="gl2-sym">${s.ticker}</span>
-    <span class="gl2-score" style="color:${gl2ScoreColor(s.score)}">${s.score!=null?s.score:'—'}</span>
-    <span class="ts-badge ${gl2TsClass(s.trade_signal)}">${s.trade_signal||'—'}</span>
+    ${s.score!=null?`<span class="gl2-score" style="color:${gl2ScoreColor(s.score)}">${s.score}</span>`:''}
+    ${s.trade_signal?`<span class="ts-badge ${gl2TsClass(s.trade_signal)}">${s.trade_signal}</span>`:''}
+    ${tr}
     <span class="gl2-break"></span>
     <span class="gl2-num" title="price vs SMA20">$${s.price!=null?s.price.toFixed(2):'—'} <b style="color:${vsCol}">${vsTxt}</b> vs SMA20</span>
-    <span class="gl2-num" title="RSI-14">RSI ${s.rsi!=null?s.rsi.toFixed(0):'—'}</span>
+    ${s.rsi!=null?`<span class="gl2-num" title="RSI-14">RSI ${s.rsi.toFixed(0)}</span>`:''}
   </div>`;
 }
 async function gl2Fill(rid,groupName){
@@ -975,14 +992,25 @@ async function gl2Fill(rid,groupName){
   const sig=await gl2Signals();
   const grp=((sig&&sig.groups)||[]).find(g=>g.name===groupName);
   const stocks=grp&&Array.isArray(grp.stocks)?grp.stocks:[];
+  const tracked=gl2Tracked();
+  // additive both directions: a tracked name in THIS group but absent
+  // from signals.json still renders its watchlist components (close/
+  // SMA20 from the assessment row; no fake score/signal chips)
+  const inSignals=new Set(stocks.map(s=>s.ticker));
+  const extras=Object.entries(tracked)
+    .filter(([t,x])=>x.group===groupName&&!inSignals.has(t))
+    .map(([t,x])=>({ticker:t,score:null,trade_signal:null,
+                    price:x.close!=null?x.close:null,
+                    ma20:x.sma20!=null?x.sma20:null,rsi:null}));
   cell.dataset.filled='1';
-  if(!stocks.length){
+  if(!stocks.length&&!extras.length){
     // honest gap — never an empty silent expansion (a group can be in
     // the rotated universe before the next signals.json run covers it)
     cell.innerHTML='<div class="gl2-note">tickers unavailable this run (signals.json has no rows for this group yet)</div>';
     return;
   }
-  cell.innerHTML=stocks.map(gl2TickRow).join('');
+  cell.innerHTML=stocks.concat(extras)
+    .map(s=>gl2TickRow(s,tracked[s.ticker]||null)).join('');
 }
 function gl2Toggle(rid,groupName){
   const sub=document.getElementById(rid);
