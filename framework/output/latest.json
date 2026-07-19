@@ -1,16 +1,61 @@
 {
-  "generated_at": "2026-07-17T21:51:41.308362+00:00",
-  "schema": "regime-1a-3voter",
+  "generated_at": "2026-07-19T12:57:49.862365+00:00",
+  "schema": "regime-b-chassis",
   "framework_version": "1.0",
   "regime": {
-    "date": "2026-07-17",
+    "date": "2026-07-19",
     "regime": "Risk-on / Trending",
     "regime_color": "#3fb950",
+    "engine": "chassis",
+    "chassis": {
+      "engine": "chassis",
+      "raw_state": "In-Trend-Full",
+      "confirmed_state": "In-Trend-Full",
+      "regime": "Risk-on / Trending",
+      "exposure_ceiling_pct": 90.0,
+      "trend_in": true,
+      "trend_pct": 7.19,
+      "throttles": {
+        "vix": {
+          "firing": false,
+          "value": 16.97,
+          "cut": 22.0
+        },
+        "hy": {
+          "firing": false,
+          "pctile": 78.3,
+          "cut": 90.0,
+          "basis": "hyg_ief_inverted_pctile"
+        },
+        "breadth": {
+          "firing": false,
+          "value": 0.57,
+          "cut": -0.5
+        }
+      },
+      "throttles_firing": 0,
+      "hysteresis": {
+        "up": 0,
+        "down": 0,
+        "n": 2,
+        "mode": "asymmetric"
+      },
+      "replay": {
+        "days_used": 60,
+        "window": 60,
+        "start": "2026-04-22",
+        "end": "2026-07-17"
+      },
+      "hy_basis": "hyg_ief_inverted_pctile",
+      "hy_pctile": 78.3,
+      "degraded": true,
+      "degraded_reason": "hy_fallback_basis"
+    },
     "gauges": {
       "vix_5d_avg": {
-        "value": 16.97,
+        "value": 17.29,
         "signal": "risk_on",
-        "detail": "VIX 5d avg 17.0 (spot 18.8)",
+        "detail": "VIX 5d avg 17.3 (spot 18.8)",
         "spot": 18.77
       },
       "hy_spread": {
@@ -21,22 +66,22 @@
         "percentile": 78.3
       },
       "breadth": {
-        "value": 0.57,
-        "signal": "risk_on",
-        "detail": "RSP/SPY ratio change: +0.57% (20d) \u2014 breadth broadening",
+        "value": 0.45,
+        "signal": "caution",
+        "detail": "RSP/SPY ratio change: +0.45% (20d) \u2014 breadth broadening",
         "source": "RSP/SPY fallback"
       }
     },
     "backdrop_gate": {
       "gauge": "spy_vs_200dma",
-      "role": "backdrop_gate",
+      "role": "trend_chassis",
       "open": true,
       "capped": false,
       "reason": null,
-      "value": 7.19,
-      "detail": "SPY $743.29 vs 200DMA $693.44 (+7.2%)",
+      "value": 7.13,
+      "detail": "SPY $743.29 vs 200DMA $693.85 (+7.1%)",
       "price": 743.29,
-      "ma200": 693.44
+      "ma200": 693.85
     },
     "macro_inputs": {
       "yield_curve": {
@@ -51,8 +96,8 @@
         "role": "macro_input"
       }
     },
-    "risk_on_count": 3,
-    "caution_count": 0,
+    "risk_on_count": 2,
+    "caution_count": 1,
     "risk_off_count": 0,
     "unavailable_count": 0,
     "regime_change_pending": false,
@@ -64,92 +109,92 @@
     "action": "Full deployment. Aggressive sleeve active. New themes considered."
   },
   "themes": {
-    "date": "2026-07-17",
+    "date": "2026-07-19",
     "ranked_themes": [
       {
-        "return_4w": 9.73,
-        "return_12w": 12.45,
-        "composite": 1.5,
+        "return_4w": 5.76,
+        "return_12w": 14.81,
+        "composite": 2.0,
         "current_price": 154.26,
-        "detail": "XBI: 4w +9.7%, 12w +12.5%",
+        "detail": "XBI: 4w +5.8%, 12w +14.8%",
         "name": "Biotech",
         "proxy": "XBI",
-        "rank_4w": 1,
+        "rank_4w": 2,
         "rank_12w": 2,
         "rank": 1,
         "consecutive_top_n_weeks": 4
       },
       {
-        "return_4w": 8.05,
-        "return_12w": 2.75,
-        "composite": 4.0,
+        "return_4w": 6.7,
+        "return_12w": 1.96,
+        "composite": 3.5,
         "current_price": 57.68,
-        "detail": "XLE: 4w +8.0%, 12w +2.8%",
+        "detail": "XLE: 4w +6.7%, 12w +2.0%",
         "name": "Energy",
         "proxy": "XLE",
-        "rank_4w": 2,
+        "rank_4w": 1,
         "rank_12w": 6,
         "rank": 2,
         "consecutive_top_n_weeks": 1
       },
       {
-        "return_4w": -15.66,
-        "return_12w": 16.71,
+        "return_4w": -12.51,
+        "return_12w": 9.7,
         "composite": 4.5,
-        "current_price": 556.53,
-        "detail": "SMH: 4w -15.7%, 12w +16.7%",
-        "name": "Semis",
-        "proxy": "SMH",
-        "rank_4w": 8,
-        "rank_12w": 1,
+        "current_price": 58.7,
+        "detail": "AIQ: 4w -12.5%, 12w +9.7%",
+        "name": "AI Broad",
+        "proxy": "AIQ",
+        "rank_4w": 6,
+        "rank_12w": 3,
         "rank": 3,
         "consecutive_top_n_weeks": 0
       },
       {
-        "return_4w": -3.46,
-        "return_12w": 5.36,
+        "return_4w": -16.8,
+        "return_12w": 15.5,
         "composite": 4.5,
-        "current_price": 230.73,
-        "detail": "ITA: 4w -3.5%, 12w +5.4%",
-        "name": "Defense",
-        "proxy": "ITA",
-        "rank_4w": 4,
-        "rank_12w": 5,
+        "current_price": 556.53,
+        "detail": "SMH: 4w -16.8%, 12w +15.5%",
+        "name": "Semis",
+        "proxy": "SMH",
+        "rank_4w": 8,
+        "rank_12w": 1,
         "rank": 4,
         "consecutive_top_n_weeks": 0
       },
       {
-        "return_4w": -12.13,
-        "return_12w": 6.79,
-        "composite": 5.0,
-        "current_price": 58.7,
-        "detail": "AIQ: 4w -12.1%, 12w +6.8%",
-        "name": "AI Broad",
-        "proxy": "AIQ",
-        "rank_4w": 6,
-        "rank_12w": 4,
+        "return_4w": -2.03,
+        "return_12w": 5.38,
+        "composite": 4.5,
+        "current_price": 230.73,
+        "detail": "ITA: 4w -2.0%, 12w +5.4%",
+        "name": "Defense",
+        "proxy": "ITA",
+        "rank_4w": 4,
+        "rank_12w": 5,
         "rank": 5,
         "consecutive_top_n_weeks": 0
       },
       {
-        "return_4w": -15.51,
-        "return_12w": 8.96,
-        "composite": 5.0,
+        "return_4w": -15.82,
+        "return_12w": 9.38,
+        "composite": 5.5,
         "current_price": 141.69,
-        "detail": "QTUM: 4w -15.5%, 12w +9.0%",
+        "detail": "QTUM: 4w -15.8%, 12w +9.4%",
         "name": "Quantum",
         "proxy": "QTUM",
         "rank_4w": 7,
-        "rank_12w": 3,
+        "rank_12w": 4,
         "rank": 6,
         "consecutive_top_n_weeks": 0
       },
       {
-        "return_4w": 2.05,
-        "return_12w": -18.77,
+        "return_4w": -0.41,
+        "return_12w": -17.48,
         "composite": 5.5,
         "current_price": 36.35,
-        "detail": "IBIT: 4w +2.0%, 12w -18.8%",
+        "detail": "IBIT: 4w -0.4%, 12w -17.5%",
         "name": "Crypto",
         "proxy": "IBIT",
         "rank_4w": 3,
@@ -158,11 +203,11 @@
         "consecutive_top_n_weeks": 0
       },
       {
-        "return_4w": -4.83,
-        "return_12w": -15.36,
+        "return_4w": -4.21,
+        "return_12w": -14.53,
         "composite": 6.0,
         "current_price": 368.41,
-        "detail": "GLD: 4w -4.8%, 12w -15.4%",
+        "detail": "GLD: 4w -4.2%, 12w -14.5%",
         "name": "Gold",
         "proxy": "GLD",
         "rank_4w": 5,
@@ -181,7 +226,16 @@
         "requires_discretionary_review": false
       }
     ],
-    "exit_signals": [],
+    "exit_signals": [
+      {
+        "theme": "Semis",
+        "proxy": "SMH",
+        "rank": 4,
+        "consecutive_weeks_below": 1,
+        "action": "Warning \u2014 1/3 weeks below #3",
+        "reason": "rank_warning"
+      }
+    ],
     "active_themes": [
       "Semis",
       "Biotech"
@@ -193,6 +247,158 @@
       "Max total themes: 25% of book"
     ]
   },
+  "universe_leadership": [
+    {
+      "name": "Systems Software",
+      "rank": 1,
+      "composite": 68.35,
+      "median_ytd": 79.09,
+      "sector": "Information Technology",
+      "tickers": 4,
+      "weeks_in_universe": null,
+      "breaker_status": "clear"
+    },
+    {
+      "name": "Oil & Gas Refining & Marketing",
+      "rank": 2,
+      "composite": 61.38,
+      "median_ytd": 89.36,
+      "sector": "Energy",
+      "tickers": 3,
+      "weeks_in_universe": null,
+      "breaker_status": "clear"
+    },
+    {
+      "name": "Technology Hardware, Storage & Peripherals",
+      "rank": 4,
+      "composite": 57.79,
+      "median_ytd": 91.35,
+      "sector": "Information Technology",
+      "tickers": 4,
+      "weeks_in_universe": null,
+      "breaker_status": "clear"
+    },
+    {
+      "name": "Managed Health Care",
+      "rank": 5,
+      "composite": 37.37,
+      "median_ytd": 40.38,
+      "sector": "Health Care",
+      "tickers": 3,
+      "weeks_in_universe": null,
+      "breaker_status": "clear"
+    },
+    {
+      "name": "Semiconductor Materials & Equipment",
+      "rank": 6,
+      "composite": 37.24,
+      "median_ytd": 68.72,
+      "sector": "Information Technology",
+      "tickers": 2,
+      "weeks_in_universe": null,
+      "breaker_status": "clear"
+    },
+    {
+      "name": "Cargo Ground Transportation",
+      "rank": 8,
+      "composite": 28.49,
+      "median_ytd": 47.97,
+      "sector": "Industrials",
+      "tickers": 2,
+      "weeks_in_universe": null,
+      "breaker_status": "clear"
+    },
+    {
+      "name": "Communications Equipment",
+      "rank": 10,
+      "composite": 26.95,
+      "median_ytd": 52.16,
+      "sector": "Information Technology",
+      "tickers": 3,
+      "weeks_in_universe": null,
+      "breaker_status": "clear"
+    },
+    {
+      "name": "Health Care REITs",
+      "rank": 15,
+      "composite": 23.08,
+      "median_ytd": 31.03,
+      "sector": "Real Estate",
+      "tickers": 3,
+      "weeks_in_universe": null,
+      "breaker_status": "clear"
+    },
+    {
+      "name": "Rail Transportation",
+      "rank": 16,
+      "composite": 22.88,
+      "median_ytd": 31.47,
+      "sector": "Industrials",
+      "tickers": 3,
+      "weeks_in_universe": null,
+      "breaker_status": "clear"
+    },
+    {
+      "name": "Semiconductors",
+      "rank": 18,
+      "composite": 21.88,
+      "median_ytd": 39.28,
+      "sector": "Information Technology",
+      "tickers": 4,
+      "weeks_in_universe": null,
+      "breaker_status": "warning"
+    },
+    {
+      "name": "Fertilizers & Agricultural Chemicals",
+      "rank": 20,
+      "composite": 19.88,
+      "median_ytd": 29.42,
+      "sector": "Materials",
+      "tickers": 3,
+      "weeks_in_universe": null,
+      "breaker_status": "clear"
+    },
+    {
+      "name": "Construction & Engineering",
+      "rank": 21,
+      "composite": 19.43,
+      "median_ytd": 43.0,
+      "sector": "Industrials",
+      "tickers": 1,
+      "weeks_in_universe": null,
+      "breaker_status": "critical"
+    },
+    {
+      "name": "Air Freight & Logistics",
+      "rank": 22,
+      "composite": 18.1,
+      "median_ytd": 24.6,
+      "sector": "Industrials",
+      "tickers": 3,
+      "weeks_in_universe": null,
+      "breaker_status": "clear"
+    },
+    {
+      "name": "Regional Banks",
+      "rank": 23,
+      "composite": 17.43,
+      "median_ytd": 23.56,
+      "sector": "Financials",
+      "tickers": 7,
+      "weeks_in_universe": null,
+      "breaker_status": "clear"
+    },
+    {
+      "name": "Retail REITs",
+      "rank": 24,
+      "composite": 17.27,
+      "median_ytd": 27.13,
+      "sector": "Real Estate",
+      "tickers": 5,
+      "weeks_in_universe": null,
+      "breaker_status": "clear"
+    }
+  ],
   "theme_leaders": {
     "AI Broad": {
       "qualified": false,
@@ -200,28 +406,28 @@
         {
           "ticker": "META",
           "current_price": 646.01,
-          "return_4w": 11.92,
-          "return_12w": -4.17,
+          "return_4w": 14.57,
+          "return_12w": -1.9,
           "composite_rank": 1,
           "rsi_14": 57,
           "warnings": []
         },
         {
-          "ticker": "NVDA",
-          "current_price": 202.81,
-          "return_4w": -3.74,
-          "return_12w": 0.27,
+          "ticker": "GOOGL",
+          "current_price": 346.77,
+          "return_4w": -0.83,
+          "return_12w": 2.39,
           "composite_rank": 2,
-          "rsi_14": 48,
+          "rsi_14": 42,
           "warnings": []
         },
         {
-          "ticker": "MSFT",
-          "current_price": 393.82,
-          "return_4w": 3.8,
-          "return_12w": -8.83,
+          "ticker": "NVDA",
+          "current_price": 202.81,
+          "return_4w": -2.8,
+          "return_12w": 1.71,
           "composite_rank": 3,
-          "rsi_14": 52,
+          "rsi_14": 48,
           "warnings": []
         }
       ]
@@ -232,8 +438,8 @@
         {
           "ticker": "AMD",
           "current_price": 495.76,
-          "return_4w": -7.74,
-          "return_12w": 63.37,
+          "return_4w": -10.13,
+          "return_12w": 62.37,
           "composite_rank": 1,
           "rsi_14": 46,
           "warnings": []
@@ -241,8 +447,8 @@
         {
           "ticker": "MU",
           "current_price": 848.95,
-          "return_4w": -25.12,
-          "return_12w": 74.18,
+          "return_4w": -29.91,
+          "return_12w": 76.26,
           "composite_rank": 2,
           "rsi_14": 41,
           "warnings": []
@@ -250,8 +456,8 @@
         {
           "ticker": "NVDA",
           "current_price": 202.81,
-          "return_4w": -3.74,
-          "return_12w": 0.27,
+          "return_4w": -2.8,
+          "return_12w": 1.71,
           "composite_rank": 3,
           "rsi_14": 48,
           "warnings": []
@@ -264,8 +470,8 @@
         {
           "ticker": "GOOGL",
           "current_price": 346.77,
-          "return_4w": -5.78,
-          "return_12w": 2.26,
+          "return_4w": -0.83,
+          "return_12w": 2.39,
           "composite_rank": 1,
           "rsi_14": 42,
           "warnings": []
@@ -273,8 +479,8 @@
         {
           "ticker": "IBM",
           "current_price": 212.67,
-          "return_4w": -14.62,
-          "return_12w": -14.94,
+          "return_4w": -15.68,
+          "return_12w": -7.29,
           "composite_rank": 2,
           "rsi_14": 31,
           "warnings": []
@@ -282,8 +488,8 @@
         {
           "ticker": "QBTS",
           "current_price": 16.73,
-          "return_4w": -32.24,
-          "return_12w": -21.23,
+          "return_4w": -31.63,
+          "return_12w": -13.36,
           "composite_rank": 3,
           "rsi_14": 31,
           "warnings": []
@@ -296,8 +502,8 @@
         {
           "ticker": "MPC",
           "current_price": 312.6,
-          "return_4w": 28.69,
-          "return_12w": 41.3,
+          "return_4w": 26.41,
+          "return_12w": 41.92,
           "composite_rank": 1,
           "rsi_14": 78,
           "warnings": [
@@ -308,8 +514,8 @@
         {
           "ticker": "CVX",
           "current_price": 187.38,
-          "return_4w": 7.92,
-          "return_12w": 1.49,
+          "return_4w": 7.04,
+          "return_12w": 0.8,
           "composite_rank": 2,
           "rsi_14": 64,
           "warnings": []
@@ -317,10 +523,10 @@
         {
           "ticker": "EOG",
           "current_price": 139.89,
-          "return_4w": 7.62,
-          "return_12w": 5.17,
+          "return_4w": 6.1,
+          "return_12w": 5.27,
           "composite_rank": 3,
-          "rsi_14": 58,
+          "rsi_14": 60,
           "warnings": []
         }
       ]
@@ -331,8 +537,8 @@
         {
           "ticker": "GOLD",
           "current_price": 38.31,
-          "return_4w": -9.33,
-          "return_12w": -18.54,
+          "return_4w": -8.37,
+          "return_12w": -17.9,
           "composite_rank": 1,
           "rsi_14": 39,
           "warnings": []
@@ -340,8 +546,8 @@
         {
           "ticker": "FNV",
           "current_price": 200.77,
-          "return_4w": -8.43,
-          "return_12w": -18.66,
+          "return_4w": -9.04,
+          "return_12w": -17.56,
           "composite_rank": 2,
           "rsi_14": 40,
           "warnings": []
@@ -349,8 +555,8 @@
         {
           "ticker": "NEM",
           "current_price": 89.7,
-          "return_4w": -13.58,
-          "return_12w": -19.62,
+          "return_4w": -11.89,
+          "return_12w": -19.04,
           "composite_rank": 3,
           "rsi_14": 37,
           "warnings": []
@@ -363,8 +569,8 @@
         {
           "ticker": "GD",
           "current_price": 368.58,
-          "return_4w": 5.77,
-          "return_12w": 15.42,
+          "return_4w": 7.82,
+          "return_12w": 16.16,
           "composite_rank": 1,
           "rsi_14": 58,
           "warnings": []
@@ -372,19 +578,19 @@
         {
           "ticker": "RTX",
           "current_price": 193.51,
-          "return_4w": 4.26,
-          "return_12w": 7.41,
+          "return_4w": 6.42,
+          "return_12w": 8.37,
           "composite_rank": 2,
           "rsi_14": 55,
           "warnings": []
         },
         {
-          "ticker": "LMT",
-          "current_price": 508.77,
-          "return_4w": -0.43,
-          "return_12w": -7.8,
+          "ticker": "PLTR",
+          "current_price": 132.38,
+          "return_4w": 10.78,
+          "return_12w": -6.49,
           "composite_rank": 3,
-          "rsi_14": 44,
+          "rsi_14": 53,
           "warnings": []
         }
       ]
@@ -395,8 +601,8 @@
         {
           "ticker": "CLSK",
           "current_price": 13.03,
-          "return_4w": -24.42,
-          "return_12w": 6.72,
+          "return_4w": -25.33,
+          "return_12w": 6.54,
           "composite_rank": 1,
           "rsi_14": 43,
           "warnings": []
@@ -404,8 +610,8 @@
         {
           "ticker": "COIN",
           "current_price": 157.12,
-          "return_4w": -3.76,
-          "return_12w": -23.82,
+          "return_4w": -4.68,
+          "return_12w": -20.62,
           "composite_rank": 2,
           "rsi_14": 46,
           "warnings": []
@@ -413,8 +619,8 @@
         {
           "ticker": "MSTR",
           "current_price": 94.85,
-          "return_4w": -15.71,
-          "return_12w": -47.12,
+          "return_4w": -13.35,
+          "return_12w": -45.0,
           "composite_rank": 3,
           "rsi_14": 40,
           "warnings": []
@@ -425,37 +631,37 @@
       "qualified": true,
       "leaders": [
         {
+          "ticker": "MRNA",
+          "current_price": 61.82,
+          "return_4w": 4.17,
+          "return_12w": 16.97,
+          "composite_rank": 1,
+          "rsi_14": 46,
+          "warnings": []
+        },
+        {
           "ticker": "VRTX",
           "current_price": 485.65,
-          "return_4w": 7.53,
-          "return_12w": 10.96,
-          "composite_rank": 1,
+          "return_4w": 4.04,
+          "return_12w": 11.62,
+          "composite_rank": 2,
           "rsi_14": 53,
           "warnings": []
         },
         {
           "ticker": "REGN",
           "current_price": 676.69,
-          "return_4w": 10.94,
-          "return_12w": -9.23,
-          "composite_rank": 2,
-          "rsi_14": 62,
-          "warnings": []
-        },
-        {
-          "ticker": "MRNA",
-          "current_price": 61.82,
-          "return_4w": -3.35,
-          "return_12w": 11.19,
+          "return_4w": 10.48,
+          "return_12w": -11.53,
           "composite_rank": 3,
-          "rsi_14": 46,
+          "rsi_14": 62,
           "warnings": []
         }
       ]
     }
   },
   "position_signals": {
-    "generated_at": "2026-07-17T21:51:41.301478+00:00",
+    "generated_at": "2026-07-19T12:57:49.861951+00:00",
     "account": "TOS",
     "schema_version": "1.0",
     "regime_state": "Risk-on / Trending",
@@ -489,7 +695,8 @@
           "5_thesis": {
             "name": "thesis",
             "met": true,
-            "detail": "theme 'Biotech' active (weekly qualification)"
+            "detail": "no group mapping ('Biotech') \u2014 thesis gate not applicable",
+            "no_group_mapping": true
           }
         },
         "conditions_met": 2,
@@ -505,18 +712,70 @@
           "close": 74.30000305175781,
           "sma20": 79.56525039672852,
           "sma20_5d_ago": 80.57300033569337,
-          "atr14": 4.0752154758998325,
+          "atr14": 4.080929347446987,
           "consecutive_closes_above": 0,
           "regime_state": "Risk-on / Trending",
-          "theme_qualified": true,
+          "group_in_universe": true,
           "kind": "watching"
+        },
+        "grade": {
+          "grade": "C",
+          "rows": {
+            "1_conditions": {
+              "met": false,
+              "detail": "five mechanical conditions not met"
+            },
+            "2_extension": {
+              "met": true,
+              "detail": "extension -1.2902079150830241\u00d7ATR <= 1.8\u00d7"
+            },
+            "3_approach": {
+              "met": true,
+              "detail": "close 74.30 > SMA5 72.70 with up-close off the low"
+            },
+            "4_rsi": {
+              "met": false,
+              "detail": "RSI 43 outside [45, 70]"
+            },
+            "5_score": {
+              "met": false,
+              "detail": "score 45 < 75"
+            },
+            "6_breaker": {
+              "met": false,
+              "detail": "group breaker unknown (no group data)"
+            },
+            "7_runway": {
+              "met": false,
+              "detail": "13 sessions before the print (< 15)"
+            }
+          },
+          "failing": [
+            "1_conditions",
+            "4_rsi",
+            "5_score",
+            "6_breaker",
+            "7_runway"
+          ],
+          "reasons": "five mechanical conditions not met; RSI 43 outside [45, 70]; score 45 < 75; group breaker unknown (no group data); 13 sessions before the print (< 15)"
+        },
+        "grade_inputs": {
+          "sma5": 72.7030014038086,
+          "up_close_since_swing_low": true,
+          "rsi14": 43.31287139792931,
+          "quality_score": 45,
+          "score_waived": false,
+          "breaker_status": null,
+          "runway_sessions": 13
         },
         "ticker": "ARWR",
         "kind": "watching",
         "theme": "Biotech",
+        "group": null,
+        "weeks_in_universe": null,
         "note": "sold 71 @ 76.40 2026-07-10 MOC \u2014 sma20_close stop fired at 7/9 close; watching for reclaim",
         "next_earnings_date": "2026-08-06",
-        "days_to_earnings": 20
+        "days_to_earnings": 18
       },
       "MRNA": {
         "state": "WATCHING",
@@ -546,11 +805,11 @@
           },
           "5_thesis": {
             "name": "thesis",
-            "met": true,
-            "detail": "theme 'Biotech' active (weekly qualification)"
+            "met": false,
+            "detail": "group 'Biotechnology' not in current universe (top-15)"
           }
         },
-        "conditions_met": 3,
+        "conditions_met": 2,
         "all_conditions_met": false,
         "extension_pct": -9.86,
         "extension_atr": -1.33,
@@ -566,18 +825,314 @@
           "atr14": 5.0768568856375555,
           "consecutive_closes_above": 0,
           "regime_state": "Risk-on / Trending",
-          "theme_qualified": true,
+          "group_in_universe": false,
           "kind": "watching"
+        },
+        "grade": {
+          "grade": "C",
+          "rows": {
+            "1_conditions": {
+              "met": false,
+              "detail": "five mechanical conditions not met"
+            },
+            "2_extension": {
+              "met": true,
+              "detail": "extension -1.331877219081473\u00d7ATR <= 1.8\u00d7"
+            },
+            "3_approach": {
+              "met": false,
+              "detail": "close 61.82 below SMA5 65.54 \u2014 arriving from above"
+            },
+            "4_rsi": {
+              "met": true,
+              "detail": "RSI 46 in [45, 70]"
+            },
+            "5_score": {
+              "met": false,
+              "detail": "score 55 < 75"
+            },
+            "6_breaker": {
+              "met": false,
+              "detail": "group breaker unknown (no group data)"
+            },
+            "7_runway": {
+              "met": false,
+              "detail": "9 sessions before the print (< 15)"
+            }
+          },
+          "failing": [
+            "1_conditions",
+            "3_approach",
+            "5_score",
+            "6_breaker",
+            "7_runway"
+          ],
+          "reasons": "five mechanical conditions not met; close 61.82 below SMA5 65.54 \u2014 arriving from above; score 55 < 75; group breaker unknown (no group data); 9 sessions before the print (< 15)"
+        },
+        "grade_inputs": {
+          "sma5": 65.54000091552734,
+          "up_close_since_swing_low": true,
+          "rsi14": 46.065488361421075,
+          "quality_score": 55,
+          "score_waived": false,
+          "breaker_status": null,
+          "runway_sessions": 9
         },
         "ticker": "MRNA",
         "kind": "watching",
         "theme": "Biotech",
+        "group": "Biotechnology",
+        "weeks_in_universe": null,
         "note": "theme momentum leader +158% YTD; dashboard score 55, outranked",
         "next_earnings_date": "2026-07-31",
-        "days_to_earnings": 14
+        "days_to_earnings": 12
+      },
+      "CRWD": {
+        "state": "RE_ENTRY_READY",
+        "conditions": {
+          "1_trigger": {
+            "name": "trigger",
+            "met": true,
+            "detail": "close 203.08 above SMA20 188.51"
+          },
+          "2_confirmation": {
+            "name": "confirmation",
+            "met": true,
+            "detail": "close 203.08 > SMA20 + 0.5*ATR14 (194.30)",
+            "consecutive_closes_above": 15,
+            "atr14": 11.58
+          },
+          "3_regime_gate": {
+            "met": true,
+            "mode": "full",
+            "detail": "regime Risk-on / Trending \u2014 full clearance",
+            "name": "regime_gate"
+          },
+          "4_slope": {
+            "name": "slope",
+            "met": true,
+            "detail": "SMA20 188.51 vs 5d ago 180.76 (flat/rising)"
+          },
+          "5_thesis": {
+            "name": "thesis",
+            "met": true,
+            "detail": "group 'Systems Software' in universe (top-15)"
+          }
+        },
+        "conditions_met": 5,
+        "all_conditions_met": true,
+        "extension_pct": 7.73,
+        "extension_atr": 1.26,
+        "close": 203.08,
+        "sma5": 202.45,
+        "sma10": 198.29,
+        "sma20": 188.51,
+        "assess_inputs": {
+          "close": 203.0800018310547,
+          "sma20": 188.50612411499023,
+          "sma20_5d_ago": 180.7647491455078,
+          "atr14": 11.582317897251674,
+          "consecutive_closes_above": 15,
+          "regime_state": "Risk-on / Trending",
+          "group_in_universe": true,
+          "kind": "watching"
+        },
+        "grade": {
+          "grade": "A+",
+          "rows": {
+            "1_conditions": {
+              "met": true,
+              "detail": "five mechanical conditions met"
+            },
+            "2_extension": {
+              "met": true,
+              "detail": "extension 1.258286799356685\u00d7ATR <= 1.8\u00d7"
+            },
+            "3_approach": {
+              "met": true,
+              "detail": "close 203.08 > SMA5 202.45 with up-close off the low"
+            },
+            "4_rsi": {
+              "met": true,
+              "detail": "RSI 63 in [45, 70]"
+            },
+            "5_score": {
+              "met": true,
+              "detail": "score 77 >= 75"
+            },
+            "6_breaker": {
+              "met": true,
+              "detail": "group breaker clear"
+            },
+            "7_runway": {
+              "met": true,
+              "detail": "31 sessions before the print (\u2265 15)"
+            }
+          },
+          "failing": [],
+          "reasons": ""
+        },
+        "grade_inputs": {
+          "sma5": 202.45,
+          "up_close_since_swing_low": true,
+          "rsi14": 62.817001669494076,
+          "quality_score": 77,
+          "score_waived": false,
+          "breaker_status": "clear",
+          "runway_sessions": 31
+        },
+        "ticker": "CRWD",
+        "kind": "watching",
+        "theme": null,
+        "group": "Systems Software",
+        "weeks_in_universe": null,
+        "note": "added 2026-07-18 off the Layer-2 GICS view \u2014 Systems Software #1 (breaker clear), score 77 BUY NOW, +7.7% vs SMA20, RSI 63 at add",
+        "next_earnings_date": "2026-09-01",
+        "days_to_earnings": 44
+      },
+      "GEN": {
+        "state": "RE_ENTRY_READY",
+        "conditions": {
+          "1_trigger": {
+            "name": "trigger",
+            "met": true,
+            "detail": "close 26.74 above SMA20 25.43"
+          },
+          "2_confirmation": {
+            "name": "confirmation",
+            "met": true,
+            "detail": "close 26.74 > SMA20 + 0.5*ATR14 (25.87)",
+            "consecutive_closes_above": 14,
+            "atr14": 0.88
+          },
+          "3_regime_gate": {
+            "met": true,
+            "mode": "full",
+            "detail": "regime Risk-on / Trending \u2014 full clearance",
+            "name": "regime_gate"
+          },
+          "4_slope": {
+            "name": "slope",
+            "met": true,
+            "detail": "SMA20 25.43 vs 5d ago 24.84 (flat/rising)"
+          },
+          "5_thesis": {
+            "name": "thesis",
+            "met": true,
+            "detail": "group 'Systems Software' in universe (top-15)"
+          }
+        },
+        "conditions_met": 5,
+        "all_conditions_met": true,
+        "extension_pct": 5.17,
+        "extension_atr": 1.49,
+        "close": 26.74,
+        "sma5": 26.59,
+        "sma10": 26.4,
+        "sma20": 25.43,
+        "assess_inputs": {
+          "close": 26.739999771118164,
+          "sma20": 25.42500009536743,
+          "sma20_5d_ago": 24.83700008392334,
+          "atr14": 0.882857050214495,
+          "consecutive_closes_above": 14,
+          "regime_state": "Risk-on / Trending",
+          "group_in_universe": true,
+          "kind": "watching"
+        },
+        "grade": {
+          "grade": "B",
+          "rows": {
+            "1_conditions": {
+              "met": true,
+              "detail": "five mechanical conditions met"
+            },
+            "2_extension": {
+              "met": true,
+              "detail": "extension 1.4894819896734668\u00d7ATR <= 1.8\u00d7"
+            },
+            "3_approach": {
+              "met": true,
+              "detail": "close 26.74 > SMA5 26.59 with up-close off the low"
+            },
+            "4_rsi": {
+              "met": true,
+              "detail": "RSI 61 in [45, 70]"
+            },
+            "5_score": {
+              "met": false,
+              "detail": "score 72 < 75"
+            },
+            "6_breaker": {
+              "met": true,
+              "detail": "group breaker clear"
+            },
+            "7_runway": {
+              "met": false,
+              "detail": "13 sessions before the print (< 15)"
+            }
+          },
+          "failing": [
+            "5_score",
+            "7_runway"
+          ],
+          "reasons": "score 72 < 75; 13 sessions before the print (< 15)"
+        },
+        "grade_inputs": {
+          "sma5": 26.586000061035158,
+          "up_close_since_swing_low": true,
+          "rsi14": 61.39974353702065,
+          "quality_score": 72,
+          "score_waived": false,
+          "breaker_status": "clear",
+          "runway_sessions": 13
+        },
+        "ticker": "GEN",
+        "kind": "watching",
+        "theme": null,
+        "group": "Systems Software",
+        "weeks_in_universe": null,
+        "note": "added 2026-07-18 off the Layer-2 GICS view \u2014 Systems Software #1 (breaker clear), score 72 BUY NOW, +5.2% vs SMA20, RSI 61 at add",
+        "next_earnings_date": "2026-08-06",
+        "days_to_earnings": 18
       }
     },
-    "transitions": []
+    "transitions": [
+      {
+        "timestamp": "2026-07-19T12:57:49.672371+00:00",
+        "type": "position_state_change",
+        "severity": "high",
+        "group": "Systems Software",
+        "ticker": "CRWD",
+        "description": "CRWD: untracked \u2192 RE_ENTRY_READY",
+        "detail": {
+          "from_state": null,
+          "to_state": "RE_ENTRY_READY",
+          "close": 203.08,
+          "sma20": 188.51,
+          "extension_pct": 7.73,
+          "extension_atr": 1.26,
+          "conditions_met": "5/5"
+        }
+      },
+      {
+        "timestamp": "2026-07-19T12:57:49.859403+00:00",
+        "type": "position_state_change",
+        "severity": "high",
+        "group": "Systems Software",
+        "ticker": "GEN",
+        "description": "GEN: untracked \u2192 RE_ENTRY_READY",
+        "detail": {
+          "from_state": null,
+          "to_state": "RE_ENTRY_READY",
+          "close": 26.74,
+          "sma20": 25.43,
+          "extension_pct": 5.17,
+          "extension_atr": 1.49,
+          "conditions_met": "5/5"
+        }
+      }
+    ]
   },
   "r28": {
     "status": "ok",
@@ -612,13 +1167,13 @@
     }
   },
   "rules": {
-    "date": "2026-07-17",
+    "date": "2026-07-19",
     "evaluations": [
       {
         "rule": "R1",
         "text": "Weekly Sunday review (regime + themes). Do not skip.",
-        "status": "compliant",
-        "message": "Not Sunday. Next review on Sunday."
+        "status": "action_needed",
+        "message": "Today is Sunday \u2014 weekly review required. Complete regime + theme analysis."
       },
       {
         "rule": "R2",
@@ -636,33 +1191,34 @@
         "rule": "R4",
         "text": "Theme exits when below #3 for 3 consecutive Sundays OR regime degrades to Caution/Risk-off.",
         "status": "compliant",
-        "message": "2 active theme(s) monitored \u2014 no exit conditions triggered."
+        "message": "Exit warnings: Semis (Warning \u2014 1/3 weeks below #3)."
       },
       {
         "rule": "R5",
         "text": "Maximum 2 themes active. Cash is the default.",
         "status": "compliant",
-        "message": "2/2 active themes. Cash is the default."
+        "superseded_by": "R28",
+        "message": "Superseded \u2192 R28 per-group caps: \u226420% / \u22643 positions per GICS group (computed, Layer 3). Concentration is enforced in dollars, not theme counts (D-007)."
       },
       {
         "rule": "R6",
         "text": "Define invalidation before entry. Written down. Close-based.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Define invalidation before entry. Written down. Close-based.",
+        "status": "compliant",
+        "message": "No active positions. Define invalidation before entry. Written down. Close-based.",
         "category": "invalidation"
       },
       {
         "rule": "R7",
         "text": "Size from risk-to-stop, not gut, not conviction, not max premium.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Size from risk-to-stop, not gut, not conviction, not max premium.",
+        "status": "compliant",
+        "message": "No active positions. Size from risk-to-stop, not gut, not conviction, not max premium.",
         "category": "sizing"
       },
       {
         "rule": "R8",
         "text": "No naked momentum exposure through binary catalysts.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. No naked momentum exposure through binary catalysts.",
+        "status": "compliant",
+        "message": "No active positions. No naked momentum exposure through binary catalysts.",
         "category": "binary_catalyst"
       },
       {
@@ -675,29 +1231,29 @@
       {
         "rule": "R10",
         "text": "Stop moves UP only. Never lower a stop in adversity.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Stop moves UP only. Never lower a stop in adversity.",
+        "status": "compliant",
+        "message": "No active positions. Stop moves UP only. Never lower a stop in adversity.",
         "category": "stop_management"
       },
       {
         "rule": "R11",
         "text": "Decisions on the exit-timeframe CLOSE, never on intraday wicks.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Decisions on the exit-timeframe CLOSE, never on intraday wicks.",
+        "status": "compliant",
+        "message": "No active positions. Decisions on the exit-timeframe CLOSE, never on intraday wicks.",
         "category": "close_based"
       },
       {
         "rule": "R12",
         "text": "Exit timeframe must be slower than entry timeframe.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Exit timeframe must be slower than entry timeframe.",
+        "status": "compliant",
+        "message": "No active positions. Exit timeframe must be slower than entry timeframe.",
         "category": "timeframe"
       },
       {
         "rule": "R13",
         "text": "Never override a fired stop.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Never override a fired stop.",
+        "status": "compliant",
+        "message": "No active positions. Never override a fired stop.",
         "category": "stop_override"
       },
       {
@@ -710,8 +1266,8 @@
       {
         "rule": "R15",
         "text": "Maximum single-position size: 5-8% of relevant account's capital.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Maximum single-position size: 5-8% of relevant account's capital.",
+        "status": "compliant",
+        "message": "No active positions. Maximum single-position size: 5-8% of relevant account's capital.",
         "category": "position_size"
       },
       {
@@ -738,8 +1294,8 @@
       {
         "rule": "R19",
         "text": "Aggressive sleeve cost basis capped at active theme limits.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Aggressive sleeve cost basis capped at active theme limits.",
+        "status": "compliant",
+        "message": "No active positions. Aggressive sleeve cost basis capped at active theme limits.",
         "category": "cost_basis"
       },
       {
@@ -752,8 +1308,8 @@
       {
         "rule": "R21",
         "text": "No new entries on same day as stop-out from related name.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. No new entries on same day as stop-out from related name.",
+        "status": "compliant",
+        "message": "No active positions. No new entries on same day as stop-out from related name.",
         "category": "same_day_entry"
       },
       {
@@ -766,22 +1322,22 @@
       {
         "rule": "R23",
         "text": "Conviction expresses through stop placement, not oversizing.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Conviction expresses through stop placement, not oversizing.",
+        "status": "compliant",
+        "message": "No active positions. Conviction expresses through stop placement, not oversizing.",
         "category": "conviction_sizing"
       },
       {
         "rule": "R24",
         "text": "Hitting target = sell signal. No goalpost-moving.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Hitting target = sell signal. No goalpost-moving.",
+        "status": "compliant",
+        "message": "No active positions. Hitting target = sell signal. No goalpost-moving.",
         "category": "target_hit"
       },
       {
         "rule": "R25",
         "text": "Don't add to position because it's working. Add only on pullbacks per pre-committed plan.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Don't add to position because it's working. Add only on pullbacks per pre-committed plan.",
+        "status": "compliant",
+        "message": "No active positions. Don't add to position because it's working. Add only on pullbacks per pre-committed plan.",
         "category": "adding_to_position"
       },
       {
@@ -802,108 +1358,21 @@
     "violations": [],
     "action_items": [
       {
-        "rule": "R6",
-        "text": "Define invalidation before entry. Written down. Close-based.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Define invalidation before entry. Written down. Close-based.",
-        "category": "invalidation"
-      },
-      {
-        "rule": "R7",
-        "text": "Size from risk-to-stop, not gut, not conviction, not max premium.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Size from risk-to-stop, not gut, not conviction, not max premium.",
-        "category": "sizing"
-      },
-      {
-        "rule": "R8",
-        "text": "No naked momentum exposure through binary catalysts.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. No naked momentum exposure through binary catalysts.",
-        "category": "binary_catalyst"
-      },
-      {
-        "rule": "R10",
-        "text": "Stop moves UP only. Never lower a stop in adversity.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Stop moves UP only. Never lower a stop in adversity.",
-        "category": "stop_management"
-      },
-      {
-        "rule": "R11",
-        "text": "Decisions on the exit-timeframe CLOSE, never on intraday wicks.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Decisions on the exit-timeframe CLOSE, never on intraday wicks.",
-        "category": "close_based"
-      },
-      {
-        "rule": "R12",
-        "text": "Exit timeframe must be slower than entry timeframe.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Exit timeframe must be slower than entry timeframe.",
-        "category": "timeframe"
-      },
-      {
-        "rule": "R13",
-        "text": "Never override a fired stop.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Never override a fired stop.",
-        "category": "stop_override"
-      },
-      {
-        "rule": "R15",
-        "text": "Maximum single-position size: 5-8% of relevant account's capital.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Maximum single-position size: 5-8% of relevant account's capital.",
-        "category": "position_size"
-      },
-      {
-        "rule": "R19",
-        "text": "Aggressive sleeve cost basis capped at active theme limits.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Aggressive sleeve cost basis capped at active theme limits.",
-        "category": "cost_basis"
-      },
-      {
-        "rule": "R21",
-        "text": "No new entries on same day as stop-out from related name.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. No new entries on same day as stop-out from related name.",
-        "category": "same_day_entry"
-      },
-      {
-        "rule": "R23",
-        "text": "Conviction expresses through stop placement, not oversizing.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Conviction expresses through stop placement, not oversizing.",
-        "category": "conviction_sizing"
-      },
-      {
-        "rule": "R24",
-        "text": "Hitting target = sell signal. No goalpost-moving.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Hitting target = sell signal. No goalpost-moving.",
-        "category": "target_hit"
-      },
-      {
-        "rule": "R25",
-        "text": "Don't add to position because it's working. Add only on pullbacks per pre-committed plan.",
-        "status": "elevated",
-        "message": "Active themes: Semis, Biotech. Don't add to position because it's working. Add only on pullbacks per pre-committed plan.",
-        "category": "adding_to_position"
+        "rule": "R1",
+        "text": "Weekly Sunday review (regime + themes). Do not skip.",
+        "status": "action_needed",
+        "message": "Today is Sunday \u2014 weekly review required. Complete regime + theme analysis."
       }
     ],
     "summary": {
       "total_rules": 27,
-      "compliant": 14,
-      "action_needed": 13,
+      "compliant": 26,
+      "action_needed": 1,
       "violations": 0
     },
     "regime_used": "Risk-on / Trending",
-    "active_themes_used": [
-      "Semis",
-      "Biotech"
-    ]
+    "active_groups_used": [],
+    "active_state_unavailable": false
   },
   "standing_rules_text": {
     "R1": "Weekly Sunday review (regime + themes). Do not skip.",
@@ -933,5 +1402,459 @@
     "R25": "Don't add to position because it's working. Add only on pullbacks per pre-committed plan.",
     "R26": "No margin leverage on aggressive options trades.",
     "R27": "Flexibility means switching themes by rules, not by feel."
+  },
+  "candidate_grades": {
+    "FTNT": {
+      "grade": "C",
+      "reasons": "close 161.61 below SMA5 162.87 \u2014 arriving from above; score 52 < 75; 7 sessions before the print (< 15)",
+      "failing": [
+        "3_approach",
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Systems Software"
+    },
+    "PANW": {
+      "grade": "B",
+      "reasons": "score 61 < 75",
+      "failing": [
+        "5_score"
+      ],
+      "group": "Systems Software"
+    },
+    "MPC": {
+      "grade": "C",
+      "reasons": "extension 4.472917947837491\u00d7ATR > 1.8\u00d7; RSI 78 outside [45, 70]; 11 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "4_rsi",
+        "7_runway"
+      ],
+      "group": "Oil & Gas Refining & Marketing"
+    },
+    "VLO": {
+      "grade": "C",
+      "reasons": "extension 3.4998619788735525\u00d7ATR > 1.8\u00d7; RSI 73 outside [45, 70]; 8 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "4_rsi",
+        "7_runway"
+      ],
+      "group": "Oil & Gas Refining & Marketing"
+    },
+    "PSX": {
+      "grade": "C",
+      "reasons": "extension 4.0327223899280416\u00d7ATR > 1.8\u00d7; RSI 73 outside [45, 70]; 12 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "4_rsi",
+        "7_runway"
+      ],
+      "group": "Oil & Gas Refining & Marketing"
+    },
+    "HPE": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 45.82 below SMA5 47.03 \u2014 arriving from above; score 44 < 75",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "5_score"
+      ],
+      "group": "Technology Hardware, Storage & Peripherals"
+    },
+    "NTAP": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 163.88 below SMA5 164.83 \u2014 arriving from above; score 62 < 75",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "5_score"
+      ],
+      "group": "Technology Hardware, Storage & Peripherals"
+    },
+    "AAPL": {
+      "grade": "C",
+      "reasons": "extension 3.418479106366864\u00d7ATR > 1.8\u00d7; RSI 72 outside [45, 70]; 8 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "4_rsi",
+        "7_runway"
+      ],
+      "group": "Technology Hardware, Storage & Peripherals"
+    },
+    "HPQ": {
+      "grade": "A+",
+      "reasons": "",
+      "failing": [],
+      "group": "Technology Hardware, Storage & Peripherals"
+    },
+    "AMAT": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 529.66 below SMA5 568.22 \u2014 arriving from above; RSI 44 outside [45, 70]; score 51 < 75",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "4_rsi",
+        "5_score"
+      ],
+      "group": "Semiconductor Materials & Equipment"
+    },
+    "ASML": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 1747.58 below SMA5 1769.88 \u2014 arriving from above; score 58 < 75",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "5_score"
+      ],
+      "group": "Semiconductor Materials & Equipment"
+    },
+    "HUM": {
+      "grade": "C",
+      "reasons": "close 400.00 below SMA5 401.41 \u2014 arriving from above; score 56 < 75; 7 sessions before the print (< 15)",
+      "failing": [
+        "3_approach",
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Managed Health Care"
+    },
+    "CNC": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 66.44 below SMA5 66.79 \u2014 arriving from above; score 66 < 75; 6 sessions before the print (< 15)",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Managed Health Care"
+    },
+    "UNH": {
+      "grade": "B",
+      "reasons": "score 71 < 75",
+      "failing": [
+        "5_score"
+      ],
+      "group": "Managed Health Care"
+    },
+    "JBHT": {
+      "grade": "A+",
+      "reasons": "",
+      "failing": [],
+      "group": "Cargo Ground Transportation"
+    },
+    "ODFL": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; 7 sessions before the print (< 15)",
+      "failing": [
+        "1_conditions",
+        "7_runway"
+      ],
+      "group": "Cargo Ground Transportation"
+    },
+    "CSX": {
+      "grade": "C",
+      "reasons": "extension 2.7498348902677767\u00d7ATR > 1.8\u00d7; RSI 70 outside [45, 70]; 2 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "4_rsi",
+        "7_runway"
+      ],
+      "group": "Rail Transportation"
+    },
+    "UNP": {
+      "grade": "C",
+      "reasons": "extension 4.476276473532863\u00d7ATR > 1.8\u00d7; RSI 78 outside [45, 70]; 3 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "4_rsi",
+        "7_runway"
+      ],
+      "group": "Rail Transportation"
+    },
+    "NSC": {
+      "grade": "C",
+      "reasons": "extension 3.6254371199019038\u00d7ATR > 1.8\u00d7; RSI 74 outside [45, 70]; 3 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "4_rsi",
+        "7_runway"
+      ],
+      "group": "Rail Transportation"
+    },
+    "FFIV": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 409.10 below SMA5 417.24 \u2014 arriving from above; score 54 < 75; 5 sessions before the print (< 15)",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Communications Equipment"
+    },
+    "ANET": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 168.61 below SMA5 174.56 \u2014 arriving from above; score 58 < 75; 11 sessions before the print (< 15)",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Communications Equipment"
+    },
+    "MSI": {
+      "grade": "B",
+      "reasons": "score 60 < 75; 8 sessions before the print (< 15)",
+      "failing": [
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Communications Equipment"
+    },
+    "WELL": {
+      "grade": "C",
+      "reasons": "extension 2.734220154239496\u00d7ATR > 1.8\u00d7; 5 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "7_runway"
+      ],
+      "group": "Health Care REITs"
+    },
+    "DOC": {
+      "grade": "C",
+      "reasons": "extension 2.490203735116962\u00d7ATR > 1.8\u00d7; RSI 71 outside [45, 70]; score 60 < 75; 11 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "4_rsi",
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Health Care REITs"
+    },
+    "VTR": {
+      "grade": "C",
+      "reasons": "extension 3.041691661541333\u00d7ATR > 1.8\u00d7; RSI 71 outside [45, 70]; 7 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "4_rsi",
+        "7_runway"
+      ],
+      "group": "Health Care REITs"
+    },
+    "KIM": {
+      "grade": "C",
+      "reasons": "extension 1.9845011760390023\u00d7ATR > 1.8\u00d7; 11 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "7_runway"
+      ],
+      "group": "Retail REITs"
+    },
+    "SPG": {
+      "grade": "B",
+      "reasons": "score 62 < 75",
+      "failing": [
+        "5_score"
+      ],
+      "group": "Retail REITs"
+    },
+    "FRT": {
+      "grade": "C",
+      "reasons": "extension 1.9233169085144082\u00d7ATR > 1.8\u00d7; 9 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "7_runway"
+      ],
+      "group": "Retail REITs"
+    },
+    "REG": {
+      "grade": "C",
+      "reasons": "extension 1.8777100170253944\u00d7ATR > 1.8\u00d7; 7 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "7_runway"
+      ],
+      "group": "Retail REITs"
+    },
+    "O": {
+      "grade": "C",
+      "reasons": "extension 2.3461920245574235\u00d7ATR > 1.8\u00d7; 12 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "7_runway"
+      ],
+      "group": "Retail REITs"
+    },
+    "MPWR": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 1312.00 below SMA5 1327.62 \u2014 arriving from above; RSI 44 outside [45, 70]; score 59 < 75; group breaker warning; 8 sessions before the print (< 15)",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "4_rsi",
+        "5_score",
+        "6_breaker",
+        "7_runway"
+      ],
+      "group": "Semiconductors"
+    },
+    "TSM": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 398.37 below SMA5 413.91 \u2014 arriving from above; RSI 39 outside [45, 70]; score 51 < 75; group breaker warning",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "4_rsi",
+        "5_score",
+        "6_breaker"
+      ],
+      "group": "Semiconductors"
+    },
+    "NVDA": {
+      "grade": "C",
+      "reasons": "close 202.81 below SMA5 207.61 \u2014 arriving from above; score 61 < 75; group breaker warning",
+      "failing": [
+        "3_approach",
+        "5_score",
+        "6_breaker"
+      ],
+      "group": "Semiconductors"
+    },
+    "AVGO": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 370.83 below SMA5 382.54 \u2014 arriving from above; RSI 44 outside [45, 70]; score 53 < 75; group breaker warning",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "4_rsi",
+        "5_score",
+        "6_breaker"
+      ],
+      "group": "Semiconductors"
+    },
+    "CFG": {
+      "grade": "A+",
+      "reasons": "",
+      "failing": [],
+      "group": "Regional Banks"
+    },
+    "UMBF": {
+      "grade": "B",
+      "reasons": "score 57 < 75; 6 sessions before the print (< 15)",
+      "failing": [
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Regional Banks"
+    },
+    "MTB": {
+      "grade": "C",
+      "reasons": "extension 1.9915595216749664\u00d7ATR > 1.8\u00d7",
+      "failing": [
+        "2_extension"
+      ],
+      "group": "Regional Banks"
+    },
+    "FITB": {
+      "grade": "B",
+      "reasons": "score 54 < 75",
+      "failing": [
+        "5_score"
+      ],
+      "group": "Regional Banks"
+    },
+    "RF": {
+      "grade": "A+",
+      "reasons": "",
+      "failing": [],
+      "group": "Regional Banks"
+    },
+    "KEY": {
+      "grade": "B",
+      "reasons": "score 60 < 75",
+      "failing": [
+        "5_score"
+      ],
+      "group": "Regional Banks"
+    },
+    "HBAN": {
+      "grade": "B",
+      "reasons": "score 71 < 75; 3 sessions before the print (< 15)",
+      "failing": [
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Regional Banks"
+    },
+    "CF": {
+      "grade": "C",
+      "reasons": "extension 2.420737063545985\u00d7ATR > 1.8\u00d7; score 73 < 75; 12 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Fertilizers & Agricultural Chemicals"
+    },
+    "CTVA": {
+      "grade": "B",
+      "reasons": "8 sessions before the print (< 15)",
+      "failing": [
+        "7_runway"
+      ],
+      "group": "Fertilizers & Agricultural Chemicals"
+    },
+    "MOS": {
+      "grade": "C",
+      "reasons": "close 22.13 below SMA5 22.59 \u2014 arriving from above; score 57 < 75; 11 sessions before the print (< 15)",
+      "failing": [
+        "3_approach",
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Fertilizers & Agricultural Chemicals"
+    },
+    "CHRW": {
+      "grade": "C",
+      "reasons": "extension 3.384338816708076\u00d7ATR > 1.8\u00d7; RSI 72 outside [45, 70]; 7 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "4_rsi",
+        "7_runway"
+      ],
+      "group": "Air Freight & Logistics"
+    },
+    "EXPD": {
+      "grade": "C",
+      "reasons": "extension 4.085373761436512\u00d7ATR > 1.8\u00d7; RSI 78 outside [45, 70]; 11 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "4_rsi",
+        "7_runway"
+      ],
+      "group": "Air Freight & Logistics"
+    },
+    "UPS": {
+      "grade": "C",
+      "reasons": "extension 2.802278288806119\u00d7ATR > 1.8\u00d7; 6 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "7_runway"
+      ],
+      "group": "Air Freight & Logistics"
+    },
+    "J": {
+      "grade": "B",
+      "reasons": "score 70 < 75; group breaker critical; 11 sessions before the print (< 15)",
+      "failing": [
+        "5_score",
+        "6_breaker",
+        "7_runway"
+      ],
+      "group": "Construction & Engineering"
+    }
   }
 }
