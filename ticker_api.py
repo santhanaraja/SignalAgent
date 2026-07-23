@@ -1457,7 +1457,7 @@ def framework_gauges_json():
     ONE-GRAMMAR NOTE (D-008 / Phase 3): the CHASSIS sets the regime — the
     three gauges are informational readings, not the deciders, and the
     flat *_count fields are parliament-era leftovers kept ONE deprecation
-    cycle (read legacy_voters on /api/regime instead). spy_vs_200dma is
+    cycle (read legacy_voters in THIS payload / the assessment). spy_vs_200dma is
     the trend chassis's direction; yield_curve lives under macro_inputs
     (computed, non-voting).
 
@@ -1602,7 +1602,7 @@ def _assessment_regime(data):
         "engine": regime.get("engine"),
         "chassis": regime.get("chassis"),
         # deprecated flat counts (one cycle) + the annotated block —
-        # ONE construction shared with /api/regime (review finding)
+        # ONE construction shared with /api/framework/gauges.json (review finding)
         "risk_on_count": regime.get("risk_on_count"),
         "caution_count": regime.get("caution_count"),
         "risk_off_count": regime.get("risk_off_count"),
@@ -1652,7 +1652,7 @@ def _assessment_positions(data):
 
 def _legacy_voters(regime):
     """The ONE construction of the deprecation block (Phase 3 one-grammar
-    retirement) — /api/regime and the assessment both serve this; a
+    retirement) — /api/framework/gauges.json and the assessment both serve this; a
     hand-duplicated copy was a review finding."""
     return {
         "risk_on": regime.get("risk_on_count"),
