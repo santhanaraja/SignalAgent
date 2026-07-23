@@ -223,15 +223,16 @@ def detect_regime_change(prev_regime, curr_regime, timestamp):
     ro = _num(curr_regime.get("risk_on_count"))
     ca = _num(curr_regime.get("caution_count"))
     rf = _num(curr_regime.get("risk_off_count"))
-    counts = (f" ({ro}/{ca}/{rf})"
-              if ro is not None and ca is not None and rf is not None else "")
+    # One-grammar retirement (Phase 3): the description no longer bakes the
+    # parliament "(N/N/N)" counts — the chassis sets the regime (D-008).
+    # The counts remain in `detail` as data (era-annotated at render).
     return [{
         "timestamp": timestamp,
         "type": "regime_change",
         "severity": "critical" if to_r == "Risk-off" else "high",
         "group": None,
         "ticker": None,
-        "description": f"Swing regime: {prev_regime['regime']} → {to_r}{counts}",
+        "description": f"Swing regime: {prev_regime['regime']} → {to_r}",
         "detail": {
             "from_regime": prev_regime["regime"],
             "to_regime": to_r,

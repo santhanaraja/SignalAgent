@@ -179,8 +179,7 @@ def build_message(data, positions, quotes, all_failed, now_et):
     regime = (data.get("regime") or {})
     gen_date = str(data.get("generated_at", ""))[:10]
     lines.append(f"Regime: {regime.get('regime', '?')} "
-                 f"({regime.get('risk_on_count')}/{regime.get('caution_count')}"
-                 f"/{regime.get('risk_off_count')}) — as of last close"
+                 f"— as of last close"
                  + (f" ({gen_date})" if gen_date else ""))
 
     dash = os.environ.get("DASHBOARD_URL", "").rstrip("/")

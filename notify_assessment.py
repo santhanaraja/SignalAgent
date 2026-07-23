@@ -42,7 +42,11 @@ def should_notify(now_et, marker_path=None):
     marker_path = marker_path or MARKER_PATH
     if now_et.weekday() >= 5:
         return False, f"weekend ({now_et.strftime('%A')}) — skipping"
-    if now_et.hour < 16:
+    # 16:15, not 16:00 (review finding): the chassis confirms today's close
+    # from 16:10 ET, and the cron grid has a slot AT the bell — a 16:0x
+    # post would burn the once-per-day marker on an artifact still serving
+    # YESTERDAY's close-basis regime, suppressing the real close report.
+    if now_et.time() < datetime.time(16, 15):
         return False, f"pre-close ({now_et.strftime('%H:%M')} ET) — skipping"
     if os.path.exists(marker_path):
         try:

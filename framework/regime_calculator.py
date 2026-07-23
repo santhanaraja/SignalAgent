@@ -26,12 +26,18 @@ def _today():
 def _now_et():
     """ET wall clock — the exchange clock the close-basis law keys on.
     Overridable per-calculator via `_now_et_override` (tests pin it so
-    stub bars read deterministically confirmed or forming)."""
+    stub bars read deterministically confirmed or forming). Fallback when
+    tzdata is unavailable: fixed EST (UTC-5) — deliberately the WINTER
+    offset year-round, which in summer reads up to an hour BEHIND real ET
+    and therefore holds a genuinely-confirmed close as forming a little
+    longer (conservative), instead of naive local time, which on an
+    ahead-of-ET host would fake-confirm a forming bar (review finding)."""
     try:
         from zoneinfo import ZoneInfo
         return datetime.datetime.now(ZoneInfo("America/New_York"))
     except Exception:
-        return datetime.datetime.now()
+        return datetime.datetime.now(
+            datetime.timezone(datetime.timedelta(hours=-5)))
 
 
 def confirmed_close_frame(frame, now_et=None):
@@ -45,10 +51,15 @@ def confirmed_close_frame(frame, now_et=None):
     Jul-21 flickered a one-cent EXIT_FIRED off the same mechanism.
 
     A row is FORMING iff it is dated today in ET and the session hasn't
-    closed (before 16:00 ET). Half-days are handled conservatively: the
-    early close only reads confirmed from 16:00, so the regime just stays
-    at yesterday's state a few hours longer — the ladder never moves on an
-    unproven bar in either direction.
+    settled — the boundary is 16:10 ET, not 16:00 sharp: the cron grid has
+    a slot AT the bell (20:00 UTC = 16:00 EDT), and in the first minutes
+    the closing-auction print and index disseminations are still settling
+    (review finding — a 16:0x run must not step the ladder and burn the
+    once-per-day close report on an unsettled value). Half-days are
+    handled conservatively: the early close only reads confirmed from
+    16:10, so the regime just stays at yesterday's state a few hours
+    longer — the ladder never moves on an unproven bar in either
+    direction.
 
     Returns (confirmed_frame, forming_last_row_or_None)."""
     if frame is None or len(frame) == 0:
@@ -58,7 +69,7 @@ def confirmed_close_frame(frame, now_et=None):
         last_date = frame.index[-1].date()
     except (AttributeError, TypeError):
         return frame, None
-    if last_date == now.date() and now.time() < datetime.time(16, 0):
+    if last_date == now.date() and now.time() < datetime.time(16, 10):
         return frame.iloc[:-1], frame.iloc[-1]
     return frame, None
 
@@ -728,8 +739,10 @@ class RegimeCalculator:
         # Volume 0) for a date that will never be a trading day — it must not
         # count as a hysteresis close. Real SPY bars always carry volume, and
         # a pre-market synthetic row isn't a close either (close-basis, R11).
-        # Intraday partial bars during market hours have real volume and stay
-        # (the documented provisional-intraday read).
+        # Intraday partial bars during market hours have real volume and pass
+        # THIS guard — confirmed_close_frame (the close-basis law, ruled
+        # 2026-07-23) splits them off downstream so they never step the
+        # ladder; they surface only as the labeled intraday_preview.
         if "Volume" in spy.columns and len(spy) and \
                 float(spy["Volume"].iloc[-1]) == 0.0:
             spy = spy.iloc[:-1]
@@ -776,7 +789,16 @@ class RegimeCalculator:
                            # a hypothetical OAS print against THIS window.
                            "oas_window_tail": [
                                round(float(v), 4) for v in
-                               oas.values[-(ccfg["hy_window"] - 1):]]}
+                               oas.values[-(ccfg["hy_window"] - 1):]],
+                           # internal (popped, never serialized): the full
+                           # pct series + one-longer tail so the close-basis
+                           # split can realign both to the CONFIRMED close
+                           # (review finding: served pctile must share the
+                           # basis of every other field in the block)
+                           "_pct": pct,
+                           "_oas_tail_plus": [
+                               round(float(v), 4) for v in
+                               oas.values[-ccfg["hy_window"]:]]}
         if hy_stress is None:
             # Fallback: HYG/IEF ratio percentile, INVERTED (low ratio = wide
             # spreads = stress) — the HY voter's own production fallback
@@ -799,7 +821,8 @@ class RegimeCalculator:
                     hy_stress = (rp <= (100.0 - ccfg["hy_cut"])).where(rp.notna())
                     valid = rp.dropna()
                     hy_meta = {"basis": "hyg_ief_inverted_pctile",
-                               "pctile": round(float(valid.iloc[-1]), 1)}
+                               "pctile": round(float(valid.iloc[-1]), 1),
+                               "_pct": rp}
 
         f = pd.DataFrame({"trend": trend, "vix_5d": vix_5d,
                           "breadth": breadth})
@@ -846,6 +869,9 @@ class RegimeCalculator:
         if frame is not None:
             frame, forming = confirmed_close_frame(
                 frame, now_et=getattr(self, "_now_et_override", None))
+        # internal realignment inputs (never serialized)
+        _pct_series = hy_meta.pop("_pct", None)
+        _oas_tail_plus = hy_meta.pop("_oas_tail_plus", None)
 
         if frame is None or len(frame) < 10:
             # data outage — fall back to the recorded state, degraded.
@@ -887,6 +913,22 @@ class RegimeCalculator:
                 "hy_basis": None, "hy_pctile": None,
                 "degraded": True, "degraded_reason": reason,
             }
+
+        # Basis alignment on a split (review finding): the served/recorded
+        # hy pctile + the lab's OAS window must be as-of the CONFIRMED
+        # close like every other field in the block — the forming-day
+        # values move to the preview, never sit beside close-basis fields.
+        preview_pctile = None
+        if forming is not None:
+            preview_pctile = hy_meta.get("pctile")
+            if _pct_series is not None:
+                try:
+                    v = _pct_series.loc[frame.index[-1]]
+                    hy_meta["pctile"] = round(float(v), 1) if v == v else None
+                except (KeyError, TypeError, ValueError):
+                    pass
+            if _oas_tail_plus and hy_meta.get("oas_window_tail"):
+                hy_meta["oas_window_tail"] = _oas_tail_plus[:-1]
 
         seqs = (
             [float(x) for x in frame["trend"].values],
@@ -965,7 +1007,7 @@ class RegimeCalculator:
                     "throttles": {
                         "vix": {"firing": bool(pv >= ccfg["vix_thr"]),
                                 "value": round(pv, 2)},
-                        "hy": {"firing": ph},
+                        "hy": {"firing": ph, "pctile": preview_pctile},
                         "breadth": {"firing": bool(pb < ccfg["breadth_thr"]),
                                     "value": round(pb, 2)},
                     },

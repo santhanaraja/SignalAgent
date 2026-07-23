@@ -534,8 +534,32 @@ def test_one_grammar_page_sources():
     hist = open(os.path.join(here, "public", "history.html")).read()
     assert "does not set the regime" in hist and "chassisEra" in hist
     assert "Voters: ${detail.risk_on_count}" in hist  # pre-cutover era kept
+    # ternary ORDER pin (review finding): the chassis-era (true) arm must
+    # be the DEMOTED one — an inverted ternary would survive substring
+    # checks while demoting the wrong era
+    i_c = hist.index("chassisEra")
+    assert i_c < hist.index("legacy voters") \
+        < hist.index("Voters: ${detail.risk_on_count}"), \
+        "inverted era ternary — the demoted arm must be chassis-era"
+    # baked-in "(N/N/N)" gets stripped from committed chassis-era
+    # descriptions at render
+    assert r"replace(/\s*\(\d+\/\d+\/\d+\)\s*$/" in hist
+    # the deprecation block: ONE construction, correct content (the
+    # assessment test pins it functionally; this pins the dedupe)
+    import ticker_api
+    lv = ticker_api._legacy_voters({"risk_on_count": 2, "caution_count": 1,
+                                    "risk_off_count": 0})
+    assert lv["risk_on"] == 2 and "chassis sets the regime" in lv["note"]
+    src = open(os.path.join(here, "ticker_api.py")).read()
+    assert src.count("parliament-era vote counts") == 1, \
+        "the note text must exist ONLY in _legacy_voters (dedupe pin)"
+    # no rendered vote-count surface anywhere else (pre-market included —
+    # a review finding caught it after Part 2 shipped the first two)
+    pm = open(os.path.join(here, "notify_premarket.py")).read()
+    assert "')}/{" not in pm, "premarket still formats (N/N/N) counts"
     print("  one-grammar page sources: vote tile gone, history demotes "
-          "chassis-era counts, era-true pre-cutover: OK")
+          "chassis-era counts (order-pinned, baked counts stripped), "
+          "era-true pre-cutover, legacy_voters deduped, premarket clean: OK")
 
 
 def test_signal_refresh_chases_framework():

@@ -266,7 +266,12 @@ def test_marker_gating_once_per_trading_day():
         # pre-close
         ok, why = notify.should_notify(_et("2026-07-09T15:59:00"))
         assert not ok and "pre-close" in why
-        # post-close, first run
+        # the settling window (review finding): a 16:0x run still serves
+        # YESTERDAY's close-basis regime (chassis confirms from 16:10) —
+        # posting there would burn the once-per-day marker on it
+        ok, why = notify.should_notify(_et("2026-07-09T16:05:00"))
+        assert not ok and "pre-close" in why
+        # post-close, first run (16:15 — past the settle boundary)
         ok, _ = notify.should_notify(_et(NOW))
         assert ok
         # marker written -> same day suppressed (throttled reruns)
@@ -274,10 +279,10 @@ def test_marker_gating_once_per_trading_day():
         ok, why = notify.should_notify(_et("2026-07-09T17:30:00"))
         assert not ok and "already notified" in why
         # next trading day -> fires again
-        ok, _ = notify.should_notify(_et("2026-07-10T16:05:00"))
+        ok, _ = notify.should_notify(_et("2026-07-10T16:20:00"))
         assert ok
         # weekend
-        ok, why = notify.should_notify(_et("2026-07-11T16:05:00"))
+        ok, why = notify.should_notify(_et("2026-07-11T16:20:00"))
         assert not ok and "weekend" in why
     finally:
         env.close()

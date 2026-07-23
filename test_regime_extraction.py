@@ -87,8 +87,11 @@ def test_corpus_a_regime_history():
         sigs = [x.get("signal") for x in g.values()]
         assert sigs.count("risk_on") == e["risk_on_count"], e["date"]
         assert sigs.count("risk_off") == e["risk_off_count"], e["date"]
-    era_note = (f" ({len(chassis_era)} chassis-era entries excluded — "
-                f"replay under test_gauge_chassis)" if chassis_era else "")
+    era_note = (f" ({len(chassis_era)} chassis-era entries excluded — the "
+                f"chassis ENGINE is pinned by test_gauge_chassis; the "
+                f"chassis-era history CORPUS itself is not replay-pinned, "
+                f"and pre-2026-07-23 intraday entries may carry forming-bar "
+                f"prints)" if chassis_era else "")
     print(f"  corpus A: {len(entries)} regime_history entries replay "
           f"exactly{era_note}: OK")
 

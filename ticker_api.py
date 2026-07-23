@@ -1454,9 +1454,12 @@ def framework_gauges_json():
     Public JSON API — returns the swing regime gauges as a compact object.
     Useful for quick regime checks without downloading the full framework output.
 
-    gauges holds the 3 swing VOTERS (counts range 0-3). spy_vs_200dma is
-    the backdrop_gate (binary cap, not a voter); yield_curve lives under
-    macro_inputs (computed, non-voting).
+    ONE-GRAMMAR NOTE (D-008 / Phase 3): the CHASSIS sets the regime — the
+    three gauges are informational readings, not the deciders, and the
+    flat *_count fields are parliament-era leftovers kept ONE deprecation
+    cycle (read legacy_voters on /api/regime instead). spy_vs_200dma is
+    the trend chassis's direction; yield_curve lives under macro_inputs
+    (computed, non-voting).
 
     Response shape:
     {
@@ -1493,15 +1496,7 @@ def framework_gauges_json():
             "risk_on_count": regime.get("risk_on_count"),
             "caution_count": regime.get("caution_count"),
             "risk_off_count": regime.get("risk_off_count"),
-            "legacy_voters": {
-                "risk_on": regime.get("risk_on_count"),
-                "caution": regime.get("caution_count"),
-                "risk_off": regime.get("risk_off_count"),
-                "note": "parliament-era vote counts — informational only; "
-                        "the chassis sets the regime (D-008). The flat "
-                        "*_count fields are deprecated and will be removed "
-                        "after a cycle.",
-            },
+            "legacy_voters": _legacy_voters(regime),
             "consecutive_weeks": regime.get("consecutive_weeks_at_state"),
             "regime_change_pending": regime.get("regime_change_pending", False),
             "gauges": regime.get("gauges", {}),
@@ -1607,18 +1602,11 @@ def _assessment_regime(data):
         "engine": regime.get("engine"),
         "chassis": regime.get("chassis"),
         # deprecated flat counts (one cycle) + the annotated block —
-        # see /api/regime's legacy_voters note (one-grammar retirement)
+        # ONE construction shared with /api/regime (review finding)
         "risk_on_count": regime.get("risk_on_count"),
         "caution_count": regime.get("caution_count"),
         "risk_off_count": regime.get("risk_off_count"),
-        "legacy_voters": {
-            "risk_on": regime.get("risk_on_count"),
-            "caution": regime.get("caution_count"),
-            "risk_off": regime.get("risk_off_count"),
-            "note": "parliament-era vote counts — informational only; "
-                    "the chassis sets the regime (D-008). Deprecated flat "
-                    "*_count fields will be removed after a cycle.",
-        },
+        "legacy_voters": _legacy_voters(regime),
         "gauges": regime.get("gauges", {}),
         "backdrop_gate": regime.get("backdrop_gate"),
         "macro_inputs": regime.get("macro_inputs"),
@@ -1660,6 +1648,20 @@ def _assessment_positions(data):
             row["conditions"] = x.get("conditions")
         out[t] = row
     return out
+
+
+def _legacy_voters(regime):
+    """The ONE construction of the deprecation block (Phase 3 one-grammar
+    retirement) — /api/regime and the assessment both serve this; a
+    hand-duplicated copy was a review finding."""
+    return {
+        "risk_on": regime.get("risk_on_count"),
+        "caution": regime.get("caution_count"),
+        "risk_off": regime.get("risk_off_count"),
+        "note": "parliament-era vote counts — informational only; the "
+                "chassis sets the regime (D-008). The flat *_count fields "
+                "are deprecated and will be removed after a cycle.",
+    }
 
 
 def _assessment_candidates(data):

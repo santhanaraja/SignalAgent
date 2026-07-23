@@ -159,8 +159,12 @@ def test_regime_change():
     assert len(ev) == 1
     e = ev[0]
     assert e["severity"] == "high" and e["group"] is None
+    # one-grammar retirement (Phase 3): the description carries NO
+    # parliament counts — the chassis sets the regime; counts stay in
+    # detail as data (demoted at render)
     assert e["description"] == ("Swing regime: Risk-on / Trending → "
-                                "Risk-on / Choppy (2/1/0)")
+                                "Risk-on / Choppy")
+    assert "(2/1/0)" not in e["description"]
     assert e["detail"]["risk_on_count"] == 2
 
     off = dict(curr, regime="Risk-off")

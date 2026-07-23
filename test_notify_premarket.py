@@ -75,7 +75,9 @@ def test_gap_breach_day():
     assert "$76.10 vs stop $80.59" in line
     assert "below stop pre-market — close decides, no pre-emption" in line
     assert "Watchlist: MRNA RE_ENTRY_READY" in msg
-    assert "Regime: Risk-on / Choppy (2/1/0) — as of last close (2026-07-09)" in msg
+    # one-grammar retirement (Phase 3): no parliament counts in the line
+    assert "Regime: Risk-on / Choppy — as of last close (2026-07-09)" in msg
+    assert "(2/1/0)" not in msg
     print("  gap-breach day: 🔴 + no-pre-emption discipline line: OK")
 
 

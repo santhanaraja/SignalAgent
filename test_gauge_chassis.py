@@ -228,18 +228,18 @@ def _ohlcv(closes, end=None):
                          "Volume": 1_000_000.0}, index=idx)
 
 
-def _stub_fetcher(spy_up=True, vix_level=15.0):
+def _stub_fetcher(spy_up=True, vix_level=15.0, end=None):
     n = 520
     spy = list(np.linspace(400, 500, n)) if spy_up \
         else list(np.linspace(500, 380, n))
     frames = {
-        "SPY": _ohlcv(spy),
-        "^VIX": _ohlcv([vix_level] * 130),
-        "RSP": _ohlcv([x * 0.4 for x in spy[-130:]]),
-        "HYG": _ohlcv(list(np.linspace(78, 80, 130))),
-        "IEF": _ohlcv([95.0] * 130),
-        "^TYX": _ohlcv([4.8] * 25),
-        "^IRX": _ohlcv([4.2] * 25),
+        "SPY": _ohlcv(spy, end),
+        "^VIX": _ohlcv([vix_level] * 130, end),
+        "RSP": _ohlcv([x * 0.4 for x in spy[-130:]], end),
+        "HYG": _ohlcv(list(np.linspace(78, 80, 130)), end),
+        "IEF": _ohlcv([95.0] * 130, end),
+        "^TYX": _ohlcv([4.8] * 25, end),
+        "^IRX": _ohlcv([4.2] * 25, end),
     }
 
     def fetch(ticker, period="1y"):
@@ -247,18 +247,18 @@ def _stub_fetcher(spy_up=True, vix_level=15.0):
     return fetch
 
 
-def _calc(tmpdir, fetch, oas_series="declining"):
+def _calc(tmpdir, fetch, oas_series="declining", oas_end=None):
     import yaml
     with open(os.path.join(REPO, "framework", "config.yaml")) as f:
         cfg = yaml.safe_load(f)
     calc = RegimeCalculator(cfg, fetch)
     calc.STATE_DIR = tmpdir
     if oas_series == "declining":
-        idx = _bdays(200)
+        idx = _bdays(200, oas_end)
         calc._fetch_oas_series = lambda c, limit=250: pd.Series(
             np.linspace(4.0, 2.5, 200), index=idx)     # falling OAS -> low pctile
     elif oas_series == "spiking":
-        idx = _bdays(200)
+        idx = _bdays(200, oas_end)
         vals = [3.0] * 195 + [3.5, 3.8, 4.2, 4.6, 5.0]  # fresh spike -> pctile 100
         calc._fetch_oas_series = lambda c, limit=250: pd.Series(
             vals, index=idx, dtype=float)
@@ -686,6 +686,39 @@ def test_calculator_intraday_preview():
         rec = json.load(open(os.path.join(tmp, "regime_chassis_state.json")))
         assert rec["as_of"] == prev_day, \
             "intraday run must record the CONFIRMED close, not the forming bar"
+        # BASIS PIN (review finding): every served/recorded hy field on the
+        # intraday run must equal a post-close run over THE SAME DATA
+        # truncated to the confirmed close — no forming-day value may sit
+        # beside close-basis fields (the display can never self-contradict).
+        # Truncating wrappers, not regenerated stubs: the equivalence must
+        # hold on identical data or the pin proves nothing.
+        yday = _bdays(2)[-2]
+        tmp3 = tempfile.mkdtemp(prefix="chassis_yday_")
+        try:
+            def fetch_trunc(t, period="1y"):
+                f = fetch(t, period)
+                return None if f is None else f.iloc[:-1]
+            calc3 = _calc(tmp3, fetch_trunc)
+            full_oas = pd.Series(np.linspace(4.0, 2.5, 200),
+                                 index=_bdays(200))
+            # calc's own series was _calc's default: the SAME construction
+            calc3._fetch_oas_series = lambda c, limit=250: full_oas.iloc[:-1]
+            calc3._now_et_override = yday + pd.Timedelta(hours=17)
+            ch3 = calc3.compute()["chassis"]
+            assert ch["throttles"]["hy"]["pctile"] == \
+                ch3["throttles"]["hy"]["pctile"], \
+                (ch["throttles"]["hy"], ch3["throttles"]["hy"])
+            assert ch["confirmed_state"] == ch3["confirmed_state"]
+            assert ch["hysteresis"] == ch3["hysteresis"]
+            rec3 = json.load(open(os.path.join(tmp3,
+                                               "regime_chassis_state.json")))
+            assert rec["oas_window_tail"] == rec3["oas_window_tail"], \
+                "recorded OAS window must be as-of the confirmed close"
+            # the forming-day pctile lives ONLY in the preview
+            assert ch["intraday_preview"]["throttles"]["hy"]["pctile"] \
+                is not None
+        finally:
+            shutil.rmtree(tmp3, ignore_errors=True)
         # post-close: bar confirms, preview gone, record advances
         calc2 = _calc(tmp, fetch)                          # 17:00 pin in _calc
         r2 = calc2.compute()
@@ -696,7 +729,8 @@ def test_calculator_intraday_preview():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("  calculator: intraday run serves confirmed state + labeled "
-          "preview; post-close run steps and records: OK")
+          "preview; hy basis pinned to the confirmed close; post-close "
+          "run steps and records: OK")
 
 
 if __name__ == "__main__":

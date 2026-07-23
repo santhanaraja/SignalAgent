@@ -277,6 +277,12 @@ function renderChanges(){
       // label can never read as "contradicted by its components".
       // Pre-cutover entries keep the era-true "Voters:" grammar.
       const chassisEra=(c.timestamp||'')>='2026-07-18';
+      if(chassisEra){
+        // committed pre-retirement events baked "(N/N/N)" into the
+        // description itself — strip it at render so the headline speaks
+        // one grammar (the counts stay in the demoted detail below)
+        c.description=(c.description||'').replace(/\s*\(\d+\/\d+\/\d+\)\s*$/,'');
+      }
       detailHtml = (detail.risk_on_count!=null
         ? (chassisEra
             ? `${detail.from_regime?`${detail.from_regime} → ${detail.to_regime||''}`:'regime change'} · legacy voters ${detail.risk_on_count}/${detail.caution_count}/${detail.risk_off_count} — informational, does not set the regime (chassis, D-008)`
