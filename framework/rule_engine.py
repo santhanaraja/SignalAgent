@@ -8,9 +8,11 @@ D-007 Phase 2: the active-state trigger for the 13 behavioral reminder rules
 derives from REAL HOLDINGS' GICS groups (positions.json resolved through the
 shared resolver — the same map condition 5 and R28 consume), not from
 qualified themes. R5's theme-count semantics are superseded by R28's
-per-group caps. theme_result is retained ONLY for the display-only rotation
-entry/exit signals R3/R4 echo until Phase 3 deletes the layer — no
-qualified-theme STATE is consumed here anymore.
+per-group caps.
+
+D-007 Phase 3: the theme layer is decommissioned. R3/R4 are pointer rows
+(superseded by the universe rotation + the position engine's stops and
+breakers); theme_result is accepted for back-compat but never read.
 """
 
 import datetime
@@ -29,8 +31,7 @@ class RuleEngine:
 
         Args:
             regime_result: Output from RegimeCalculator.compute()
-            theme_result: ThemeRanker output — display-only rotation
-                entry/exit signals for R3/R4 (Phase 3 removes)
+            theme_result: back-compat only — ignored (D-007 Phase 3)
             active_groups: the REAL holdings' GICS groups (runner resolves
                 positions.json through the shared resolver; unmapped
                 holdings appear as "TICKER (ungrouped)" — R28's own bucket
@@ -39,9 +40,9 @@ class RuleEngine:
         Returns dict with rule evaluations, violations, and summary.
         """
         regime = regime_result.get("regime", "Unknown")
-        theme_result = theme_result or {}
-        entry_signals = theme_result.get("entry_signals", [])
-        exit_signals = theme_result.get("exit_signals", [])
+        # theme_result is accepted for caller back-compat but NO LONGER
+        # consumed (D-007 Phase 3): the rotation-signal echoes R3/R4 used
+        # to read are retired with the theme layer itself.
         # None = active state UNKNOWN (positions unreadable — the runner's
         # degrade path); [] = genuinely flat. An outage must never render
         # as a confident flat book (review finding). str() coercion +
@@ -68,17 +69,10 @@ class RuleEngine:
         if r2["status"] == "violation":
             violations.append(r2)
 
-        # --- R3: New theme entry requirements ---
-        r3 = self._eval_r3(entry_signals)
-        evaluations.append(r3)
-        if r3["status"] == "action_needed":
-            action_items.append(r3)
-
-        # --- R4: Theme exit conditions ---
-        r4 = self._eval_r4(exit_signals)
-        evaluations.append(r4)
-        if r4["status"] in ("violation", "action_needed"):
-            action_items.append(r4)
+        # --- R3/R4: SUPERSEDED by the universe rotation + the position
+        # engine (D-007 Phase 3) — pointer rows, no signal consumption ---
+        evaluations.append(self._eval_r3())
+        evaluations.append(self._eval_r4())
 
         # --- R5: SUPERSEDED by R28's per-group caps (D-007 Phase 2) ---
         evaluations.append(self._eval_r5())
@@ -146,7 +140,8 @@ class RuleEngine:
                 "rule": "R1",
                 "text": self.rules.get("R1", ""),
                 "status": "action_needed",
-                "message": "Today is Sunday — weekly review required. Complete regime + theme analysis.",
+                "message": "Today is Sunday — weekly review required. "
+                           "Complete regime + universe review.",
             }
         return {
             "rule": "R1",
@@ -158,11 +153,9 @@ class RuleEngine:
     def _eval_r2(self, regime: str) -> dict:
         """R2: Risk-off → no new aggressive positions.
 
-        No violation branch: theme_ranker only emits ENTRY signals when the
-        regime is risk-on (its entry gate requires regime in Trending/
-        Choppy), so a risk-off ENTRY signal can never reach here. R2
-        degrades to an elevated reminder in Risk-off; the actual block is
-        enforced upstream in theme_ranker.
+        Reminder-only: the actual entry block is enforced upstream — the
+        position engine's condition 3 blocks re-entry outside the risk-on
+        regimes, and the A+ hard gate governs Choppy (D-011).
         """
         if regime == "Risk-off":
             return {
@@ -178,66 +171,33 @@ class RuleEngine:
             "message": f"Regime is {regime}. Rule not triggered.",
         }
 
-    def _eval_r3(self, entry_signals: list) -> dict:
-        """R3: New theme entry requirements.
-
-        The "risk-on regime" clause of the rule is enforced upstream in
-        theme_ranker (which only produces ENTRY signals in risk-on), so
-        this reads only the entry signals it is given.
-        """
-        qualified = [s for s in entry_signals if "ENTRY SIGNAL" in s.get("action", "")]
-        building = [s for s in entry_signals if "Building" in s.get("action", "")]
-
-        if qualified:
-            names = ", ".join(s["theme"] for s in qualified)
-            return {
-                "rule": "R3",
-                "text": self.rules.get("R3", ""),
-                "status": "action_needed",
-                "message": f"Entry signals qualified: {names}. Requires discretionary catalyst review before activation.",
-            }
-        if building:
-            names = ", ".join(f"{s['theme']} ({s['action']})" for s in building)
-            return {
-                "rule": "R3",
-                "text": self.rules.get("R3", ""),
-                "status": "compliant",
-                "message": f"Themes building qualification: {names}.",
-            }
+    def _eval_r3(self) -> dict:
+        """R3 retired (D-007 Phase 3): theme entry signals no longer exist.
+        Entries qualify through the weekly universe rotation (top-15 GICS
+        scanner) + the A+ doctrine (D-011) — the R5→R28 pointer treatment."""
         return {
             "rule": "R3",
             "text": self.rules.get("R3", ""),
             "status": "compliant",
-            "message": "No new entry signals.",
+            "superseded_by": "universe rotation (D-007)",
+            "message": "Superseded → universe rotation + A+ doctrine: entries "
+                       "qualify via the weekly top-15 GICS scanner and the "
+                       "D-011 grade — theme entry signals retired (D-007 "
+                       "Phase 3).",
         }
 
-    def _eval_r4(self, exit_signals: list) -> dict:
-        """R4: exit conditions — echoes the display-only rotation exit
-        signals (Phase 3 removes). No qualified-theme state consumed."""
-        exits = [s for s in exit_signals if "EXIT SIGNAL" in s.get("action", "")]
-        warnings = [s for s in exit_signals if "Warning" in s.get("action", "")]
-
-        if exits:
-            names = ", ".join(f"{s['theme']}: {s.get('reason', '')}" for s in exits)
-            return {
-                "rule": "R4",
-                "text": self.rules.get("R4", ""),
-                "status": "action_needed",
-                "message": f"EXIT SIGNALS FIRED: {names}. Close positions per rule.",
-            }
-        if warnings:
-            names = ", ".join(f"{s['theme']} ({s['action']})" for s in warnings)
-            return {
-                "rule": "R4",
-                "text": self.rules.get("R4", ""),
-                "status": "compliant",
-                "message": f"Exit warnings: {names}.",
-            }
+    def _eval_r4(self) -> dict:
+        """R4 retired (D-007 Phase 3): theme exit warnings no longer exist.
+        Exits are governed by the position engine's close-basis stops (R11)
+        and the per-group breakers — the R5→R28 pointer treatment."""
         return {
             "rule": "R4",
             "text": self.rules.get("R4", ""),
             "status": "compliant",
-            "message": "No exit signals.",
+            "superseded_by": "position engine stops + group breakers",
+            "message": "Superseded → close-basis stops (R10/R11, the 1B "
+                       "engine's EXIT_FIRED) + per-group breakers: theme "
+                       "exit warnings retired (D-007 Phase 3).",
         }
 
     def _eval_r5(self) -> dict:

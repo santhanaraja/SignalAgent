@@ -486,6 +486,40 @@ def test_candidates_page_contract():
           f"+watch prompt, honest constraint; {note}: OK")
 
 
+def test_theme_layer_decommission():
+    """D-007 Phase 3: the theme layer is gone — /api/framework/leaders.json
+    is 410 Gone with pointers; the assessment themes section reports the
+    retirement on post-Phase-3 artifacts and still projects rows from
+    pre-Phase-3 ones (era-aware, the archive stays readable); the page
+    carries no legacy strip / theme-rotation actions panel."""
+    import ticker_api
+    env = _Env()
+    try:
+        r = env.client.get("/api/framework/leaders.json")
+        assert r.status_code == 410, r.status_code
+        b = r.get_json()
+        assert "D-007 Phase 3" in b["error"]
+        assert "universe_leadership" in json.dumps(b["see"])
+    finally:
+        env.close()
+    # era-aware assessment section
+    assert "retired" in ticker_api._assessment_themes({})
+    old = ticker_api._assessment_themes(
+        {"themes": {"active_themes": ["Semis"],
+                    "ranked_themes": [{"name": "Semis", "rank": 1,
+                                       "composite": 9.0}]}})
+    assert old == [{"rank": 1, "theme": "Semis", "composite": 9.0,
+                    "status": "active"}]
+    # page: the legacy strip and the rotation actions panel are gone
+    here = os.path.dirname(os.path.abspath(__file__))
+    html = open(os.path.join(here, "public", "framework.html")).read()
+    assert "Legacy themes" not in html and "Entry Signals</h3>" not in html
+    assert "renderLeaders" not in html and "toggleLeaders" not in html
+    assert "Entries Allowed" not in html    # theme-flag badge died too
+    print("  D-007 Phase 3 decommission: leaders 410+pointers, era-aware "
+          "themes section, page strip/actions/renderers gone: OK")
+
+
 def test_one_grammar_page_sources():
     """Phase 3 one-grammar retirement: the framework page's meta area
     carries no parliament vote tile (the chassis tile shows the real
@@ -557,6 +591,7 @@ if __name__ == "__main__":
     test_layer2_ticker_expansion_contract()
     test_layer2_enrichment_shared_renderers()
     test_candidates_page_contract()
+    test_theme_layer_decommission()
     test_one_grammar_page_sources()
     test_signal_refresh_chases_framework()
     test_missing_file_still_404()

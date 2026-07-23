@@ -114,8 +114,8 @@ def test_r9_never_elevates():
 
 
 def test_r2_has_no_violation_path():
-    # Even the synthetic input that used to trip it — an ENTRY signal in
-    # Risk-off, which theme_ranker cannot produce — now yields elevated.
+    # Even a synthetic Risk-off ENTRY signal (a retired-era input, now
+    # ignored entirely) yields elevated, never a violation.
     out = _eval(RISK_OFF, [],
                 entries=[{"theme": "X",
                           "action": "ENTRY SIGNAL — qualified for activation"}])
@@ -127,17 +127,29 @@ def test_r2_has_no_violation_path():
     print("  R2 has no violation branch; elevated in Risk-off only: OK")
 
 
-def test_r3_works_without_regime_param():
-    # qualified ENTRY -> action_needed; building -> compliant; none -> compliant
-    q = _eval(TRENDING, [], entries=[{"theme": "X",
-              "action": "ENTRY SIGNAL — qualified for activation"}])
-    r3 = next(e for e in q["evaluations"] if e["rule"] == "R3")
-    assert r3["status"] == "action_needed"
-    b = _eval(TRENDING, [], entries=[{"theme": "X",
-              "action": "Building — 1/2 weeks in top 2"}])
-    assert _statuses(b)["R3"] == "compliant"
-    assert _statuses(_eval(TRENDING, []))["R3"] == "compliant"
-    print("  R3 evaluates from entry signals alone (no regime param): OK")
+def test_r3_r4_superseded():
+    # D-007 Phase 3: R3/R4 are pointer rows — injected rotation signals
+    # (the retired echo inputs) are IGNORED entirely; no signal can ever
+    # produce an action_needed from either rule again
+    out = _eval(TRENDING, [],
+                entries=[{"theme": "X",
+                          "action": "ENTRY SIGNAL — qualified for activation"}],
+                exits=[{"theme": "Y", "action": "EXIT SIGNAL — fired",
+                        "reason": "rank collapse"}])
+    st = _statuses(out)
+    assert st["R3"] == "compliant" and st["R4"] == "compliant"
+    r3 = next(e for e in out["evaluations"] if e["rule"] == "R3")
+    r4 = next(e for e in out["evaluations"] if e["rule"] == "R4")
+    assert r3["superseded_by"] == "universe rotation (D-007)"
+    assert "top-15 GICS scanner" in r3["message"] and "D-011" in r3["message"]
+    assert "stops" in r4["superseded_by"]
+    assert "EXIT_FIRED" in r4["message"] and "breakers" in r4["message"]
+    assert out["summary"]["action_needed"] == 0
+    # the pointers hold with no signals passed at all (the live call shape)
+    st2 = _statuses(_eval(TRENDING, []))
+    assert st2["R3"] == "compliant" and st2["R4"] == "compliant"
+    print("  R3/R4 superseded pointers: injected rotation signals ignored, "
+          "scanner/stops named: OK")
 
 
 def test_defensive_set_fires_in_caution_and_riskoff():
@@ -213,7 +225,7 @@ if __name__ == "__main__":
     test_july6_book_groups_fire()
     test_r9_never_elevates()
     test_r2_has_no_violation_path()
-    test_r3_works_without_regime_param()
+    test_r3_r4_superseded()
     test_defensive_set_fires_in_caution_and_riskoff()
     test_r5_superseded()
     test_positions_unavailable_not_flat()

@@ -73,37 +73,30 @@ authority ([D-007](decisions/D-007-theme-layer-retirement.md),
   removed; R2 degrades to `elevated` in Risk-off. The block-the-entry
   intent is enforced upstream in theme_ranker's entry gate.
 
-## R3 — New theme entry requirements
+## R3 — RETIRED → universe rotation + A+ doctrine (D-007 Phase 3, 2026-07-23)
 
-- **Text:** "New theme entry requires #1/#2 rank for 2 consecutive
-  Sundays AND risk-on regime AND discretionary catalyst review."
-- **Code (`_eval_r3`, lines 163–189):**
-  - any `entry_signals` action contains `"ENTRY SIGNAL"` → `action_needed`
-    ("Requires discretionary catalyst review before activation").
-  - else any contains `"Building"` → `compliant` (lists progress).
-  - else → `compliant`.
-- **Thresholds:** the "#1/#2 rank for 2 consecutive Sundays AND risk-on"
-  logic is **enforced upstream in theme_ranker**, not here:
-  `requires_top_n_rank: 2`, `consecutive_sundays_required: 2`,
-  `regime_required: [Risk-on / Trending, Risk-on / Choppy]` (config
-  `themes.entry_rule`). Counters run on ISO-week-deduped weekly closes
-  (see regime.md). R3 only re-reports theme_ranker's verdict.
-- **Enforcement:** ADVISORY (the discretionary catalyst review is a human
-  gate; code never confirms it happened).
-- **Resolved 2026-07-09:** `_eval_r3` formerly took a `regime` parameter
-  it never read (the "risk-on regime" clause is checked only in
-  theme_ranker). The unused parameter and its call-site argument were
-  removed; signature is now `_eval_r3(entry_signals)`.
+- **Text (historical):** "New theme entry requires #1/#2 rank for 2
+  consecutive Sundays AND risk-on regime AND discretionary catalyst
+  review."
+- **Code (`_eval_r3`):** always `compliant` with a supersession pointer —
+  "Superseded → universe rotation + A+ doctrine: entries qualify via the
+  weekly top-15 GICS scanner and the D-011 grade." No signal consumption
+  remains (the R5→R28 pointer treatment). Theme entry signals no longer
+  exist anywhere in the pipeline; the entry gate is condition 5 (group in
+  the current universe) + the D-011 A+ grade, both computed.
+- **Enforcement:** the pointer row is informational; the real gates are
+  COMPUTED (c5 + grade in the position engine).
 
-## R4 — Theme exit conditions
+## R4 — RETIRED → position-engine stops + group breakers (D-007 Phase 3, 2026-07-23)
 
-- **Documented in [docs/regime.md](regime.md).** Summary: `_eval_r4`
-  reports `exit_signals` — `"EXIT SIGNAL"` →
-  `action_needed`, `"Warning"` → `compliant`. The rule-engine report is
-  ADVISORY, but the underlying theme_ranker **HARD-mutates**
-  `qualified_themes.json` on a *confirmed* (2 degraded weekly closes)
-  regime-degradation or 3-weekly-close rank exit. Enforcement class
-  overall: HARD (state mutation) + ADVISORY (rule-engine surface).
+- **Text (historical):** documented in [docs/regime.md](regime.md) —
+  Sunday-cadence theme qualification exits (D-002).
+- **Code (`_eval_r4`):** always `compliant` with a supersession pointer —
+  "Superseded → close-basis stops (R10/R11, the 1B engine's EXIT_FIRED) +
+  per-group breakers." The theme_ranker's `qualified_themes.json`
+  mutation died with the layer (module archived; state file in
+  `archive/`). Exits are governed by the position engine's stop machine
+  and the per-group breaker status — both computed.
 
 ## R5 — RETIRED → R28 per-group caps (D-007 Phase 2, 2026-07-18)
 
@@ -113,9 +106,8 @@ authority ([D-007](decisions/D-007-theme-layer-retirement.md),
   (computed, Layer 3)." No count logic and **no violation branch remain**
   (the same pointer treatment R17/R18 received). Concentration is
   enforced in dollars by R28, not theme counts.
-- The theme_ranker still caps its own display-only active list at 2
-  (legacy layer, retiring in Phase 3) — that cap no longer has rule
-  status.
+- The theme_ranker's display-only active-list cap died with the layer
+  (D-007 Phase 3, 2026-07-23 — module archived).
 
 ---
 
@@ -249,6 +241,8 @@ concentration, with the actual numbers and whether code enforces them.
 
 | Rule | Limit (from text) | Where the number lives | Computed against real $? | Enforcement |
 |---|---|---|---|---|
+| **R3** | *(retired)* theme entry gate | superseded → universe rotation + A+ doctrine (D-007 Phase 3) | **Yes** — c5 + D-011 grade | **COMPUTED (position engine)** |
+| **R4** | *(retired)* theme exit signals | superseded → close-basis stops + group breakers (D-007 Phase 3) | **Yes** — EXIT_FIRED + breakers | **COMPUTED (position engine)** |
 | **R5** | *(retired)* theme count | superseded → R28 per-group caps (D-007 Phase 2) | **Yes — R28** (≤20% / ≤3 per group) | **COMPUTED (R28)** |
 | **R15** | Single position 5–8% of account | rule text + `portfolio_rules.py` | **Yes — R28** (warning >7.2%, violation >8%) | **COMPUTED (R28)** |
 | **R16** | Single theme ≤ 15% of book | `portfolio_rules.py` per-GICS-group caps (config `r28:`) | **Yes — R28** (≤20% AND ≤3 positions/group, amended 2026-07-13) | **COMPUTED (R28)** |

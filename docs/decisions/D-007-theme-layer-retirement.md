@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | D-007 |
 | **Date** | 2026-07-12 |
-| **Status** | Ruled — **Phases 0-2 implemented** (Phase 3 pending) |
+| **Status** | Ruled — **Phases 0-3 COMPLETE** (Phase 3 shipped 2026-07-23) |
 
 ## Context
 
@@ -99,7 +99,26 @@ two gates is observable, not harmful.
   (`resolve_group_map`), R5 → superseded R28 pointer, Layer 2 renders the
   universe's selected groups with breaker chips; legacy themes demoted to
   a visibly-deprecated strip.
-- **Phase 3 (decommission)**: pending.
+- **Phase 3 (decommission)**: shipped 2026-07-23 after five days of
+  parallel observation (per this record's own plan). ThemeRanker /
+  ConstituentRanker / `qualified_themes.json` / `theme_history.json`
+  moved to `archive/` (git history intact); the runner computes no theme
+  layer and the artifacts carry no `themes`/`theme_leaders` blocks
+  (era-aware consumers render the retirement — `/api/framework/
+  leaders.json` is 410 Gone with pointers, the assessment `themes`
+  section reports the decommission on post-Phase-3 artifacts and still
+  projects rows from older ones). R3/R4 are superseded pointer rows
+  (entries → universe rotation + A+ doctrine; exits → close-basis stops
+  + group breakers — the R5→R28 treatment). The Sunday weekly-review
+  text reduced to its scanner-era form ("regime + universe review").
+  The Layer-2 legacy strip and the theme-rotation "Actions This Week"
+  panel are gone from the page.
+- **The MRNA divergence exhibit's final state**: the exhibit (c5
+  honestly failing while the display theme layer ranked Biotech #1)
+  RETIRED WITH THE LAYER — the contradiction it existed to demonstrate
+  is no longer expressible, which was Phase 3's whole point. The
+  replay pin's exhibit assertions self-retire era-aware: they activate
+  only on artifacts that carry a themes block.
 
 ## Revisit triggers
 

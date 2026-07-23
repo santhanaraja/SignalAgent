@@ -498,10 +498,10 @@ class RegimeCalculator:
                 "ma200": spy_gauge.get("ma200"),
             }
 
-        # --- Degraded-week streaks (R4 confirmation protocol) ---
+        # --- Degraded-week streaks (D-002-era confirmation protocol) ---
         # Weekly close = latest entry per ISO week (ISO weeks end Sunday, so
-        # the weekly close IS the Sunday review state). Consumed by
-        # theme_ranker: qualification mutates only on confirmed degradation.
+        # the weekly close IS the Sunday review state). Display-only since
+        # D-007 Phase 3 retired the theme layer (its last consumer).
         degraded_incl_current, degraded_completed = self._degraded_week_streaks(
             regime_history, regime_state, backdrop_gate)
 

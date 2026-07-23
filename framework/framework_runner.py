@@ -14,9 +14,8 @@ import yfinance as yf
 import pandas as pd
 
 from .regime_calculator import RegimeCalculator, artifact_schema
-from .theme_ranker import ThemeRanker
+# D-007 Phase 3: ThemeRanker/ConstituentRanker retired to archive/
 from .rule_engine import RuleEngine
-from .constituent_ranker import ConstituentRanker
 from .position_signals import PositionSignalEngine
 
 
@@ -272,36 +271,12 @@ def run_framework(force_fetch: bool = False) -> dict:
     # Save regime history
     save_regime_history(regime_history, regime_result)
 
-    # --- Layer 2: Theme Rotation ---
-    print("[framework] Computing theme rankings...")
-    theme_ranker = ThemeRanker(config, fetch_data)
-    theme_result = theme_ranker.compute(regime_result["regime"], regime_result)
-
-    # Save theme history snapshot
-    theme_ranker.save_weekly_snapshot(theme_result)
-
-    top_themes = [t for t in theme_result["ranked_themes"] if t.get("rank") is not None]
-    for t in top_themes[:3]:
-        print(f"[framework]   #{t['rank']} {t['name']} ({t['proxy']}): "
-              f"4w {t.get('return_4w', 'N/A')}%, 12w {t.get('return_12w', 'N/A')}%")
-
-    # --- Layer 2.5: Constituent leaders for qualified themes ---
-    print("[framework] Ranking constituents for qualified themes...")
-    max_active = config.get("themes", {}).get("ranking", {}).get("max_active_themes", 2)
-    qualified_names = [t["name"] for t in theme_result["ranked_themes"]
-                       if t.get("rank") is not None and t["rank"] <= max_active]
-    # Always include currently-held (active) themes so their leaders show too.
-    for name in theme_result.get("active_themes", []):
-        if name not in qualified_names:
-            qualified_names.append(name)
-
-    # Rank constituents for ALL themes (informational visibility); only the
-    # qualified subset gets the full warning pipeline.
-    all_theme_names = [t["name"] for t in config.get("themes", {}).get("watchlist", [])]
-    constituent_ranker = ConstituentRanker(config, fetch_data, fetch_next_earnings)
-    theme_leaders = constituent_ranker.compute(all_theme_names, qualified_names)
-    print(f"[framework] Constituent leaders ranked for {len(theme_leaders)} themes "
-          f"(qualified: {', '.join(qualified_names) or 'none'})")
+    # --- Layer 2: the theme layer is DECOMMISSIONED (D-007 Phase 3) ---
+    # ThemeRanker/ConstituentRanker moved to archive/ — the universe
+    # rotation (top-15 GICS scanner) + Layer-2 GICS leadership are the
+    # thesis layer; the position engine + breakers govern exits. The
+    # artifacts no longer carry themes/theme_leaders blocks (era-aware
+    # consumers render the retirement honestly).
 
     # --- Shared ticker->group resolution (ONE resolver — D-007 Phase 1):
     # condition 5 and R28 both consume this map. Loaded once here; the whole
@@ -370,7 +345,7 @@ def run_framework(force_fetch: bool = False) -> dict:
     try:
         pos_engine = PositionSignalEngine(config, fetch_data)
         position_signals = pos_engine.compute(
-            regime_result, theme_result,
+            regime_result, None,
             universe_active=universe_active, group_map=group_map)
         n_pos = len(position_signals.get("tickers", {}))
         n_trans = len(position_signals.get("transitions", []))
@@ -386,7 +361,7 @@ def run_framework(force_fetch: bool = False) -> dict:
     # --- Layer 3: Rules ---
     print("[framework] Evaluating rules...")
     rule_engine = RuleEngine(config)
-    rules_result = rule_engine.evaluate(regime_result, theme_result,
+    rules_result = rule_engine.evaluate(regime_result,
                                         active_groups=active_groups)
     summary = rules_result["summary"]
     print(f"[framework] Rules: {summary['compliant']} compliant, "
@@ -441,13 +416,11 @@ def run_framework(force_fetch: bool = False) -> dict:
         "schema": artifact_schema(config.get("regime")),
         "framework_version": config.get("framework", {}).get("version", "1.0"),
         "regime": regime_result,
-        "themes": theme_result,
-        # Layer 2 primary content (D-007 Phase 2): the GICS leadership view;
-        # the themes block above is the legacy display-only strip until
-        # Phase 3 deletes it
+        # Layer 2 (D-007 Phase 3): the GICS leadership view is the ONLY
+        # thesis surface — the themes/theme_leaders blocks are retired
+        # (era-aware consumers render the retirement, never a fake empty)
         "universe_leadership": build_universe_leadership(universe_active,
                                                          signals_data),
-        "theme_leaders": theme_leaders,
         "position_signals": position_signals,
         "r28": r28_result,
         "rules": rules_result,

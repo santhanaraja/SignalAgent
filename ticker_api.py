@@ -1780,7 +1780,15 @@ def _assessment_vol(data):
 
 
 def _assessment_themes(data):
-    themes = data.get("themes") or {}
+    """Era-aware retirement (D-007 Phase 3): post-decommission artifacts
+    carry no themes block — the section reports the retirement honestly.
+    Pre-Phase-3 artifacts (older committed history) still project their
+    theme rows so the archive stays readable."""
+    themes = data.get("themes")
+    if not themes:
+        return {"retired": "theme layer decommissioned (D-007 Phase 3) — "
+                           "the thesis surface is universe_leadership; "
+                           "see /api/framework/latest"}
     active = set(themes.get("active_themes") or [])
     rows = []
     for t in themes.get("ranked_themes") or []:
@@ -1893,58 +1901,22 @@ def assessment_json():
 
 @app.route("/api/framework/leaders.json")
 def framework_leaders_json():
-    """
-    Public JSON API — returns the per-theme constituent leaders for ALL themes.
-
-    Each theme carries a "qualified" flag (deployment-ready top-2 + active) and
-    its top-3 "leaders". Warnings (earnings_within_7d / at_52w_high /
-    rsi_overbought) are populated only for qualified themes; non-qualified themes
-    are informational and always return warnings: [].
-
-    Response shape:
-    {
-      "generated_at": "...",
-      "theme_leaders": {
-        "Semis": {
-          "qualified": true,
-          "leaders": [
-            { "ticker": "MU", "current_price": 1133.99, "return_4w": 51.0,
-              "return_12w": 219.15, "composite_rank": 2, "rsi_14": 66,
-              "warnings": ["earnings_within_7d", "at_52w_high"] },
-            ...
-          ]
-        },
-        "Energy": { "qualified": false, "leaders": [ { ..., "warnings": [] }, ... ] },
-        ...
-      }
-    }
-    """
-    framework_path = os.path.join(PUBLIC_DIR, "framework.json")
-    if not os.path.exists(framework_path):
-        return app.response_class(
-            response=json.dumps({
-                "error": "Framework has not been run yet.",
-                "hint": "POST /api/framework/run to trigger a run.",
-            }),
-            status=404,
-            mimetype="application/json",
-        )
-    try:
-        with open(framework_path, "r") as f:
-            data = json.load(f)
-        return app.response_class(
-            response=json.dumps({
-                "generated_at": data.get("generated_at"),
-                "theme_leaders": data.get("theme_leaders", {}),
-            }, cls=NumpyEncoder),
-            mimetype="application/json",
-        )
-    except Exception as e:
-        return app.response_class(
-            response=json.dumps({"error": str(e)}),
-            status=500,
-            mimetype="application/json",
-        )
+    """RETIRED (D-007 Phase 3): the per-theme constituent-leaders payload
+    died with the theme layer. 410 Gone with pointers — the thesis surface
+    is universe_leadership on /api/framework/latest; per-name grades are
+    candidate_grades (D-017). ConstituentRanker lives on in archive/."""
+    return app.response_class(
+        response=json.dumps({
+            "error": "gone — theme layer decommissioned (D-007 Phase 3)",
+            "see": {
+                "leadership": "/api/framework/latest (universe_leadership)",
+                "per_name_grades": "/api/framework/latest (candidate_grades)",
+                "history": "git history + archive/constituent_ranker.py",
+            },
+        }),
+        status=410,
+        mimetype="application/json",
+    )
 
 
 @app.route("/api/universe/candidates.json")
