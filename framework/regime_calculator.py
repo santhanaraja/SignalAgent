@@ -23,6 +23,46 @@ def _today():
     return datetime.date.today()
 
 
+def _now_et():
+    """ET wall clock — the exchange clock the close-basis law keys on.
+    Overridable per-calculator via `_now_et_override` (tests pin it so
+    stub bars read deterministically confirmed or forming)."""
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.datetime.now(ZoneInfo("America/New_York"))
+    except Exception:
+        return datetime.datetime.now()
+
+
+def confirmed_close_frame(frame, now_et=None):
+    """D-008 close-basis law (intraday-provisional fix, ruled 2026-07-23):
+    the hysteresis ladder advances ONLY on CONFIRMED daily closes. During
+    market hours a fetched daily frame's last row is the FORMING bar — it
+    carries real volume, so the phantom-bar guard rightly keeps it, but it
+    is not a close. Live evidence that forced the ruling: the Jul-23
+    9:55am run counted the forming bar as clean close #2 and printed
+    Trending (lifting the A+ hard gate) hours before the close proved it;
+    Jul-21 flickered a one-cent EXIT_FIRED off the same mechanism.
+
+    A row is FORMING iff it is dated today in ET and the session hasn't
+    closed (before 16:00 ET). Half-days are handled conservatively: the
+    early close only reads confirmed from 16:00, so the regime just stays
+    at yesterday's state a few hours longer — the ladder never moves on an
+    unproven bar in either direction.
+
+    Returns (confirmed_frame, forming_last_row_or_None)."""
+    if frame is None or len(frame) == 0:
+        return frame, None
+    now = now_et or _now_et()
+    try:
+        last_date = frame.index[-1].date()
+    except (AttributeError, TypeError):
+        return frame, None
+    if last_date == now.date() and now.time() < datetime.time(16, 0):
+        return frame.iloc[:-1], frame.iloc[-1]
+    return frame, None
+
+
 # ---------------------------------------------------------------------------
 # The regime decision as pure functions (Build 4 step 0)
 #
@@ -798,6 +838,15 @@ class RegimeCalculator:
         except Exception:
             frame, hy_meta = None, {"basis": None, "pctile": None}
 
+        # Close-basis law: split off a forming last bar BEFORE the replay —
+        # the ladder, counters, throttle display, and the recorded state all
+        # come from confirmed closes only; the forming bar renders as
+        # intraday_preview below, never steps anything.
+        forming = None
+        if frame is not None:
+            frame, forming = confirmed_close_frame(
+                frame, now_et=getattr(self, "_now_et_override", None))
+
         if frame is None or len(frame) < 10:
             # data outage — fall back to the recorded state, degraded.
             # STALENESS BOUND (review finding): a record older than 7
@@ -897,6 +946,34 @@ class RegimeCalculator:
             "degraded": degraded,
             "degraded_reason": degraded_reason,
         }
+
+        if forming is not None:
+            # Display-only preview of the forming bar (raw chassis verdict
+            # on live values) — labeled so no reader can mistake it for the
+            # regime. The whole annotation is best-effort.
+            try:
+                pt = float(forming["trend"])
+                pv = float(forming["vix_5d"])
+                pb = float(forming["breadth"])
+                ph = bool(forming["hy_stress"])
+                block["intraday_preview"] = {
+                    "as_of": str(forming.name.date()),
+                    "raw_state": chassis_raw_state(
+                        pt >= 0, pv, ph, pb, vix_thr=ccfg["vix_thr"],
+                        breadth_thr=ccfg["breadth_thr"],
+                        require_k=ccfg["require_k"]),
+                    "throttles": {
+                        "vix": {"firing": bool(pv >= ccfg["vix_thr"]),
+                                "value": round(pv, 2)},
+                        "hy": {"firing": ph},
+                        "breadth": {"firing": bool(pb < ccfg["breadth_thr"]),
+                                    "value": round(pb, 2)},
+                    },
+                    "note": "forming bar — display only, never steps the "
+                            "ladder (close-basis law, ruled 2026-07-23)",
+                }
+            except (KeyError, TypeError, ValueError):
+                pass
 
         # Record the result (observability + the outage fallback above).
         # Committed by CI's framework/state/ add — survives redeploys.

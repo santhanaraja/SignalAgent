@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.join(REPO, "scripts"))
 from framework.regime_calculator import (  # noqa: E402
     CHASSIS_STATES, CHASSIS_RANK, CHASSIS_TO_REGIME, CHASSIS_LADDER,
     chassis_raw_state, chassis_step, new_chassis_hysteresis, pctile_of_last,
-    replay_chassis, artifact_schema, RegimeCalculator,
+    replay_chassis, artifact_schema, confirmed_close_frame, RegimeCalculator,
 )
 import backtest_gauge_b as bt  # noqa: E402  — the validated analysis source
 
@@ -268,6 +268,11 @@ def _calc(tmpdir, fetch, oas_series="declining"):
     calc._compute_yield_curve = lambda c: {"value": None, "signal": "unavailable",
                                            "detail": "stubbed"}
     calc._try_fred_hy_spread = lambda c: None
+    # Close-basis law (Part-1 fix): pin the clock POST-close of the stub's
+    # last bar so every stub bar reads deterministically CONFIRMED — the
+    # forming-bar semantics get their own explicit tests. Without this pin
+    # the suite would pass after 4pm ET and fail before (clock-dependent).
+    calc._now_et_override = pd.Timestamp(_STUB_LAST_DAY) + pd.Timedelta(hours=17)
     return calc
 
 
@@ -613,6 +618,87 @@ def test_simulate_perf_and_zero_fetch():
           f"fetches (booby-trapped), record-absent degrade honest: OK")
 
 
+# ---- close-basis law: forming bars never step the ladder (ruled 2026-07-23)
+
+
+def test_forming_bar_never_steps_ladder():
+    """THE Part-1 pin, on the pure layer: a frame whose forming last bar
+    WOULD complete an N=2 upgrade must not — the confirmed state and the
+    up-counter come from confirmed closes only. Replayed both ways
+    (live evidence: the Jul-23 9:55am run printed Trending off a forming
+    clean bar while the committed close-basis state was up=1 Choppy)."""
+    idx = _bdays(4)
+    # closes: dirty (breadth fires) -> clean -> clean(forming today)
+    # from In-Trend-Full: dirty close downgrades instantly (Throttled),
+    # then clean close #1 banks up=1, forming clean bar would be #2
+    frame = pd.DataFrame({
+        "trend": [5.0, 5.0, 5.0, 5.0],
+        "vix_5d": [15.0, 15.0, 15.0, 15.0],
+        "breadth": [0.3, -0.9, 0.3, 0.3],
+        "hy_stress": [False, False, False, False],
+    }, index=idx)
+    seqs = lambda f: ([float(x) for x in f["trend"]],
+                      [float(x) for x in f["vix_5d"]],
+                      [bool(x) for x in f["hy_stress"]],
+                      [float(x) for x in f["breadth"]])
+    # intraday clock: 13:00 ET on the last bar's date -> forming
+    noon = idx[-1] + pd.Timedelta(hours=13)
+    confirmed, forming = confirmed_close_frame(frame, now_et=noon)
+    assert forming is not None and len(confirmed) == 3
+    states, carry, raw = replay_chassis(*seqs(confirmed))
+    assert states[-1] == "In-Trend-Throttled" and carry["up"] == 1, \
+        (states[-1], carry)     # ladder holds — one clean close banked
+    # the full frame (what the pre-fix replay used) WOULD have upgraded:
+    states_f, carry_f, _ = replay_chassis(*seqs(frame))
+    assert states_f[-1] == "In-Trend-Full", \
+        "fixture must represent the live bug (forming bar completes N=2)"
+    # post-close clock: the same bar is now a confirmed close and steps
+    confirmed2, forming2 = confirmed_close_frame(
+        frame, now_et=idx[-1] + pd.Timedelta(hours=16, minutes=10))
+    assert forming2 is None and len(confirmed2) == 4
+    # yesterday-dated last bar is confirmed at ANY hour
+    confirmed3, forming3 = confirmed_close_frame(
+        frame, now_et=idx[-1] + pd.Timedelta(days=1, hours=9))
+    assert forming3 is None and len(confirmed3) == 4
+    print("  close-basis law (pure): forming bar held at up=1 (full frame "
+          "would have upgraded), post-close/next-day bars step: OK")
+
+
+def test_calculator_intraday_preview():
+    """Calculator path: an intraday run serves the CONFIRMED close-basis
+    state (replay/record end at the last confirmed close) and renders the
+    forming bar as intraday_preview — labeled display-only. The same data
+    post-close steps normally with no preview."""
+    tmp = tempfile.mkdtemp(prefix="chassis_intraday_")
+    try:
+        fetch = _stub_fetcher(spy_up=True, vix_level=15.0)
+        prev_day = str(_bdays(2)[-2].date())
+        calc = _calc(tmp, fetch)
+        calc._now_et_override = pd.Timestamp(_STUB_LAST_DAY) \
+            + pd.Timedelta(hours=13)                       # 1pm ET: forming
+        r = calc.compute()
+        ch = r["chassis"]
+        assert ch["replay"]["end"] == prev_day, ch["replay"]
+        pv = ch.get("intraday_preview")
+        assert pv and pv["as_of"] == _STUB_LAST_DAY
+        assert pv["raw_state"] in CHASSIS_STATES
+        assert "never steps" in pv["note"]
+        rec = json.load(open(os.path.join(tmp, "regime_chassis_state.json")))
+        assert rec["as_of"] == prev_day, \
+            "intraday run must record the CONFIRMED close, not the forming bar"
+        # post-close: bar confirms, preview gone, record advances
+        calc2 = _calc(tmp, fetch)                          # 17:00 pin in _calc
+        r2 = calc2.compute()
+        assert r2["chassis"]["replay"]["end"] == _STUB_LAST_DAY
+        assert "intraday_preview" not in r2["chassis"]
+        rec2 = json.load(open(os.path.join(tmp, "regime_chassis_state.json")))
+        assert rec2["as_of"] == _STUB_LAST_DAY
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    print("  calculator: intraday run serves confirmed state + labeled "
+          "preview; post-close run steps and records: OK")
+
+
 if __name__ == "__main__":
     print("\n=== Gauge B production chassis pins (D-008 build) ===")
     test_locked_config()
@@ -634,4 +720,6 @@ if __name__ == "__main__":
     test_artifact_schema_tags()
     test_simulate_endpoint_chassis()
     test_simulate_perf_and_zero_fetch()
+    test_forming_bar_never_steps_ladder()
+    test_calculator_intraday_preview()
     print("\nAll Gauge B chassis pins green.")

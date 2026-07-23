@@ -1257,6 +1257,7 @@ function render(){
         <div style="font-size:18px;font-weight:700;color:${regimeColor};">${ch.trend_in===false?'Out of Trend':ch.trend_in?'In Trend':'Trend Unknown'}</div>
         <div style="font-size:11px;margin-top:4px;">${firing.length?`Throttled: ${firing.join(' + ')}`:(ch.trend_in?'No throttles firing':'&mdash;')}</div>
         ${ch.raw_state&&ch.raw_state!==ch.confirmed_state?`<div style="font-size:11px;margin-top:4px;">raw ${ch.raw_state} &rarr; needs ${(ch.hysteresis&&ch.hysteresis.n)||2} closes (${(ch.hysteresis&&ch.hysteresis.up)||0} so far)</div>`:''}
+        ${ch.intraday_preview?`<div style="font-size:11px;margin-top:4px;color:var(--dim);" title="${(ch.intraday_preview.note||'').replace(/"/g,'&quot;')}">intraday preview (forming bar): ${ch.intraday_preview.raw_state} &mdash; display only, close confirms</div>`:''}
         ${regime.consecutive_weeks_at_state>1?`<div style="font-size:11px;margin-top:4px;">${regime.consecutive_weeks_at_state} consecutive weeks</div>`:''}
       </div>`;})():`<div class="regime-meta">
         <div class="label">Voter Score</div>
