@@ -167,7 +167,7 @@ message). "Elevates" = the condition under which status becomes
 | **R8** | No naked momentum exposure through binary catalysts. | binary_catalyst | active themes > 0 | ADVISORY¹ |
 | **R9** | Verify compliance scope before entering any new instrument class. | compliance | **never** (in no set) | DISPLAY-ONLY |
 | **R10** | Stop moves UP only. Never lower a stop in adversity. | stop_management | Risk-off/Caution **or** active themes | ADVISORY |
-| **R11** | Decisions on the exit-timeframe CLOSE, never on intraday wicks. | close_based | active themes > 0 | ADVISORY² |
+| **R11** | Decisions on the exit-timeframe CLOSE, never on intraday wicks. ([why the close — the mechanics primer](explainers/market-mechanics-primer.md)) | close_based | active themes > 0 | ADVISORY² |
 | **R12** | Exit timeframe must be slower than entry timeframe. | timeframe | active themes > 0 | ADVISORY |
 | **R13** | Never override a fired stop. | stop_override | Risk-off/Caution **or** active themes | ADVISORY |
 | **R14** | Bank big winners back to preservation core where tax-efficient. | profit_taking | **never** (in no set) | DISPLAY-ONLY |

@@ -10,6 +10,12 @@ re-derive is a ruling you cannot trust when conditions change.
 no record without a revisit trigger; no ruling without its evidence
 linked."
 
+**How decisions get judged here:** every record stores its options
+considered and a retest recipe — stored counterfactuals. The method
+itself is taught in
+[the counterfactual-reasoning explainer](../explainers/counterfactual-reasoning.md)
+(change the DECISION, never the INFORMATION).
+
 Deliberation briefs (the pre-ruling analysis documents) live in
 [`docs/briefs/`](../briefs/); records link back to theirs.
 
@@ -52,6 +58,7 @@ flowchart TD
 | [D-013](D-013-sentiment-rebuild.md) | Sentiment rebuilt as per-ticker behavioral analysis (Technical Sentiment + relative strength + news; VADER/StockTwits retired) | 2026-07-13 | Ruled | — |
 | [D-014](D-014-tradingview-data-api.md) | TradingView Data API as a candidate yfinance replacement | 2026-07-13 | **Proposed** — parked (gated on a free-tier spike, gated on a trigger) | — |
 | [D-015](D-015-oss-frameworks-survey.md) | Survey serious OSS trading frameworks for borrowable techniques (harvest, don't migrate) | 2026-07-13 | **Proposed** — parked (gated on the build queue clearing) | — |
+| [D-016](D-016-extreme-fear-overlay.md) | Extreme-fear contrarian entry overlay — backtest-gated hypothesis (ruled exception to D-011 ONLY if it survives the full 11yr sample) | 2026-07-13 | **Proposed** — parked (gated on machinery free + F&G reconstruction appetite) | — |
 | [D-017](D-017-candidates-tier.md) | Candidates tier — auto-grade every signals.json name (grade without a state); chip-only display; copy-the-prompt +watch; close-report line | 2026-07-18 | Ruled | — |
 
 Status meanings: **Proposed** (deliberation open or parked with its

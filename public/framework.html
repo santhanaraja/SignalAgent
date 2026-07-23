@@ -1397,6 +1397,11 @@ function render(){
   }
   // R28 reality replaces the retired static theme caps (hardening item H2)
   html+=`<div style="margin-top:8px;font-size:11px;color:var(--dim);">Group caps: ≤20% / ≤3 positions per GICS group (R28, computed) &middot; aggregate ceiling regime-scaled 90/50/25/5 (D-008 Q4) &middot; see Layer 3</div>`;
+  // Rank semantics (docs rider): the skipped numbers are not missing
+  // data — they are ineligible groups; the gap list computes live so the
+  // example can never go stale on a rotation
+  const rankGaps=(()=>{const rs=lead.map(g=>g.rank).filter(r=>r!=null);if(!rs.length)return [];const out=[];for(let i=1;i<=Math.max(...rs);i++){if(!rs.includes(i))out.push('#'+i);}return out;})();
+  html+=`<div style="margin-top:4px;font-size:11px;color:var(--dim);">Ranks are global across every GICS sub-industry — a skipped rank is a group excluded by the eligibility rules (≥3 candidate tickers, no solo/duo groups; ≥1 ticker passing the score/market-cap/volume qualifier gates)${rankGaps.length?` &middot; this rotation skips ${rankGaps.slice(0,6).join(', ')}${rankGaps.length>6?'…':''} (see universe_ranking.json for who and why)`:''}.</div>`;
 
   // (D-007 Phase 3: the legacy theme strip and the theme-rotation
   // "Actions This Week" panel died here — entries qualify via the

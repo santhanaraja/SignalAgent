@@ -138,6 +138,22 @@ completed live on cutover day. The Build-1A parliament remains behind
 `regime.engine` (revert lever). Perf follow-up `9641a07` (Gauge Lab
 zero-fetch simulate).
 
+**Implementation note — close-basis law (2026-07-23, Phase 3 Part 1):**
+intraday runs no longer step the hysteresis ladder. The live evidence: on
+2026-07-23 a 9:55am dyno run counted the day's FORMING bar as clean close #2
+and printed Trending (lifting the A+ hard gate) hours before the close proved
+it. `confirmed_close_frame` now splits off a last bar dated today-ET before
+16:00 ET; the replay, counters, throttle display, and the recorded state come
+from confirmed closes only, and the forming bar renders as a labeled
+`intraday_preview`. Pinned both ways in `test_gauge_chassis.py`; the
+2,896-day full-replay pin is untouched.
+
+**Live exhibits (the teaching layer):**
+[first live throttle fire, 2026-07-21](../explainers/regime-first-throttle-fire-2026-07-21.md)
+— the Quality calibration's first defensive call, walked through its
+mechanics · [N=2 asymmetric hysteresis](../explainers/n2-asymmetric-hysteresis.md)
+— the upgrade rule taught from the harness evidence that chose it.
+
 ## Evidence
 
 - [docs/backtest-regime.md](../backtest-regime.md) — the Build 4 record
