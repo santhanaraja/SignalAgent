@@ -271,8 +271,16 @@ function renderChanges(){
       detailHtml = `${breakerIcon(detail.to_status)} ${detail.from_status} → ${detail.to_status}`
         + (detail.reason?` · ${detail.reason}`:'');
     } else if(c.type==='regime_change'){
+      // One-grammar retirement (Phase 3): from the chassis cutover
+      // (2026-07-18, D-008) the vote counts no longer set the regime —
+      // demoted to an explicitly-informational tail so a chassis-era
+      // label can never read as "contradicted by its components".
+      // Pre-cutover entries keep the era-true "Voters:" grammar.
+      const chassisEra=(c.timestamp||'')>='2026-07-18';
       detailHtml = (detail.risk_on_count!=null
-        ? `Voters: ${detail.risk_on_count} risk-on / ${detail.caution_count} caution / ${detail.risk_off_count} risk-off`
+        ? (chassisEra
+            ? `${detail.from_regime?`${detail.from_regime} → ${detail.to_regime||''}`:'regime change'} · legacy voters ${detail.risk_on_count}/${detail.caution_count}/${detail.risk_off_count} — informational, does not set the regime (chassis, D-008)`
+            : `Voters: ${detail.risk_on_count} risk-on / ${detail.caution_count} caution / ${detail.risk_off_count} risk-off`)
         : `${detail.from_regime} → ${detail.to_regime}`);
     } else if(c.type==='trade_signal_change'){
       detailHtml = (detail.score!=null?`Score: ${detail.score}`:'')

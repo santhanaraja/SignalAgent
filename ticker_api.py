@@ -1486,9 +1486,22 @@ def framework_gauges_json():
             "generated_at": data.get("generated_at"),
             "regime": regime.get("regime"),
             "regime_action": regime.get("action"),
+            # One-grammar retirement (Phase 3): the chassis sets the regime
+            # (D-008); the parliament vote counts are informational leftovers.
+            # The flat *_count fields remain ONE deprecation cycle for API
+            # consumers, then go — read legacy_voters instead.
             "risk_on_count": regime.get("risk_on_count"),
             "caution_count": regime.get("caution_count"),
             "risk_off_count": regime.get("risk_off_count"),
+            "legacy_voters": {
+                "risk_on": regime.get("risk_on_count"),
+                "caution": regime.get("caution_count"),
+                "risk_off": regime.get("risk_off_count"),
+                "note": "parliament-era vote counts — informational only; "
+                        "the chassis sets the regime (D-008). The flat "
+                        "*_count fields are deprecated and will be removed "
+                        "after a cycle.",
+            },
             "consecutive_weeks": regime.get("consecutive_weeks_at_state"),
             "regime_change_pending": regime.get("regime_change_pending", False),
             "gauges": regime.get("gauges", {}),
@@ -1593,9 +1606,19 @@ def _assessment_regime(data):
         # throttles, hysteresis) ride the assessment like every other layer
         "engine": regime.get("engine"),
         "chassis": regime.get("chassis"),
+        # deprecated flat counts (one cycle) + the annotated block —
+        # see /api/regime's legacy_voters note (one-grammar retirement)
         "risk_on_count": regime.get("risk_on_count"),
         "caution_count": regime.get("caution_count"),
         "risk_off_count": regime.get("risk_off_count"),
+        "legacy_voters": {
+            "risk_on": regime.get("risk_on_count"),
+            "caution": regime.get("caution_count"),
+            "risk_off": regime.get("risk_off_count"),
+            "note": "parliament-era vote counts — informational only; "
+                    "the chassis sets the regime (D-008). Deprecated flat "
+                    "*_count fields will be removed after a cycle.",
+        },
         "gauges": regime.get("gauges", {}),
         "backdrop_gate": regime.get("backdrop_gate"),
         "macro_inputs": regime.get("macro_inputs"),

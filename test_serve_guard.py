@@ -486,6 +486,24 @@ def test_candidates_page_contract():
           f"+watch prompt, honest constraint; {note}: OK")
 
 
+def test_one_grammar_page_sources():
+    """Phase 3 one-grammar retirement: the framework page's meta area
+    carries no parliament vote tile (the chassis tile shows the real
+    drivers); the history page demotes chassis-era vote counts to an
+    explicitly-informational tail and keeps the era-true grammar for
+    pre-cutover entries."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    fw = open(os.path.join(here, "public", "framework.html")).read()
+    assert "Voter Score" not in fw, "parliament vote tile resurfaced"
+    assert "Risk-On</div>" not in fw
+    assert "intraday preview (forming bar)" in fw   # Part-1 annotation
+    hist = open(os.path.join(here, "public", "history.html")).read()
+    assert "does not set the regime" in hist and "chassisEra" in hist
+    assert "Voters: ${detail.risk_on_count}" in hist  # pre-cutover era kept
+    print("  one-grammar page sources: vote tile gone, history demotes "
+          "chassis-era counts, era-true pre-cutover: OK")
+
+
 def test_signal_refresh_chases_framework():
     """D-017 live-serving law: an engine rewrite strips the candidate
     annotation (grades must travel with the rows that produced their
@@ -539,6 +557,7 @@ if __name__ == "__main__":
     test_layer2_ticker_expansion_contract()
     test_layer2_enrichment_shared_renderers()
     test_candidates_page_contract()
+    test_one_grammar_page_sources()
     test_signal_refresh_chases_framework()
     test_missing_file_still_404()
     print("\nAll serve-guard tests passed.\n")

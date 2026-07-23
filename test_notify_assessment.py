@@ -160,7 +160,10 @@ def test_message_formatting_normal_day():
     try:
         msg = notify.build_message(_framework_payload(), _et(NOW))
         assert "*SignalAgent Daily Assessment* — 2026-07-09 04:15 PM ET" in msg
-        assert "Regime: *Risk-on / Trending → Risk-on / Choppy* (2/1/0)" in msg
+        # one-grammar retirement (Phase 3): the regime line carries NO
+        # parliament vote counts — the chassis sets the regime (D-008)
+        assert "Regime: *Risk-on / Trending → Risk-on / Choppy*" in msg
+        assert "(2/1/0)" not in msg and "/0)" not in msg
         assert "• ARWR *HELD* — $84.0 vs stop $80.29 · cushion 0.95×ATR" in msg
         assert ("• MRNA *EXTENDED_HOLD* — ext +18.65% (2.03×ATR) — "
                 "extension 2.03×ATR > 1.8× — re-entry suppressed") in msg

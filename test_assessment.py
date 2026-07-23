@@ -211,6 +211,13 @@ def test_response_shape():
             ["breadth", "hy_spread", "vix_5d_avg"]
         assert b["regime"]["backdrop_gate"]["open"] is True
         assert "yield_curve" in b["regime"]["macro_inputs"]
+        # one-grammar retirement (Phase 3): counts survive ONE deprecation
+        # cycle as flat fields, annotated via legacy_voters — the note must
+        # say the chassis sets the regime
+        lv = b["regime"]["legacy_voters"]
+        assert lv["risk_on"] == 2 and lv["caution"] == 1
+        assert "informational only" in lv["note"] and "chassis" in lv["note"]
+        assert b["regime"]["risk_on_count"] == 2   # deprecated, one cycle
         # positions: HELD has no conditions block, watcher does
         assert "conditions" not in b["positions"]["ARWR"]
         assert b["positions"]["ARWR"]["stop"]["level"] == 80.29

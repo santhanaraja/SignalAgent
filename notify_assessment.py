@@ -81,11 +81,12 @@ def build_message(data, now_et):
     shift = (changes or {}).get("regime_shift")
     reg_txt = (f"{shift['from']} → {shift['to']}" if shift
                else regime.get("regime", "?"))
-    counts = (f"({regime.get('risk_on_count')}/{regime.get('caution_count')}"
-              f"/{regime.get('risk_off_count')})")
+    # One-grammar retirement (Phase 3): the "(N/N/N)" parliament vote
+    # counts are gone — the chassis sets the regime (D-008), and two
+    # readers were misled by counts that neither explain nor set it.
     lines.append(f"*SignalAgent Daily Assessment* — "
                  f"{now_et.strftime('%Y-%m-%d %I:%M %p')} ET")
-    lines.append(f"Regime: *{reg_txt}* {counts}")
+    lines.append(f"Regime: *{reg_txt}*")
 
     holdings = {t: x for t, x in positions.items()
                 if isinstance(x, dict) and x.get("kind") == "holding"}
