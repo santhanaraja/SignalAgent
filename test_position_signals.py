@@ -23,8 +23,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from framework.position_signals import (
     PositionSignalEngine, HELD, EXIT_FIRED, WATCHING,
-    RE_ENTRY_ARMING, RE_ENTRY_READY,
+    RE_ENTRY_ARMING, RE_ENTRY_READY, EXTENDED_HOLD,
+    assess_position, pending_closes, MAX_CATCHUP_BARS,
 )
+from framework.regime_calculator import confirmed_close_frame
 
 TRENDING = "Risk-on / Trending"
 CHOPPY = "Risk-on / Choppy"
@@ -43,9 +45,9 @@ CONFIG = {
 UNMAPPED = {"met": True, "no_group_mapping": True, "detail": "no mapping"}
 
 
-def _bars(closes, spread=1.0):
+def _bars(closes, spread=1.0, end="2026-07-02"):
     closes = list(closes)
-    idx = pd.date_range(end="2026-07-02", periods=len(closes), freq="B")
+    idx = pd.date_range(end=end, periods=len(closes), freq="B")
     c = np.array(closes, dtype=float)
     return pd.DataFrame({"Open": c, "High": c + spread, "Low": c - spread,
                          "Close": c, "Volume": [1000] * len(c)}, index=idx)
@@ -369,8 +371,12 @@ def test_extension_guard_no_flapping_events():
         earnings_calendar.get_earnings_map = lambda ts: {t: None for t in ts}
 
         extended = lambda t, period="6mo": _bars(*EXTENDED_DF_ARGS)
+        # D-018: the fall-back must arrive on a NEW confirmed close. (A
+        # same-date data swap no longer transitions — a re-render never
+        # moves the ladder; that is pinned in
+        # test_d018_rerender_never_moves_the_ladder.)
         calm = lambda t, period="6mo": _bars([100.0] * 28 + [101.2, 101.4],
-                                             spread=3.0)
+                                             spread=3.0, end="2026-07-03")
         regime = {"regime": TRENDING}
 
         def events():
@@ -389,7 +395,7 @@ def test_extension_guard_no_flapping_events():
         assert len(events()) == 1, "flapping: event re-emitted at constant extension"
 
         eng_calm = PositionSignalEngine(copy.deepcopy(CONFIG), calm)
-        r3 = eng_calm.compute(regime, None)         # extension fell back
+        r3 = eng_calm.compute(regime, None)   # next close: extension fell back
         assert r3["tickers"]["EXT"]["state"] == RE_ENTRY_READY
         assert len(r3["transitions"]) == 1
         assert r3["transitions"][0]["detail"]["from_state"] == "EXTENDED_HOLD"
@@ -1138,6 +1144,428 @@ def test_candidate_watcher_parity():
               "(pre-grade era) — skipped")
 
 
+# ------------------------------------------------------------------
+# D-018 — the close-basis law on the position ladder: transitions only
+# on CONFIRMED closes; forming bars preview, never step.
+# ------------------------------------------------------------------
+
+# The real Jul-21 CRWD flap, from data/position_events.json:
+#   17:59 UTC (13:59 ET)  HELD -> EXIT_FIRED   close 190.96 vs SMA20 190.97
+#   19:40 UTC (15:40 ET)  EXIT_FIRED -> HELD   close 192.04
+# ...while the day's CONFIRMED close was 191.15 — ABOVE the SMA20. The
+# exit never happened; the ladder invented it off a forming bar and took
+# it back 100 minutes later.
+_CRWD_CLOSE_JUL21 = 191.15
+_CRWD_FORMING_JUL21 = 190.96
+_CRWD_CLOSE_JUL22 = 188.42        # the REAL exit (recorded SMA20 191.85)
+_D18_DAY = "2026-07-21"
+
+# One canonical history through Jul-20, shaped so SMA20 lands ~191.01 —
+# the cent-level consolidation the real flap happened in. Verified:
+#   Jul-20 191.08 > 191.0065 above  |  Jul-21 forming 190.96 < 191.0045 BELOW
+#   Jul-21 close  191.15 > 191.0140 above  |  Jul-22 188.42 < 190.8850 BELOW
+_D18_BASE = [191.0] * 27 + [191.05, 191.08]
+
+
+def _crwd_frame(*tail, **kw):
+    """The canonical history plus the given confirmed/forming closes."""
+    end = kw.get("end", _D18_DAY)
+    return _bars(_D18_BASE + list(tail), end=end)
+
+
+def _et(day, hh, mm=0):
+    return pd.Timestamp(f"{day} {hh:02d}:{mm:02d}:00")
+
+
+def test_d018_grade_inputs_are_close_basis():
+    """The D-017 reconciliation, pinned: stripping the SYNTHETIC bar was
+    only half the law — the day's FORMING bar carries real volume and used
+    to reach the grade. compute_grade_inputs must now split it off, so a
+    candidate graded intraday is graded on the confirmed close."""
+    from signal_engine import compute_grade_inputs
+    import framework.regime_calculator as rc
+
+    conf = _crwd_frame(_CRWD_CLOSE_JUL21, end="2026-07-20")
+    forming = _crwd_frame(_CRWD_CLOSE_JUL21, 250.0, end=_D18_DAY)
+
+    real_now = rc._now_et
+    try:
+        # 13:59 ET on Jul-21: the 250.0 bar is FORMING and must not count
+        rc._now_et = lambda: pd.Timestamp(f"{_D18_DAY} 13:59:00")
+        gi_intraday = compute_grade_inputs(forming)
+        gi_conf = compute_grade_inputs(conf)
+        assert gi_intraday["close"] == gi_conf["close"], \
+            "a forming bar reached the grade inputs"
+        assert gi_intraday["sma20"] == gi_conf["sma20"]
+        # post-close the same frame DOES grade on the new bar
+        rc._now_et = lambda: pd.Timestamp(f"{_D18_DAY} 17:00:00")
+        gi_after = compute_grade_inputs(forming)
+        assert gi_after["close"] == 250.0
+    finally:
+        rc._now_et = real_now
+    print("  D-018 grade reconciliation: compute_grade_inputs splits the "
+          "forming bar (intraday == confirmed close), steps post-close: OK")
+
+
+def test_d018_forming_bar_cannot_transition():
+    """THE pin: reproduce the Jul-21 flap and prove the split holds it.
+    The un-split frame must PROVABLY transition (else the fixture isn't
+    the bug), and the split frame must hold the committed state."""
+    eng = _engine()
+    ok = {"met": True, "detail": "in universe"}
+    entry = {"ticker": "CRWD", "stop_on_entry": "sma20_close"}
+
+    # un-split (the pre-D-018 engine): the forming bar fires the exit
+    flap = _crwd_frame(_CRWD_FORMING_JUL21)   # ...history + Jul-21 forming
+    bad = eng.evaluate(entry, "holding", flap, TRENDING, ok, HELD)
+    assert bad["state"] == EXIT_FIRED, \
+        "fixture must reproduce the live bug (forming bar fires the exit)"
+
+    # split (D-018): the forming bar is removed, the confirmed close holds
+    conf, forming = confirmed_close_frame(flap, now_et=_et(_D18_DAY, 13, 59))
+    assert forming is not None and len(conf) == len(flap) - 1
+    held = eng.evaluate(entry, "holding", conf, TRENDING, ok, HELD)
+    assert held["state"] == HELD, held["state"]
+
+    # the day's REAL close (191.15) also holds — the exit never existed
+    real = _crwd_frame(_CRWD_CLOSE_JUL21)
+    conf2, forming2 = confirmed_close_frame(real, now_et=_et(_D18_DAY, 17, 0))
+    assert forming2 is None
+    assert eng.evaluate(entry, "holding", conf2, TRENDING, ok,
+                        HELD)["state"] == HELD
+
+    # ...and the NEXT day's real close (188.42, far below SMA20) DOES fire.
+    # Jul-22 is the other half of the live evidence: the pre-D-018 engine
+    # burned that genuine exit intraday (EXIT_FIRED 15:02 -> WATCHING
+    # 16:45) so the close run had nothing left to announce.
+    real22 = _crwd_frame(_CRWD_CLOSE_JUL21, _CRWD_CLOSE_JUL22,
+                        end="2026-07-22")
+    c22, f22 = confirmed_close_frame(real22, now_et=_et("2026-07-22", 17, 0))
+    assert f22 is None
+    assert eng.evaluate(entry, "holding", c22, TRENDING, ok,
+                        HELD)["state"] == EXIT_FIRED
+    print("  D-018 forming-bar pin: Jul-21 flap reproduced un-split "
+          "(EXIT_FIRED) and HELD once split; Jul-22's real close still "
+          "fires: OK")
+
+
+def _d018_env(positions, fetcher, ticker_group="Systems Software"):
+    """compute()-level harness: tmp dirs + artifacts + engine."""
+    tmp = tempfile.mkdtemp(prefix="d018_")
+    state_dir, data_dir, public_dir = (os.path.join(tmp, d) for d in
+                                       ("state", "data", "public"))
+    for d in (state_dir, data_dir, public_dir):
+        os.makedirs(d)
+    olds = (PositionSignalEngine.STATE_DIR, PositionSignalEngine.DATA_DIR,
+            PositionSignalEngine.PUBLIC_DIR)
+    PositionSignalEngine.STATE_DIR = state_dir
+    PositionSignalEngine.DATA_DIR = data_dir
+    PositionSignalEngine.PUBLIC_DIR = public_dir
+    with open(os.path.join(state_dir, "positions.json"), "w") as f:
+        json.dump(positions, f)
+    with open(os.path.join(data_dir, "universe_active.json"), "w") as f:
+        json.dump({"groups": {ticker_group: {"tickers": ["CRWD"],
+                                             "weeks_in_universe": 2}}}, f)
+    with open(os.path.join(data_dir, "signals.json"), "w") as f:
+        json.dump({"groups": [{"name": ticker_group,
+                               "breaker_status": "clear",
+                               "stocks": [{"ticker": "CRWD"}]}]}, f)
+    eng = PositionSignalEngine(copy.deepcopy(CONFIG), fetcher)
+    return tmp, eng, state_dir, data_dir, olds
+
+
+def _d018_restore(tmp, olds):
+    (PositionSignalEngine.STATE_DIR, PositionSignalEngine.DATA_DIR,
+     PositionSignalEngine.PUBLIC_DIR) = olds
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_d018_intraday_render_carries_and_previews():
+    """compute(): an intraday run reproduces the committed state, emits
+    NO transition and NO event, and labels the forming bar as a preview.
+    Data-unavailable carries the committed state (scope item 4)."""
+    positions = {"schema_version": "1.0", "holdings": [
+        {"ticker": "CRWD", "stop_on_entry": "sma20_close"}], "watching": []}
+    # ONE canonical series sliced two ways — Jul-20's close is identical in
+    # both runs, so any event can only come from the Jul-21 forming bar
+    full = _crwd_frame(_CRWD_FORMING_JUL21)      # ends Jul-21 (forming)
+    frames = {"CRWD": full.iloc[:-1]}            # the Jul-20 confirmed view
+    tmp, eng, state_dir, data_dir, olds = _d018_env(
+        positions, lambda t, period="6mo": frames.get(t))
+    try:
+        # confirmed close on Jul-20 -> HELD recorded
+        eng._now_et_override = _et("2026-07-20", 17, 0)
+        r1 = eng.compute({"regime": TRENDING})
+        assert r1["tickers"]["CRWD"]["state"] == HELD
+        assert len(r1["transitions"]) == 1
+        rec = json.load(open(os.path.join(state_dir, "position_state.json")))
+        assert rec["CRWD"]["last_close_date"] == "2026-07-20"
+        assert rec["CRWD"]["prev_before"] is None
+
+        # Jul-21 INTRADAY: the forming bar is the flap value. The ladder
+        # must not move, no event may be written, and the preview must
+        # say what the forming bar would have said.
+        frames["CRWD"] = full
+        eng._now_et_override = _et(_D18_DAY, 13, 59)
+        r2 = eng.compute({"regime": TRENDING})
+        row = r2["tickers"]["CRWD"]
+        assert row["state"] == HELD, row["state"]
+        assert r2["transitions"] == []
+        pv = row["intraday_preview"]
+        assert pv["as_of"] == _D18_DAY and pv["would_state"] == EXIT_FIRED
+        assert "close decides" in pv["note"] and "No transition" in pv["note"]
+        rec2 = json.load(open(os.path.join(state_dir, "position_state.json")))
+        assert rec2["CRWD"]["state"] == HELD
+        assert rec2["CRWD"]["last_close_date"] == "2026-07-20"   # unmoved
+        evp = os.path.join(data_dir, "position_events.json")
+        n_ev = len(json.load(open(evp))["changes"]) if os.path.exists(evp) else 0
+        assert n_ev == 1, "an intraday run wrote a transition event"
+
+        # data unavailable -> carries the committed state, no transition
+        frames["CRWD"] = None
+        r3 = eng.compute({"regime": TRENDING})
+        assert r3["tickers"]["CRWD"]["insufficient_data"] is True
+        assert r3["tickers"]["CRWD"]["state"] == HELD      # carried
+        assert r3["transitions"] == []
+        rec3 = json.load(open(os.path.join(state_dir, "position_state.json")))
+        assert rec3["CRWD"]["state"] == HELD
+    finally:
+        _d018_restore(tmp, olds)
+    print("  D-018 intraday: committed state re-rendered, zero events, "
+          "labeled preview (would EXIT_FIRED), data-outage carries: OK")
+
+
+def test_d018_gap_proof_catchup():
+    """A missed confirmed close must DELAY a transition, never swallow it.
+    The material case: a holding's close pierces its SMA20 on the missed
+    day and recovers the next — incrementally the exit vanishes."""
+    positions = {"schema_version": "1.0", "holdings": [
+        {"ticker": "CRWD", "stop_on_entry": "sma20_close"}], "watching": []}
+    frames = {"CRWD": _crwd_frame(_CRWD_CLOSE_JUL21)}
+    tmp, eng, state_dir, data_dir, olds = _d018_env(
+        positions, lambda t, period="6mo": frames.get(t))
+    try:
+        eng._now_et_override = _et(_D18_DAY, 17, 0)
+        assert eng.compute({"regime": TRENDING})[
+            "tickers"]["CRWD"]["state"] == HELD
+
+        # The Jul-22 close run NEVER RAN. Jul-22 closed below SMA20 (the
+        # real exit); Jul-23 recovered above. The single Jul-23 run must
+        # still report the Jul-22 exit — incrementally it would vanish.
+        frames["CRWD"] = _crwd_frame(_CRWD_CLOSE_JUL21, _CRWD_CLOSE_JUL22,
+                                     193.0, end="2026-07-23")
+        eng._now_et_override = _et("2026-07-23", 17, 0)
+        r = eng.compute({"regime": TRENDING})
+        seq = [(e["detail"]["from_state"], e["detail"]["to_state"])
+               for e in r["transitions"]]
+        # the WHOLE chain is pinned, in order, with correct from_states —
+        # not just its first link
+        assert seq == [(HELD, EXIT_FIRED), (EXIT_FIRED, RE_ENTRY_ARMING)], seq
+        # every event keeps wall-clock (so the changes-line and the close
+        # report SEE the caught-up exit) and names the bar it came from
+        caught = r["transitions"][0]
+        assert caught["detail"]["bar_date"] == "2026-07-22"
+        assert caught["detail"]["caught_up"] is True
+        assert "2026-07-22 close, caught up" in caught["description"]
+        assert not caught["timestamp"].startswith("2026-07-22")
+        last = r["transitions"][-1]
+        assert last["detail"]["bar_date"] == "2026-07-23"
+        assert "caught_up" not in last["detail"]   # the live bar
+        rec = json.load(open(os.path.join(state_dir, "position_state.json")))
+        assert rec["CRWD"]["last_close_date"] == "2026-07-23"
+
+        # a gap longer than the cap resyncs honestly instead of flooding
+        to_step, trunc = pending_closes(frames["CRWD"].index, "2000-01-01")
+        assert trunc and len(to_step) == MAX_CATCHUP_BARS
+    finally:
+        _d018_restore(tmp, olds)
+    print("  D-018 gap-proofness: a missed close is caught up in order "
+          "(the swallowed exit is reported), stamped to its own bar, "
+          "long gaps resync with a flag: OK")
+
+
+def test_d018_close_replay_identity():
+    """Pin (a): at every CONFIRMED close the D-018 engine produces the
+    IDENTICAL state sequence the pre-D-018 engine produced.
+
+    This drives the REAL compute() day by day (a reviewer caught the first
+    draft reimplementing the stepping inline — a test that could not fail).
+    The reference is the pre-D-018 semantic: one evaluate() over the full
+    frame per day, carrying prev."""
+    paths = {
+        "chop": [100.0] * 22 + [104.0, 99.0, 101.5, 103.0, 98.0, 105.0,
+                                106.0, 104.5],
+        "climb": list(np.linspace(90.0, 112.0, 30)),
+        "break": list(np.linspace(110.0, 96.0, 26)) + [95.0, 99.5, 101.0,
+                                                       103.0],
+    }
+    ref = _engine()
+    ok = {"met": True, "detail": "in universe"}
+    seen_states = set()
+    for name, closes in paths.items():
+        for kind in ("holding", "watching"):
+            entry = {"ticker": "ZZZ", "stop_on_entry": "sma20_close"}
+            full = _bars(closes, end="2026-07-22")
+            days = list(full.index)[25:]
+
+            # reference: the pre-D-018 engine, one evaluation per day
+            legacy, prev = [], None
+            for d in days:
+                res = ref.evaluate(entry, kind, full.loc[:d], TRENDING, ok, prev)
+                if res.get("insufficient_data"):
+                    continue
+                legacy.append(res["state"])
+                prev = res["state"]
+
+            # subject: the REAL compute(), run once per day post-close
+            positions = ({"holdings": [dict(entry)], "watching": []}
+                         if kind == "holding" else
+                         {"holdings": [], "watching": [dict(entry)]})
+            frames = {"ZZZ": None}
+            tmp, eng, state_dir, data_dir, olds = _d018_env(
+                positions, lambda t, period="6mo": frames.get(t),
+                ticker_group="TestGroup")
+            try:
+                with open(os.path.join(data_dir, "universe_active.json"),
+                          "w") as f:
+                    json.dump({"groups": {"TestGroup": {
+                        "tickers": ["ZZZ"]}}}, f)
+                got = []
+                for d in days:
+                    frames["ZZZ"] = full.loc[:d]
+                    eng._now_et_override = d + pd.Timedelta(hours=17)
+                    r = eng.compute({"regime": TRENDING})
+                    got.append(r["tickers"]["ZZZ"]["state"])
+            finally:
+                _d018_restore(tmp, olds)
+            assert legacy == got, (name, kind, legacy, got)
+            seen_states.update(legacy)
+    assert len(seen_states) >= 4, seen_states
+    print(f"  D-018 close-replay identity (through real compute()): "
+          f"{len(paths)} paths x holding/watching, {len(seen_states)} "
+          f"distinct states — sequences identical: OK")
+
+
+def test_d018_rerender_never_moves_the_ladder():
+    """The re-render law (three review findings): a run that steps NO new
+    confirmed close must not move the ladder — not off a regime flip, not
+    off a universe drop, not off revised data. The disagreement is
+    reported on the row and left for the next confirmed close."""
+    positions = {"schema_version": "1.0", "holdings": [
+        {"ticker": "CRWD", "stop_on_entry": "sma20_close"}], "watching": []}
+    frames = {"CRWD": _crwd_frame(_CRWD_CLOSE_JUL21)}
+    tmp, eng, state_dir, data_dir, olds = _d018_env(
+        positions, lambda t, period="6mo": frames.get(t))
+    try:
+        eng._now_et_override = _et(_D18_DAY, 17, 0)
+        assert eng.compute({"regime": TRENDING})[
+            "tickers"]["CRWD"]["state"] == HELD
+
+        # same close, REGIME now blocked (c3 fails) — a non-price input
+        r = eng.compute({"regime": CAUTION})
+        row = r["tickers"]["CRWD"]
+        assert row["state"] == HELD, row["state"]
+        assert r["transitions"] == []
+        assert "render_note" not in row      # HELD is above SMA20: agrees
+
+        # same close, the UNIVERSE dropped the group (c5 fails)
+        with open(os.path.join(data_dir, "universe_active.json"), "w") as f:
+            json.dump({"groups": {"Other Group": {"tickers": ["ZZZ"]}}}, f)
+        r2 = eng.compute({"regime": TRENDING})
+        assert r2["tickers"]["CRWD"]["state"] == HELD
+        assert r2["transitions"] == []
+
+        # same close, REVISED data that would flip the verdict
+        frames["CRWD"] = _crwd_frame(_CRWD_CLOSE_JUL22)   # far below SMA20
+        r3 = eng.compute({"regime": TRENDING})
+        row3 = r3["tickers"]["CRWD"]
+        assert row3["state"] == HELD, "a re-render moved the ladder"
+        assert r3["transitions"] == [], "a re-render emitted an event"
+        assert "render_note" in row3 and "next confirmed close" in \
+            row3["render_note"]
+        rec = json.load(open(os.path.join(state_dir, "position_state.json")))
+        assert rec["CRWD"]["state"] == HELD
+    finally:
+        _d018_restore(tmp, olds)
+    print("  D-018 re-render law: regime flip / universe drop / revised "
+          "data all leave the ladder still, and say so: OK")
+
+
+def test_d018_migration_from_pre_d018_state():
+    """THE CUTOVER PIN (critical review finding): the live state file has
+    no last_close_date. Treating that as first-sight re-steps a close the
+    old engine already stepped — and the ladder is not idempotent at
+    EXIT_FIRED, so the first run (intraday!) would consume a live exit and
+    write a false event into the permanent audit log."""
+    positions = {"schema_version": "1.0", "holdings": [
+        {"ticker": "CRWD", "stop_on_entry": "sma20_close"}], "watching": []}
+    # the real Jul-22 exit close, with the ladder already sitting in
+    # EXIT_FIRED exactly as the pre-D-018 engine left it
+    frames = {"CRWD": _crwd_frame(_CRWD_CLOSE_JUL21, _CRWD_CLOSE_JUL22,
+                                  end="2026-07-22")}
+    tmp, eng, state_dir, data_dir, olds = _d018_env(
+        positions, lambda t, period="6mo": frames.get(t))
+    try:
+        with open(os.path.join(state_dir, "position_state.json"), "w") as f:
+            json.dump({"CRWD": {"state": EXIT_FIRED,      # pre-D-018 shape:
+                                "since": "2026-07-22"}}, f)   # no bookkeeping
+        eng._now_et_override = _et("2026-07-23", 13, 59)   # INTRADAY
+        r = eng.compute({"regime": TRENDING})
+        assert r["tickers"]["CRWD"]["state"] == EXIT_FIRED, \
+            "the cutover run re-consumed a live EXIT_FIRED"
+        assert r["transitions"] == [], "the cutover run emitted a false event"
+        evp = os.path.join(data_dir, "position_events.json")
+        assert not os.path.exists(evp) or \
+            json.load(open(evp))["changes"] == []
+        # ...and it stamps the bookkeeping so gap-proofness starts working
+        rec = json.load(open(os.path.join(state_dir, "position_state.json")))
+        assert rec["CRWD"]["state"] == EXIT_FIRED
+        assert rec["CRWD"]["last_close_date"] == "2026-07-22"
+    finally:
+        _d018_restore(tmp, olds)
+    print("  D-018 cutover: a pre-D-018 record adopts its close instead of "
+          "re-stepping it — no consumed exit, no false event: OK")
+
+
+def test_d018_artifact_watchers_reproduce():
+    """Pin (a) on REAL data: every tracked name in the committed artifact
+    re-renders to its recorded state under the D-018 re-render path (the
+    intraday case), with no transition. Era-aware — skips cleanly on a
+    pre-D-018 artifact."""
+    import subprocess
+    here = os.path.dirname(os.path.abspath(__file__))
+    out = subprocess.run(["git", "show", "HEAD:public/framework.json"],
+                         capture_output=True, text=True, cwd=here)
+    if out.returncode != 0:
+        print("  D-018 artifact reproduction: no committed artifact — skipped")
+        return
+    rows = (json.loads(out.stdout).get("position_signals") or {}).get(
+        "tickers") or {}
+    eng = _engine()
+    checked = []
+    for t, row in rows.items():
+        ai = row.get("assess_inputs")
+        if not isinstance(ai, dict) or row.get("insufficient_data"):
+            continue
+        # re-render == assess the SAME confirmed inputs from the seed that
+        # produced the recorded state; the recorded state must come back
+        got = assess_position(
+            ai["close"], ai["sma20"], ai["sma20_5d_ago"], ai["atr14"],
+            ai["consecutive_closes_above"], ai["regime_state"],
+            ai["group_in_universe"], ai["kind"],
+            prev_state=row["state"],
+            thesis_detail=row["conditions"]["5_thesis"]["detail"]
+            if row.get("conditions") else None)
+        # every tracked name must reproduce: holdings seeded from their own
+        # state, watchers memoryless at the reclaim branch
+        assert got["state"] == row["state"], (t, ai["kind"], got["state"],
+                                              row["state"])
+        checked.append(f"{t}={row['state']}")
+    assert checked, "no evaluable tracked rows in the artifact"
+    print(f"  D-018 artifact re-render ({len(checked)} tracked names): "
+          f"{', '.join(checked)}: OK")
+
+
 if __name__ == "__main__":
     print("\n=== Position signal engine tests (Build 1B) ===")
     test_confirmation_consecutive_closes()
@@ -1166,4 +1594,12 @@ if __name__ == "__main__":
     test_grade_inputs_helpers()
     test_candidates_tier()
     test_candidate_watcher_parity()
+    test_d018_grade_inputs_are_close_basis()
+    test_d018_forming_bar_cannot_transition()
+    test_d018_intraday_render_carries_and_previews()
+    test_d018_gap_proof_catchup()
+    test_d018_close_replay_identity()
+    test_d018_rerender_never_moves_the_ladder()
+    test_d018_migration_from_pre_d018_state()
+    test_d018_artifact_watchers_reproduce()
     print("\nAll position-signal tests passed.\n")

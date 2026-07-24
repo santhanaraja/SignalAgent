@@ -182,6 +182,7 @@
   .ps-cushion{font-family:'SF Mono',monospace;color:var(--green);font-weight:600;}
   .ps-cushion.warn{color:var(--yellow);background:rgba(210,153,34,.12);padding:1px 6px;border-radius:4px;}
   .ps-ext{font-family:'SF Mono',monospace;color:var(--dim);}
+  .ps-preview{font-size:10px;color:var(--dim);font-style:italic;cursor:default;}
   .ps-ext.hot{color:var(--red);background:rgba(248,81,73,.1);padding:1px 6px;border-radius:4px;font-weight:600;}
   .pip{display:inline-block;width:17px;height:17px;line-height:17px;text-align:center;border-radius:50%;font-size:10px;font-weight:700;margin-right:2px;cursor:default;}
   .pip.ok{background:rgba(63,185,80,.15);color:var(--green);}
@@ -1005,7 +1006,7 @@ function gl2TickRow(s,tracked,cand,gbrk){
   // state exists) and no pips (pips are the state machine's face — a
   // five-pip un-tracked row would read as READY). Tracked rows keep the
   // full enrichment: chip+badge+pips = the machine's COMMITMENT.
-  const tr=tracked?`<span class="gl2-break"></span>${psBadge(tracked.state,tracked.grade_gate)}${psGrade(tracked.grade)}<span title="The 5 re-entry conditions">${psPips(tracked.conditions)}</span>${psExt(tracked)}`:'';
+  const tr=tracked?`<span class="gl2-break"></span>${psBadge(tracked.state,tracked.grade_gate)}${psGrade(tracked.grade)}<span title="The 5 re-entry conditions">${psPips(tracked.conditions)}</span>${psExt(tracked)}${psPreview(tracked.intraday_preview)}${psCarry(tracked)}`:'';
   let cd='';
   if(!tracked&&cand&&cand.grade){
     GL2CAND[s.ticker]={s:s,c:cand,b:gbrk||null};
@@ -1141,6 +1142,31 @@ function psPips(conds){
     return `<span class="pip ${c.met?'ok':'no'}" title="${tip}">${c.met?'✓':'✗'}</span>`;
   }).join('');
 }
+function psPreview(pv){
+  // D-018: the forming bar's provisional read — a dim line, mirroring the
+  // regime tile's intraday-preview treatment. Display only: the ladder
+  // moved on the last CONFIRMED close and this says what today's
+  // unfinished bar would say if it closed now. Under Choppy the D-011
+  // hard gate still applies at the close, so a previewed READY is
+  // qualified — never advertised as a clear entry.
+  if(!pv||!pv.would_state) return '';
+  const st=String(pv.would_state).replace(/_/g,' ');
+  const gated=pv.a_plus_only&&pv.would_state==='RE_ENTRY_READY';
+  const tip=(pv.note||'')+(pv.close!=null?` · forming close $${pv.close}`:'')
+    +(pv.sma20!=null?` vs SMA20 $${pv.sma20}`:'')
+    +(gated?' · A+ gate still applies at the close (D-011)':'');
+  return `<span class="ps-preview" title="${String(tip).replace(/"/g,'&quot;')}">intraday: would be ${st}${gated?' — A+ gate decides':''} — close decides</span>`;
+}
+function psCarry(x){
+  // D-018 honesty flags: a carried state (no evaluable data this run), a
+  // re-render disagreement, and a truncated catch-up all say so.
+  const bits=[];
+  if(x.state_carried) bits.push(['carried',x.state_carried]);
+  if(x.render_note) bits.push(['pending close',x.render_note]);
+  if(x.catchup_truncated) bits.push(['resynced',x.catchup_truncated]);
+  if(x.catchup_pending) bits.push(['catch-up pending',x.catchup_pending]);
+  return bits.map(([lab,tip])=>`<span class="ps-preview" title="${String(tip).replace(/"/g,'&quot;')}">${lab}</span>`).join('');
+}
 function psEr(d){
   if(d==null||d>7) return '';
   const hot=d<=2;
@@ -1153,7 +1179,11 @@ function psExt(x){
   const hot=!!guard||(atr!=null&&atr>1.5);
   const body=`${pct>0?'+':''}${pct}%${atr!=null?` (${atr}×ATR)`:''}`;
   const suffix=guard?` — ${guard}`:(hot?' — extended, chase guard':'');
-  return `<span class="ps-ext${hot?' hot':''}" title="Extension: close vs SMA20">${body}${suffix}</span>`;
+  // D-018: when a forming bar exists, this row's numbers are the LAST
+  // CONFIRMED close's — say so, so it can't read as contradicting the
+  // live price shown elsewhere on the same line.
+  const asOf=x.intraday_preview?' — at the last confirmed close':'';
+  return `<span class="ps-ext${hot?' hot':''}" title="Extension: close vs SMA20${asOf}">${body}${suffix}</span>`;
 }
 function renderPositionsPanel(){
   let html=`<div class="section"><div class="section-title">Layer 1.5: Position Signals
@@ -1196,7 +1226,7 @@ function renderPositionsPanel(){
       :'';
     html+=`<div class="ps-row" data-ps="${t}">
       <span class="ps-ticker">${t}</span>${psBadge(x.state)}
-      ${stopTxt}${cuTxt}${psExt(x)}${psEr(x.days_to_earnings)}
+      ${stopTxt}${cuTxt}${psExt(x)}${psEr(x.days_to_earnings)}${psPreview(x.intraday_preview)}${psCarry(x)}
     </div>`;
   }
 
@@ -1213,6 +1243,7 @@ function renderPositionsPanel(){
       <span class="ps-num"><b>$${x.close}</b> / SMA20 $${x.sma20}</span>
       ${psExt(x)}${psEr(x.days_to_earnings)}
       ${x.weeks_in_universe!=null?`<span class="ps-er" style="background:rgba(88,166,255,.12);color:var(--blue);" title="Consecutive weekly rotations this group has been in the universe (observe-only, D-007 Phase 1)">${x.group||''} wk ${x.weeks_in_universe}</span>`:''}
+      ${psPreview(x.intraday_preview)}${psCarry(x)}
     </div>`;
   }
   html+=`<div id="positionLabSlot"></div></div>`;

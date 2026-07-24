@@ -593,6 +593,53 @@ def test_signal_refresh_chases_framework():
           "engine failure -> no kick: OK")
 
 
+def test_d018_preview_surfaces():
+    """D-018: the forming bar's provisional read reaches the page as a
+    LABELED dim line (the regime tile's treatment), through ONE shared
+    renderer, and rides the assessment passthrough. The state beside it
+    is close-basis — the preview must never be styled as the state."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    html = open(os.path.join(here, "public", "framework.html")).read()
+    assert html.count("function psPreview(") == 1, "forked preview renderer"
+    panel = html[html.index("function renderPositionsPanel"):
+                 html.index("function loadHistory")]
+    assert panel.count("psPreview(x.intraday_preview)") == 2, \
+        "preview must render on BOTH holdings and watchlist rows"
+    fn = html[html.index("function psPreview("):html.index("function psEr(")]
+    assert "would be" in fn and "close decides" in fn
+    assert "ps-badge" not in fn, "preview must not borrow the state badge"
+    assert ".ps-preview{" in html
+    # the D-018 honesty flags (carried state / pending re-render verdict /
+    # truncated catch-up) must RENDER, not just ride the API — the record
+    # claims the row "says so" (review finding)
+    assert html.count("function psCarry(") == 1
+    carry = html[html.index("function psCarry("):html.index("function psEr(")]
+    for k in ("state_carried", "render_note", "catchup_truncated",
+              "catchup_pending"):
+        assert k in carry, k
+    assert panel.count("psCarry(x)") == 2
+    # Layer-2 tracked sub-rows carry the same treatment, and the extension
+    # says which close it is from when a forming bar exists
+    tick = html[html.index("function gl2TickRow"):
+                html.index("async function gl2Fill")]
+    assert "psPreview(tracked.intraday_preview)" in tick
+    assert "at the last confirmed close" in html
+    # a previewed READY under Choppy must not advertise a clear entry
+    fnp = html[html.index("function psPreview("):html.index("function psCarry(")]
+    assert "a_plus_only" in fnp and "A+ gate decides" in fnp
+    import ticker_api
+    src = open(os.path.join(here, "ticker_api.py")).read()
+    assert '"intraday_preview", "catchup_truncated"' in src
+    row = ticker_api._assessment_positions({"position_signals": {"tickers": {
+        "ZZZ": {"state": "HELD", "kind": "holding", "close": 1.0,
+                "intraday_preview": {"would_state": "EXIT_FIRED",
+                                     "note": "forming bar"}}}}})["ZZZ"]
+    assert row["state"] == "HELD"          # close-basis
+    assert row["intraday_preview"]["would_state"] == "EXIT_FIRED"
+    print("  D-018 preview surfaces: one renderer, both row kinds, labeled "
+          "and un-badged, passthrough carries it: OK")
+
+
 def test_missing_file_still_404():
     env = _Env()
     try:
@@ -618,5 +665,6 @@ if __name__ == "__main__":
     test_theme_layer_decommission()
     test_one_grammar_page_sources()
     test_signal_refresh_chases_framework()
+    test_d018_preview_surfaces()
     test_missing_file_still_404()
     print("\nAll serve-guard tests passed.\n")

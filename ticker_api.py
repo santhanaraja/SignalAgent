@@ -1639,7 +1639,11 @@ def _assessment_positions(data):
         for opt in ("earnings_note", "distance_to_sma20_pct", "a_plus_only",
                     "extension_guard", "conditions_met", "insufficient_data",
                     "grade", "grade_gate", "grade_inputs", "group",
-                    "weeks_in_universe"):
+                    "weeks_in_universe",
+                    # D-018: the forming bar's labeled provisional read
+                    # (display only — the state above is close-basis)
+                    "intraday_preview", "catchup_truncated",
+                    "catchup_pending", "state_carried", "render_note"):
             if x.get(opt) is not None:
                 row[opt] = x[opt]
         # conditions itemized only for non-HELD names (the re-entry ladder);

@@ -44,6 +44,19 @@ State machine (close basis, evaluated daily):
 
 Every state transition is emitted as a history event
 (type "position_state_change") through the existing history.json pattern.
+
+THE CLOSE-BASIS LAW (D-018, 2026-07-23): transitions occur ONLY on
+CONFIRMED closes. A bar dated today before the settle boundary is still
+FORMING — it may render as a labeled provisional read, it may never step
+the ladder, move a counter, or emit an event. The splitter is the one
+`confirmed_close_frame` the regime hysteresis uses (D-008); there is one
+notion of "settled" in this system. Gap-proofness: every unevaluated
+confirmed close is stepped in order from the persisted state (see
+`pending_closes`), so a missed run delays a transition but never
+swallows it. The intraday ALERT layer is deliberately untouched —
+proximity warnings compare live price to the COMMITTED close-basis stop
+and say so ("close decides, no pre-emption"); warning is not
+transitioning.
 """
 
 import datetime
@@ -52,10 +65,55 @@ import os
 
 import numpy as np
 
+# D-018: the close-basis law is ONE law with ONE settle boundary — the
+# position ladder imports the same splitter the regime hysteresis uses
+# (D-008 / commit 4bdf2a5), never a second notion of "settled".
+from .regime_calculator import confirmed_close_frame
+
+# D-018 gap-proofness: how many missed confirmed closes a single run will
+# catch up on. Two trading weeks — beyond that the run resyncs to the last
+# close and says so (an honest resync beats a flood of stale events).
+MAX_CATCHUP_BARS = 10
+
 
 def _utcnow():
     """Timestamp — module-level so tests can inject replay times."""
     return datetime.datetime.now(datetime.timezone.utc)
+
+
+def pending_closes(index, last_close_date, max_catchup=MAX_CATCHUP_BARS):
+    """D-018 gap-proofness: which CONFIRMED closes still need stepping.
+
+    Returns (to_step, truncated) — index entries strictly after
+    `last_close_date`, oldest-first, capped at `max_catchup`.
+
+    Empty `to_step` means the latest confirmed close was already evaluated:
+    the run RE-RENDERS it (seeded from the recorded `prev_before`) instead
+    of stepping the same bar twice. `last_close_date` absent = first sight
+    or a pre-D-018 state file — evaluate only the latest close, never
+    backfill history that was already lived through.
+
+    WHY REPLAY (the ruled design question): the ladder's counters are
+    already stateless (consec_closes_above rescans the window every run),
+    but the STATE is seeded from persistence — so a missed confirmed close
+    silently swallows its transition. The material case is a holding whose
+    close pierced its SMA20 on the missed day: incrementally, the next run
+    sees price back above and reports HELD, and the stop that fired is
+    never announced. Stepping every unevaluated confirmed close in order
+    closes that hole. Unlike the regime chassis (fixed window, fresh seed,
+    seed-independent by construction), this ladder is NOT seed-independent
+    — after EXIT_FIRED a holding needs all five conditions to return to
+    HELD, so a fresh seed would fabricate HELD. Persistence is therefore
+    the authoritative seed and replay steps FORWARD from it.
+    """
+    if index is None or len(index) == 0:
+        return [], False
+    if not last_close_date:
+        return list(index[-1:]), False
+    new = [d for d in index if str(d.date()) > str(last_close_date)]
+    if len(new) > max_catchup:
+        return new[-max_catchup:], True
+    return new, False
 
 
 HELD = "HELD"
@@ -954,6 +1012,10 @@ class PositionSignalEngine:
             days_to_earnings = lambda d: None
             grade_today = None
 
+        # D-018: ONE clock for the whole run — a per-ticker read could
+        # split the book across the settle boundary mid-loop.
+        now_et = getattr(self, "_now_et_override", None)
+
         seen = set()
         for entry, kind in entries:
             ticker = entry.get("ticker")
@@ -966,11 +1028,22 @@ class PositionSignalEngine:
                       f"keeping the first (holdings-first) entry")
                 continue
             seen.add(ticker)
-            df = self._strip_synthetic_last_bar(self.fetcher(ticker, period="6mo"))
+            df_all = self._strip_synthetic_last_bar(
+                self.fetcher(ticker, period="6mo"))
+            # D-018: split off a bar that is still FORMING — it may preview,
+            # it may never step the ladder or emit an event.
+            df_conf, forming = confirmed_close_frame(df_all, now_et=now_et)
             thesis_status = self._group_status(entry, group_map,
                                                selected_groups,
                                                weeks_by_group, top_n)
-            prev = (prev_states.get(ticker) or {}).get("state")
+            rec = prev_states.get(ticker) or {}
+            prev = rec.get("state")
+            # the seed that PRODUCED `prev` — re-rendering the same close
+            # must reproduce it, never step it twice (the chassis's
+            # carry_pre_final precedent). Pre-D-018 records lack it; falling
+            # back to `prev` is the safe read (a re-render then simply
+            # re-evaluates from the committed state).
+            prev_before = rec.get("prev_before", prev)
             grade_ctx = None
             if kind == "watching":
                 grade_ctx = {
@@ -984,8 +1057,94 @@ class PositionSignalEngine:
                     # host counts runway from tomorrow between 8pm-midnight)
                     "today": grade_today,
                 }
-            result = self.evaluate(entry, kind, df, regime_state,
-                                   thesis_status, prev, grade_ctx=grade_ctx)
+
+            # --- D-018: step every unevaluated CONFIRMED close, in order ---
+            # MIGRATION: a pre-D-018 record has a state but no
+            # last_close_date. Its last confirmed close was ALREADY stepped
+            # by the old engine — adopting that date is mandatory, because
+            # re-stepping it would re-consume a live EXIT_FIRED (the ladder
+            # is not idempotent there) and emit a false event on whichever
+            # run lands first, intraday included (review finding).
+            last_eval = rec.get("last_close_date")
+            migrating = bool(prev) and not last_eval
+            if migrating and df_conf is not None and len(df_conf):
+                last_eval = str(df_conf.index[-1].date())
+            to_step, truncated = pending_closes(
+                None if df_conf is None else df_conf.index, last_eval)
+            pending = []          # (bar_date, from_state, result) to commit
+            if to_step:
+                seed = prev
+                for bar_date in to_step:
+                    step = self.evaluate(entry, kind, df_conf.loc[:bar_date],
+                                         regime_state, thesis_status, seed,
+                                         grade_ctx=grade_ctx)
+                    if step.get("insufficient_data"):
+                        # no data, no verdict — carry state, stop stepping
+                        break
+                    pending.append((bar_date, seed, step))
+                    seed = step["state"]
+            if pending:
+                result = pending[-1][2]
+            else:
+                # Either the latest confirmed close was already stepped
+                # (intraday regenerations, repeat close runs, the migration
+                # adoption above) or the new closes could not be evaluated.
+                # Either way this is a RE-RENDER: it reproduces the row's
+                # fields from the committed close and MUST NOT move the
+                # ladder.
+                result = self.evaluate(entry, kind, df_conf, regime_state,
+                                       thesis_status, prev_before,
+                                       grade_ctx=grade_ctx)
+                # THE RE-RENDER LAW (review findings, three of them): the
+                # verdict also depends on inputs that are NOT the bar — the
+                # regime (c3), the universe (c5), config. Letting a differing
+                # verdict through would transition intraday off a regime
+                # flip, and — seeded from prev_before — could walk a HELD
+                # holding out of HELD without ever firing EXIT_FIRED,
+                # disarming its stop. The committed state stands; the
+                # disagreement is reported and settled by the NEXT confirmed
+                # close, never by an intraday run.
+                if prev and result.get("state") != prev:
+                    result["render_note"] = (
+                        f"re-render verdict {result['state']} differs from "
+                        f"the committed {prev} (regime/universe/data moved) "
+                        f"— the next confirmed close decides (D-018)")
+                    result["state"] = prev
+                if to_step and not migrating:
+                    # new closes existed but none could be evaluated
+                    result["catchup_pending"] = (
+                        f"{len(to_step)} confirmed close(s) awaiting "
+                        f"evaluable history")
+            if truncated:
+                result["catchup_truncated"] = (
+                    f"more than {MAX_CATCHUP_BARS} confirmed closes were "
+                    f"unevaluated — resynced to the last {MAX_CATCHUP_BARS}")
+
+            # --- D-018: the forming bar's provisional read (display only) --
+            if forming is not None and not result.get("insufficient_data"):
+                try:
+                    pv = self.evaluate(entry, kind, df_all, regime_state,
+                                       thesis_status, result["state"])
+                    if not pv.get("insufficient_data"):
+                        result["intraday_preview"] = {
+                            "as_of": str(forming.name.date()),
+                            "would_state": pv["state"],
+                            "close": pv.get("close"),
+                            "sma20": pv.get("sma20"),
+                            "conditions_met": pv.get("conditions_met"),
+                            # D-011's hard gate is computed in the grade
+                            # block, which the preview deliberately skips —
+                            # so the preview must never advertise a bare
+                            # READY that the confirmed render would show as
+                            # "READY — BLOCKED" under Choppy (review
+                            # finding). Carry the flag; the page qualifies.
+                            "a_plus_only": bool(pv.get("a_plus_only")),
+                            "note": "forming bar — display only; the close "
+                                    "decides (D-018). No transition, no "
+                                    "event, no state change.",
+                        }
+                except Exception as exc:      # preview never breaks a row
+                    result["intraday_preview_error"] = str(exc)
             result["ticker"] = ticker
             result["kind"] = kind
             result["theme"] = entry.get("theme")
@@ -1003,16 +1162,57 @@ class PositionSignalEngine:
             if result.get("insufficient_data"):
                 # No data, no verdict: leave persisted state untouched so a
                 # transient fetch failure can't seed or poison the machine.
+                # D-018 item 4 — the ticker CARRIES its COMMITTED state: the
+                # row must show what the last confirmed close decided, not
+                # the re-render seed and not a WATCHING default, and it must
+                # SAY that it is carried rather than fresh.
+                if prev:
+                    result["state"] = prev
+                    result["state_carried"] = (
+                        f"no evaluable data this run — showing the state "
+                        f"from the last confirmed close ({prev})")
                 continue
-            new_state = result["state"]
-            if new_state != prev:
-                event = self._transition_event(ticker, entry, prev, result)
-                transitions.append(event)
-                prev_states[ticker] = {"state": new_state,
-                                       "since": _utcnow().date().isoformat()}
-            elif ticker not in prev_states:
-                prev_states[ticker] = {"state": new_state,
-                                       "since": _utcnow().date().isoformat()}
+            if not pending:
+                # Nothing NEW was stepped: the ladder does not move, no event
+                # is written. Every intraday regeneration and every repeat
+                # close run lands here — this is D-018's quiet path.
+                # One-time migration bookkeeping: stamp a pre-D-018 record
+                # with the close it was already sitting on, so gap-proofness
+                # starts working from the next run. No state change, no
+                # event — the record's own state is preserved verbatim.
+                if migrating and last_eval:
+                    stamped = dict(rec)
+                    stamped["prev_before"] = rec.get("prev_before", prev)
+                    stamped["last_close_date"] = last_eval
+                    prev_states[ticker] = stamped
+                continue
+            # Commit the stepped confirmed closes. EVERY event keeps a
+            # wall-clock timestamp — including caught-up ones. Back-dating
+            # them looked tidier but hid them from the "what changed" surface
+            # (which filters on today) and from the close report, and the
+            # whole point of gap-proofness is that a missed exit gets
+            # ANNOUNCED. The bar it came from is named instead, in the
+            # description and the detail, so the history stays truthful.
+            since = rec.get("since") or _utcnow().date().isoformat()
+            for i, (bar_date, from_state, step) in enumerate(pending):
+                if step["state"] == from_state:
+                    continue
+                bar_iso = bar_date.date().isoformat()
+                is_last = i == len(pending) - 1
+                ev = self._transition_event(ticker, entry, from_state, step)
+                ev["detail"]["bar_date"] = bar_iso
+                if not is_last:
+                    ev["detail"]["caught_up"] = True
+                    ev["description"] += f" ({bar_iso} close, caught up)"
+                transitions.append(ev)
+                since = bar_iso
+            last_bar, last_from, last_step = pending[-1]
+            prev_states[ticker] = {
+                "state": last_step["state"],
+                "since": since,
+                "prev_before": last_from,
+                "last_close_date": str(last_bar.date()),
+            }
 
         # prune states for tickers no longer tracked
         tracked = {e.get("ticker") for e, _ in entries}
@@ -1061,7 +1261,7 @@ class PositionSignalEngine:
             result["candidate_signals_timestamp"] = signals.get("timestamp")
         return result
 
-    def _transition_event(self, ticker, entry, prev, result):
+    def _transition_event(self, ticker, entry, prev, result, when=None):
         state = result["state"]
         met = result.get("conditions_met", 0)
         detail = {
@@ -1082,7 +1282,9 @@ class PositionSignalEngine:
             detail["stop"] = stop.get("detail")
         desc_from = prev if prev else "untracked"
         return {
-            "timestamp": _utcnow().isoformat(),
+            # `when` is set only for CAUGHT-UP closes (D-018): the event
+            # belongs to the bar that produced it, not to this run.
+            "timestamp": when or _utcnow().isoformat(),
             "type": "position_state_change",
             "severity": _SEVERITY.get(state, "medium"),
             "group": result.get("group") or entry.get("theme"),

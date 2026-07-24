@@ -60,6 +60,7 @@ flowchart TD
 | [D-015](D-015-oss-frameworks-survey.md) | Survey serious OSS trading frameworks for borrowable techniques (harvest, don't migrate) | 2026-07-13 | **Proposed** — parked (gated on the build queue clearing) | — |
 | [D-016](D-016-extreme-fear-overlay.md) | Extreme-fear contrarian entry overlay — backtest-gated hypothesis (ruled exception to D-011 ONLY if it survives the full 11yr sample) | 2026-07-13 | **Proposed** — parked (gated on machinery free + F&G reconstruction appetite) | — |
 | [D-017](D-017-candidates-tier.md) | Candidates tier — auto-grade every signals.json name (grade without a state); chip-only display; copy-the-prompt +watch; close-report line | 2026-07-18 | Ruled | — |
+| [D-018](D-018-close-basis-position-ladder.md) | The close-basis law extends to the position ladder — transitions only on confirmed closes; intraday previews, never transitions; gap-proof catch-up replay | 2026-07-23 | Ruled | — |
 
 Status meanings: **Proposed** (deliberation open or parked with its
 retest recipe) · **Ruled** (in force) · **Superseded-by-D-xxx** (kept for

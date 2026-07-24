@@ -1139,19 +1139,29 @@ def score_stock(df, group_info=None):
 def compute_grade_inputs(df):
     """
     D-017 emission: the per-row scalars the framework runner feeds to the
-    D-011 grade (grade_setup) for un-tracked candidates. Computed on the
-    synthetic-bar-STRIPPED df — the watcher path's close-basis law — by
-    the SAME shared helpers the position engine uses, so a candidate and
-    a watcher graded on the same day cannot drift. rsi14/quality_score
-    are added here from the same stripped df (compute_rsi + score_stock
-    without group_info — the exact watcher recipe; the row's display
-    score may differ when a live-quote bar is present, and that is
-    honest: grades are on confirmed closes). Deferred import — the
-    framework package imports this module the other way, also deferred.
+    D-011 grade (grade_setup) for un-tracked candidates.
+
+    D-018 reconciliation: stripping the SYNTHETIC bar was never the whole
+    close-basis law — a live-quote row (Volume 0) went, but the day's
+    FORMING bar has real volume and stayed, so an intraday signal run
+    graded candidates on a partial bar. Both grade paths now apply
+    `confirmed_close_frame`, the same splitter the regime hysteresis and
+    the position ladder use: grades are computed on CONFIRMED closes on
+    every path, on every run.
+
+    The row's DISPLAY fields (price/rsi/score) deliberately stay live —
+    the dashboard's job is the tape as it is now. Only the graded inputs
+    are close-basis, and the divergence is the honest one: opinions are
+    graded on closes.
+
+    Deferred imports — the framework package imports this module the
+    other way, also deferred.
     """
     from framework.position_signals import (grade_inputs_from_df,
                                             strip_synthetic_last_bar)
+    from framework.regime_calculator import confirmed_close_frame
     sdf = strip_synthetic_last_bar(df)
+    sdf, _forming = confirmed_close_frame(sdf)
     gi = grade_inputs_from_df(sdf)
     if gi is None:
         return None

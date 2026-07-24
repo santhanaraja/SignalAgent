@@ -257,6 +257,45 @@ def test_main_contract():
           " / marker-on-success / all-fetch-fail: OK")
 
 
+def test_d018_alert_layer_untouched():
+    """D-018 SCOPE FENCE: the alert layer is not part of the close-basis
+    law. Proximity warnings are the intraday runs' entire purpose — they
+    compare LIVE price to the COMMITTED close-basis stop and say the close
+    decides. This pins (1) emission parity: the same artifact row + the
+    same price path emits byte-identical alerts, and (2) the stop's
+    provenance: it is READ from the artifact, never recomputed from a
+    forming bar inside the alert path."""
+    row = _artifact()["position_signals"]["tickers"]["ARWR"]
+    # (1) parity across the whole tier ladder — these are the exact
+    # outputs the pre-D-018 build produced for the same inputs
+    # stop 80.59, ATR 4.0 -> warn band ceiling 81.59
+    path = [(76.68, -3.1), (80.19, -0.5), (80.60, 0.1), (81.55, 1.2),
+            (81.59, 1.3), (84.00, 4.0)]
+    got = [ia.evaluate_holding("ARWR", row, q, already_sent={}) for q in path]
+    tiers = [g[0] if g else None for g in got]
+    assert tiers == ["breach", "breach", "warn", "warn", None, None], tiers
+    assert got[0][1] == ("⚠️ INTRADAY — ARWR $76.68 below stop $80.59 "
+                         "(-0.98×ATR breach) · close decides, no "
+                         "pre-emption · next check at the close")
+    assert "close decides, no pre-emption" in got[2][1]
+
+    # (2) provenance: the stop comes from the artifact row. Change ONLY
+    # the row's stop and the verdict moves with it; the alert path holds
+    # no price history and cannot recompute an SMA from a forming bar.
+    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "notify_intraday.py")).read()
+    fn = src[src.index("def evaluate_holding"):src.index("def build_alerts")]
+    assert 'art_row.get("stop")' in fn
+    for forbidden in ("rolling(", "sma", "fetch_data", "yfinance",
+                      "confirmed_close_frame"):
+        assert forbidden not in fn, f"alert path recomputes: {forbidden}"
+    moved = dict(row, stop={"type": "sma20_close", "level": 70.00})
+    assert ia.evaluate_holding("ARWR", moved, (76.68, -3.1),
+                               already_sent={}) is None   # now above stop
+    print("  D-018 scope fence: alert emission parity across the tier "
+          "ladder, stop read from the committed artifact (no recompute): OK")
+
+
 if __name__ == "__main__":
     print("\n=== Intraday stop-breach alert tests (PER-510-B) ===")
     test_breach_message_format()
@@ -267,4 +306,5 @@ if __name__ == "__main__":
     test_build_alerts_scope()
     test_exit_fired_rows_never_realert()
     test_main_contract()
+    test_d018_alert_layer_untouched()
     print("\nAll intraday alert tests passed.\n")

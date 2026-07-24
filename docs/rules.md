@@ -192,9 +192,16 @@ are ≤7 days out. That is a separate display path in `signal_engine.py` /
 `position_signals.py`; it does not block or size anything either.
 
 ² **R11** (close-based decisions) is genuinely enforced — but in the 1B
-position engine, not here: the state machine strips the intraday
-live-quote bar and advances only on completed daily closes. The
-rule-engine surface is still just a reminder.
+position engine, not here: the state machine advances only on CONFIRMED
+daily closes ([D-018](decisions/D-018-close-basis-position-ladder.md),
+2026-07-23 — the same `confirmed_close_frame` and 16:10 ET settle
+boundary the regime hysteresis uses). Stripping the synthetic live-quote
+bar was only half of it: the day's *forming* bar carries real volume and
+used to step the ladder, which is how the Jul-21 CRWD flap
+(`HELD→EXIT_FIRED→HELD` on one cent of wick) happened. Intraday runs now
+render the committed state plus a labeled preview; a missed close run is
+caught up in order rather than swallowed. The rule-engine surface is
+still just a reminder.
 
    **Intraday stop-breach alerts (PER-510-B)** layer information on top of
    R11 without changing it: `notify_intraday.py` checks each HOLDING's live
