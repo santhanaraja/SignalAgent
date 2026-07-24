@@ -1925,6 +1925,36 @@ def framework_leaders_json():
     )
 
 
+@app.route("/api/position/events.json")
+def position_events_json():
+    """Read-only: the full position-state transition log (D-003 ladder,
+    close-basis since D-018). Serves the COMMITTED data/ copy — the
+    public/ mirror the engine writes is ephemeral on the dyno's disk and
+    is not committed, so a redeploy would otherwise empty the History
+    page's position view. Computes nothing; never touches the engine."""
+    path = os.path.join(DATA_DIR, "position_events.json")
+    if not os.path.exists(path):
+        return app.response_class(
+            response=json.dumps({
+                "error": "no position event log yet",
+                "hint": "written by the 1B engine on the first tracked "
+                        "state transition",
+                "changes": [],
+            }),
+            status=404, mimetype="application/json")
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        return app.response_class(
+            response=json.dumps({"changes": data.get("changes", [])},
+                                cls=NumpyEncoder),
+            mimetype="application/json")
+    except Exception as e:
+        return app.response_class(
+            response=json.dumps({"error": str(e), "changes": []}),
+            status=500, mimetype="application/json")
+
+
 @app.route("/api/universe/candidates.json")
 def universe_candidates_json():
     """
