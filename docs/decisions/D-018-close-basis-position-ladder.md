@@ -32,12 +32,40 @@ One cent of intraday wick manufactured a stop-firing, announced it, and took
 it back 100 minutes later. R11 says decisions are made on the close; the
 ladder was making them on whatever bar happened to be forming.
 
-**2026-07-22 — a real exit swallowed.** The same mechanism running the other
-way: `HELD → EXIT_FIRED` at 15:02 and `EXIT_FIRED → WATCHING` at 16:45, both
-intraday. The confirmed close (188.42) was genuinely below SMA20 (191.85) —
-a **true** stop firing. But the intraday path had already consumed the
-transition and downgraded it, so the close run saw `WATCHING → WATCHING` and
-announced nothing. The one exit that mattered went unreported.
+**2026-07-22 — a real exit mis-recorded (reported only by aggregation).**
+The same mechanism running the other way:
+
+| Time (ET) | Bar | Run outcome |
+|---|---|---|
+| 11:02 | forming 187.51 | `HELD → EXIT_FIRED` logged |
+| 12:45 | forming 187.63 | `EXIT_FIRED → WATCHING` logged |
+| 16:32 | **confirmed close 188.42** vs SMA20 191.89 | **0 transitions** — the ladder was already in `WATCHING`, so the close run detected nothing |
+
+The confirmed close was genuinely below SMA20 — a **true** stop firing. The
+intraday path had already consumed the transition and demoted it, so the
+close run itself computed `WATCHING → WATCHING` and produced no event.
+
+**The exit still reached the operator — but by aggregation, not by design.**
+`_assessment_changes` collects *every* event in `position_events.json`
+stamped with the current run's date, whatever run wrote it, so the 16:32
+close report's changes line carried both intraday transitions. What it
+carried was wrong in substance: an exit stamped 11:02 ET at 187.51 — a price
+that was never a close — immediately followed by its own reversal, so the
+day's genuine stop-firing read as intraday noise. The operator saw a flap;
+the tape had delivered an exit. (The final *state*, `WATCHING`, happened to
+be where a true exit-and-stay-below day belongs — right by accident, wrong by
+provenance.)
+
+Under D-018 the same day yields one event: `HELD → EXIT_FIRED` at the close,
+at 188.42, correctly stamped.
+
+> Correction, 2026-07-24: this record and the implementing commit
+> (`6680efe`) originally read "the close run saw `WATCHING → WATCHING` and
+> announced nothing — the one exit that mattered went unreported." The first
+> half is confirmed (that run emitted zero transitions); the second half was
+> wrong — the changes line did surface the intraday-logged events. The
+> failure is provenance and labeling, not silence. Verified against the
+> committed Jul-22 artifacts and `_assessment_changes`.
 
 ## What changes
 
