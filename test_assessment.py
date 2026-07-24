@@ -331,6 +331,66 @@ def test_term_structure_inverted():
     print("  term structure flips to inverted when VIX3M < VIX: OK")
 
 
+def test_d018_aggregation_contract():
+    """D-018 PIN (c) — turn the undesigned load-bearing behavior into a
+    contract. A caught-up OR revised exit is stamped WALL-CLOCK (today) and
+    names its bar; it MUST survive _assessment_changes' startswith(run-date)
+    filter and reach the close report labeled as what it is. This is the
+    ONLY path a close-basis exit takes to the operator — if the filter or
+    the wall-clock choice silently changed, an exit would vanish."""
+    import notify_assessment as notify
+    env = _Env()
+    try:
+        # run date is 2026-07-09 (latest regime_history entry). Three events
+        # today: a plain close exit, a CAUGHT-UP exit (names an earlier
+        # bar), and a REVISED exit — all wall-clock stamped today.
+        env._w(env.dat, "position_events.json", {"changes": [
+            {"timestamp": "2026-07-08T20:00:00+00:00", "ticker": "OLD",
+             "type": "position_state_change",
+             "detail": {"from_state": "HELD", "to_state": "EXIT_FIRED"}},
+            {"timestamp": "2026-07-09T20:01:00+00:00", "ticker": "IWM",
+             "type": "position_state_change",
+             "detail": {"from_state": "HELD", "to_state": "EXIT_FIRED",
+                        "bar_date": "2026-07-09"}},
+            {"timestamp": "2026-07-09T13:55:00+00:00", "ticker": "CFG",
+             "type": "position_state_change",
+             "detail": {"from_state": "HELD", "to_state": "EXIT_FIRED",
+                        "bar_date": "2026-07-07", "caught_up": True}},
+            {"timestamp": "2026-07-09T14:30:00+00:00", "ticker": "RF",
+             "type": "position_state_change",
+             "detail": {"from_state": "HELD", "to_state": "EXIT_FIRED",
+                        "bar_date": "2026-07-09", "revised": True,
+                        "revision": {"old_bar_ohlc": [1, 1, 1, 31.2],
+                                     "new_bar_ohlc": [1, 1, 1, 29.9]}}},
+        ]})
+        env.write_framework(_framework_payload())
+        c = env.client.get("/api/assessment.json").get_json()["changes_since_prior"]
+        pt = {t["ticker"]: t for t in c["position_transitions"]}
+        # today's three survive the filter; yesterday's OLD does not
+        assert set(pt) == {"IWM", "CFG", "RF"}, set(pt)
+        # the markers + bar name ride the passthrough
+        assert pt["CFG"]["caught_up"] is True and pt["CFG"]["bar_date"] == "2026-07-07"
+        assert pt["RF"]["revised"] is True and pt["RF"]["bar_date"] == "2026-07-09"
+        assert "caught_up" not in pt["IWM"] and "revised" not in pt["IWM"]
+
+        # the CLOSE REPORT names each for what it is
+        et = datetime.datetime(2026, 7, 9, 16, 15)
+        try:
+            from zoneinfo import ZoneInfo
+            et = et.replace(tzinfo=ZoneInfo("America/New_York"))
+        except Exception:
+            pass
+        msg = notify.build_message(_framework_payload(), et)
+        line = next(l for l in msg.splitlines() if l.startswith("Changes:"))
+        assert "CFG HELD→EXIT_FIRED (2026-07-07 close, caught up)" in line, line
+        assert "RF HELD→EXIT_FIRED (⟳ 2026-07-09 close revised)" in line, line
+        assert "IWM HELD→EXIT_FIRED" in line and "IWM HELD→EXIT_FIRED (" not in line
+    finally:
+        env.close()
+    print("  D-018 pin (c): caught-up + revised exits survive the run-date "
+          "filter and read AS SUCH in the close report (aggregation contract): OK")
+
+
 if __name__ == "__main__":
     print("\n=== Assessment endpoint tests (PER-508 #21) ===")
     test_response_shape()
@@ -338,4 +398,5 @@ if __name__ == "__main__":
     test_et_timestamp_format()
     test_sections_degrade_independently()
     test_term_structure_inverted()
+    test_d018_aggregation_contract()
     print("\nAll assessment tests passed.\n")

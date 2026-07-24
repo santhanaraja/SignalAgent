@@ -116,6 +116,67 @@ def pending_closes(index, last_close_date, max_catchup=MAX_CATCHUP_BARS):
     return new, False
 
 
+def bar_fingerprint(df):
+    """The identity of the last row's confirmed bar — its OHLC, for D-018
+    revision detection (the amendment to the re-render law).
+
+    FULL OHLC, not just the close: the ladder's verdict also depends on the
+    high and low via ATR — the confirmation branch's atr_break and the
+    extension guard both read ATR — so a provider revising ANY of the four
+    can move the state, and all four must be watched. Rounded to 4 places:
+    a genuine revision that matters (a close crossing the SMA20) is cents;
+    4dp erases float / JSON round-trip noise without masking a real change.
+    None on an empty/degenerate frame.
+
+    This is the discriminator's whole basis: two runs over the SAME last
+    confirmed bar produce the SAME fingerprint, so a verdict that moved
+    while the fingerprint held is a NON-bar input (regime/universe/config)
+    and must not transition; a fingerprint that changed is the bar itself
+    being revised and MUST fire its transition."""
+    if df is None or len(df) == 0:
+        return None
+    last = df.iloc[-1]
+    try:
+        vals = [float(last[c]) for c in ("Open", "High", "Low", "Close")]
+    except (KeyError, TypeError, ValueError):
+        return None
+    if any(not np.isfinite(v) for v in vals):
+        # a NaN/Inf bar cannot be a reliable fingerprint — nan != nan would
+        # else read a byte-identical bar as CHANGED and phantom-fire a
+        # revision (review finding). None routes to the safe HOLD branch.
+        return None
+    return [round(v, 4) for v in vals]
+
+
+def uniform_rescale(old_fp, new_fp, tol=1e-6):
+    """True iff `new_fp` is `old_fp` scaled by ONE positive factor — a
+    corporate-action re-basing (a split/dividend adjustment; the production
+    fetcher runs auto_adjust=True, which multiplicatively re-bases every
+    historical bar on an ex-date). Such a rescale is scale-invariant to the
+    whole ladder — close-vs-SMA20, the consecutive-close count, the slope,
+    and the ATR-normalized extension all divide out the factor — so it
+    changes the fingerprint WITHOUT changing any verdict, and must NOT be
+    read as a provider revision (review finding: a split coincident with a
+    non-bar verdict move would otherwise phantom-fire a critical exit).
+
+    Biased toward NOT-a-rescale — i.e. toward EMITTING: a genuine revision
+    corrects specific fields non-proportionally, so its per-field ratios
+    spread far above `tol`; only a near-perfect common factor (a true
+    rescale, spread ~1e-12) is suppressed. Missing a real revision (a
+    disarmed stop) is the worse error, so the tolerance is tight."""
+    if not old_fp or not new_fp or len(old_fp) != 4 or len(new_fp) != 4:
+        return False
+    ratios = []
+    for o, n in zip(old_fp, new_fp):
+        if o == 0:
+            return False
+        ratios.append(n / o)
+    lo, hi = min(ratios), max(ratios)
+    if lo <= 0:
+        return False
+    return (hi - lo) / abs(hi) <= tol
+
+
 HELD = "HELD"
 EXIT_FIRED = "EXIT_FIRED"
 WATCHING = "WATCHING"
@@ -1083,6 +1144,7 @@ class PositionSignalEngine:
                         break
                     pending.append((bar_date, seed, step))
                     seed = step["state"]
+            revision = None      # set only on the re-render path below
             if pending:
                 result = pending[-1][2]
             else:
@@ -1095,21 +1157,53 @@ class PositionSignalEngine:
                 result = self.evaluate(entry, kind, df_conf, regime_state,
                                        thesis_status, prev_before,
                                        grade_ctx=grade_ctx)
-                # THE RE-RENDER LAW (review findings, three of them): the
-                # verdict also depends on inputs that are NOT the bar — the
-                # regime (c3), the universe (c5), config. Letting a differing
-                # verdict through would transition intraday off a regime
-                # flip, and — seeded from prev_before — could walk a HELD
-                # holding out of HELD without ever firing EXIT_FIRED,
-                # disarming its stop. The committed state stands; the
-                # disagreement is reported and settled by the NEXT confirmed
-                # close, never by an intraday run.
+                # THE RE-RENDER LAW + THE REVISION DISCRIMINATOR (D-018
+                # amendment). A re-render's verdict can disagree with the
+                # committed state for two separable reasons, told apart by
+                # the last confirmed bar's fingerprint:
+                #   * the BAR ITSELF was revised (a provider adjusting a
+                #     confirmed close — e.g. down through the SMA20). This is
+                #     a genuine close-basis event and MUST fire, loudly, or
+                #     an exit is silently lost. Re-step the bar and emit.
+                #   * a NON-bar input moved (regime c3 / universe c5 /
+                #     config), the bar byte-identical. Transitioning here
+                #     would be the critical-#3 bug: a regime flip walking a
+                #     HELD holding out of HELD without ever firing
+                #     EXIT_FIRED. HOLD; the next confirmed close decides.
+                # An OLDER bar's revision is out of scope by construction:
+                # only the LAST confirmed bar is fingerprinted, so an older
+                # revision leaves this fingerprint identical (it moves the
+                # verdict only through the SMA20/ATR window) and routes to
+                # the HOLD branch — it never reaches back to re-step history.
+                fp_now = bar_fingerprint(df_conf)
+                fp_rec = rec.get("last_bar_fingerprint")
+                same_bar = bool(
+                    df_conf is not None and len(df_conf)
+                    and str(df_conf.index[-1].date()) == str(last_eval))
                 if prev and result.get("state") != prev:
-                    result["render_note"] = (
-                        f"re-render verdict {result['state']} differs from "
-                        f"the committed {prev} (regime/universe/data moved) "
-                        f"— the next confirmed close decides (D-018)")
-                    result["state"] = prev
+                    bar_changed = (fp_rec is not None and same_bar
+                                   and fp_now != fp_rec)
+                    if bar_changed and not uniform_rescale(fp_rec, fp_now):
+                        # genuine revision — `result` already IS the re-step
+                        # of the revised bar (evaluated from prev_before
+                        # above), so its state is the corrected verdict. Keep
+                        # it; carry the old/new bar for the loud event.
+                        revision = {"from_state": prev, "seed": prev_before,
+                                    "old_bar": fp_rec, "new_bar": fp_now}
+                    else:
+                        # Either a byte-identical bar (a non-bar input moved)
+                        # OR a uniform corporate-action re-basing (a split /
+                        # dividend adjustment, scale-invariant to the ladder)
+                        # — neither is a revision. HOLD; the next confirmed
+                        # close decides.
+                        why = ("a uniform split/dividend re-basing"
+                               if bar_changed else "a byte-identical last bar")
+                        result["render_note"] = (
+                            f"re-render verdict {result['state']} differs "
+                            f"from the committed {prev} on {why} "
+                            f"(regime/universe/config moved) — the next "
+                            f"confirmed close decides (D-018)")
+                        result["state"] = prev
                 if to_step and not migrating:
                     # new closes existed but none could be evaluated
                     result["catchup_pending"] = (
@@ -1173,17 +1267,85 @@ class PositionSignalEngine:
                         f"from the last confirmed close ({prev})")
                 continue
             if not pending:
+                if revision is not None:
+                    # GENUINE close revision (D-018 amendment): the last
+                    # confirmed bar's data changed and moved the verdict.
+                    # Emit LOUDLY — wall-clock stamped (it is detected now),
+                    # naming its bar, with old→new OHLC and a distinct
+                    # `revised` marker (not caught_up, not a plain close).
+                    ev = self._transition_event(
+                        ticker, entry, revision["from_state"], result)
+                    ev["detail"]["bar_date"] = str(last_eval)
+                    ev["detail"]["revised"] = True
+                    ev["detail"]["revision"] = {
+                        "old_bar_ohlc": revision["old_bar"],
+                        "new_bar_ohlc": revision["new_bar"],
+                    }
+                    ob, nb = revision["old_bar"], revision["new_bar"]
+                    if ob[3] != nb[3]:
+                        ev["description"] += (
+                            f" (confirmed {last_eval} close revised: "
+                            f"{ob[3]} → {nb[3]})")
+                    else:
+                        # an ATR-only revision (high/low moved, close held)
+                        # can flip the confirmation atr_break or the guard —
+                        # name the fields that actually changed, not a no-op
+                        # close-to-close string (review finding)
+                        moved = [f for f, o, n in
+                                 zip(("open", "high", "low", "close"), ob, nb)
+                                 if o != n]
+                        ev["description"] += (
+                            f" (confirmed {last_eval} bar revised: "
+                            f"{'/'.join(moved)} — {ob} → {nb})")
+                    ev["severity"] = "critical"   # a revised exit is an alarm
+                    transitions.append(ev)
+                    prev_states[ticker] = {
+                        "state": result["state"],
+                        "since": _utcnow().date().isoformat(),
+                        # the ENTERING seed, not the pre-revision committed
+                        # state — a quiet re-render next run must reproduce
+                        # this corrected state from it, and successive
+                        # revisions of one bar must not drift the seed
+                        # (review finding: from_state as seed lost an exit).
+                        "prev_before": revision["seed"],
+                        "last_close_date": str(last_eval),
+                        "last_bar_fingerprint": revision["new_bar"],
+                    }
+                    continue
                 # Nothing NEW was stepped: the ladder does not move, no event
                 # is written. Every intraday regeneration and every repeat
                 # close run lands here — this is D-018's quiet path.
-                # One-time migration bookkeeping: stamp a pre-D-018 record
-                # with the close it was already sitting on, so gap-proofness
-                # starts working from the next run. No state change, no
-                # event — the record's own state is preserved verbatim.
+                # Bookkeeping only (no state change, no event): stamp a
+                # pre-D-018 record with the close it was already sitting on
+                # (gap-proofness), and stamp the last-bar fingerprint onto any
+                # record that lacks it — records written before this
+                # amendment have none, and without it the revision
+                # discriminator can never fire (the amendment's own one-time
+                # migration, same shape as last_close_date's).
+                fp_here = (bar_fingerprint(df_conf)
+                           if df_conf is not None and len(df_conf)
+                           and str(df_conf.index[-1].date()) == str(last_eval)
+                           else None)
+                # REFRESH whenever the fingerprint is missing OR the last
+                # bar's data changed while the verdict HELD — a benign
+                # (verdict-preserving) revision or a split re-basing. Without
+                # this the stored fingerprint goes stale and a LATER non-bar
+                # verdict move compares against the pre-change value and
+                # phantom-fires a revision (review finding, critical). Keeping
+                # fp_rec == the current last bar means a later non-bar move is
+                # always seen as byte-identical → HOLD.
+                needs_fp = (fp_here is not None
+                            and fp_here != rec.get("last_bar_fingerprint"))
                 if migrating and last_eval:
                     stamped = dict(rec)
                     stamped["prev_before"] = rec.get("prev_before", prev)
                     stamped["last_close_date"] = last_eval
+                    if fp_here is not None:
+                        stamped["last_bar_fingerprint"] = fp_here
+                    prev_states[ticker] = stamped
+                elif needs_fp:
+                    stamped = dict(rec)
+                    stamped["last_bar_fingerprint"] = fp_here
                     prev_states[ticker] = stamped
                 continue
             # Commit the stepped confirmed closes. EVERY event keeps a
@@ -1212,6 +1374,10 @@ class PositionSignalEngine:
                 "since": since,
                 "prev_before": last_from,
                 "last_close_date": str(last_bar.date()),
+                # fingerprint the bar we actually committed to (the early-
+                # break case commits an older bar than df_conf's newest),
+                # so the next re-render's revision check compares like-to-like
+                "last_bar_fingerprint": bar_fingerprint(df_conf.loc[:last_bar]),
             }
 
         # prune states for tickers no longer tracked

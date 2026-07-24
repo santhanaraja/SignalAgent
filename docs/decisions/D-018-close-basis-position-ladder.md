@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | D-018 |
 | **Date** | 2026-07-23 |
-| **Status** | Ruled — implemented same session |
+| **Status** | Ruled — implemented 2026-07-23; **amended 2026-07-24** (revision discriminator) |
 
 ## The law
 
@@ -135,11 +135,81 @@ Bounded at `MAX_CATCHUP_BARS = 10` (two trading weeks); a longer gap resyncs
 to the last close and says so on the row (`catchup_truncated`) — an honest
 resync beats a flood of stale events.
 
-**Corollary:** a confirmed close re-evaluated with *revised* data does not
-retroactively move the ladder either — the revision is carried into the
-next confirmed close's verdict by the window recompute, which is the
-conservative direction and keeps the "only new closes move the ladder"
-invariant absolute.
+## Amendment — the revision discriminator (2026-07-24)
+
+As first shipped (`6680efe`), the re-render branch suppressed **every**
+verdict disagreement between the recomputed state and the committed state.
+That was correct for a non-bar input moving intraday — a regime flip or a
+universe drop must never transition a position (critical-#3) — but it also
+swallowed a *genuine provider revision of the confirmed close*. A provider
+adjusting a settled close **down through the SMA20** would recompute to
+`EXIT_FIRED`, the branch would revert it to the committed `HELD`, and the
+stop would never fire. The corollary this section originally stated —
+"revised data does not move the ladder" — was that bug written down as a
+rule. The ruling (PER-508 comment 11726 follow-up) overturns it.
+
+**The two causes are separable by the bar data itself**, and that is the
+discriminator: on any re-render whose verdict disagrees with the committed
+state, compare the last confirmed bar's **fingerprint** — its OHLC — to the
+one persisted with the state.
+
+- **Fingerprint changed → a genuine revision.** Re-step *that* bar (from
+  `prev_before`, so the re-step is the seed-entering-the-bar applied to the
+  revised data) and emit the transition **loudly**: wall-clock stamped,
+  `severity: critical`, both old and new OHLC in `detail.revision`, a
+  distinct `detail.revised` flag (not `caught_up`, not a plain close), and
+  the old→new close named in the description.
+- **Fingerprint identical → a non-bar input moved.** HOLD (the shipped
+  behavior, now correctly *scoped* to this case): `render_note` set, no
+  event, next confirmed close decides. Critical-#3 is preserved.
+
+**Why full OHLC, not just the close:** the verdict also depends on the high
+and low through ATR (the confirmation branch's `atr_break` and the extension
+guard), so a revision to any of the four can move the state and all four
+must be watched. Rounded to 4 places — a revision that matters is cents;
+4dp erases float / JSON round-trip noise (verified stable across re-fetches),
+and a NaN/Inf bar fingerprints as `None` (routes to HOLD, never a phantom
+from `nan != nan`).
+
+**Corporate actions are not revisions.** The production fetcher runs
+`auto_adjust=True`, which multiplicatively re-bases *every* historical bar
+on a split/dividend ex-date — so the last-bar OHLC changes without any
+provider revising anything, and the change is **scale-invariant to the whole
+ladder** (close-vs-SMA20, the consecutive count, the slope, and the
+ATR-normalized extension all divide out the common factor). A re-basing is
+told from a revision by `uniform_rescale`: if the four new/old OHLC ratios
+share one positive factor (tight tolerance, biased toward *emitting* — a
+missed exit is worse than a spurious event), it is a re-basing → HOLD +
+refresh the fingerprint, never a revision. And a verdict-preserving change
+(a split with no coincident move, or a sub-threshold correction) **refreshes
+the stored fingerprint on the quiet path**, so it can never leave a stale
+fingerprint that a *later* non-bar move would compare against and
+phantom-fire.
+
+**The re-step seed is the ENTERING seed, not the pre-revision state.** A
+revision re-steps the revised bar from the seed that *entered* it
+(`prev_before`), and persists *that* as the new record's `prev_before` — not
+the state the revision superseded. Persisting the superseded state instead
+drifts the seed across successive revisions of one bar (down→up→down), and
+once it lands on a reclaim-cycle state a below-stop re-step yields `WATCHING`
+instead of `EXIT_FIRED` — a disarmed stop written to the audit log as a
+critical event. Pinned by the oscillation case.
+
+**BOUND (ruled explicitly): only the LAST confirmed bar is fingerprinted
+and re-steppable.** A revision arriving for an *older* bar folds into the
+trailing window like any other data — it moves the last bar's verdict only
+through the SMA20/ATR recompute, leaving the last bar's own fingerprint
+identical, so it routes to the HOLD branch and the next close decides. It
+never reaches back to re-step history. (Verified: the older-bar case in
+pin (a) stays silent.)
+
+**Cutover for the discriminator itself:** records written before this
+amendment carry no fingerprint. On the first run one is stamped as
+bookkeeping (no state change, no event) — the same shape as the
+`last_close_date` migration — so a `null` fingerprint reads as "cannot yet
+discriminate → HOLD", never as a spurious revision. A revision that happens
+to coincide with that one stamping run is folded silently; a one-time
+cutover cost, ruled acceptable, identical in kind to the D-018 cutover.
 
 ## Scope fence — what does NOT change
 
@@ -162,7 +232,11 @@ invariant absolute.
 | Gap-proofness | A missed close is caught up in order (the full chain, with correct from-states), the swallowed exit **is** announced and named to its bar; long gaps resync with a flag. |
 | Alert-emission parity | The same artifact row + price path emits byte-identical alerts across the whole tier ladder; the stop's provenance is the artifact (source-pinned against recompute). |
 | Intraday quiet path | Committed state re-rendered, **zero** events, labeled preview, data-outage carries (and says it is carried). |
-| Re-render law | A regime flip, a universe drop, and revised same-close data each leave the ladder still — and say so. |
+| Re-render law — pin (b) | A regime flip and a universe drop on a **byte-identical** last bar leave the ladder still (`render_note`, no event, no revision) — critical-#3 preserved. |
+| Revision discriminator — pin (a) | A revised last close **through the SMA20 emits** `EXIT_FIRED` — old→new OHLC, `revised` marker, `critical`; oscillating revisions keep the seed stable (down→up→down → `EXIT_FIRED`, never `WATCHING`). |
+| The bound | An in-window older-bar revision that shifts the SMA20 past the unchanged last close **HOLDS** (fingerprint identical) — history is never re-stepped. |
+| Corporate-action guard | A uniform split/dividend re-basing is never a revision: alone it refreshes the fingerprint (no later phantom); coincident with a non-bar move it HOLDS. NaN → HOLD; round(4) noise/JSON stable. |
+| Aggregation contract — pin (c) | A caught-up **or** revised exit (wall-clock stamped, naming its bar) survives `_assessment_changes`' `startswith(run-date)` filter and reads *as such* in the close report — the once-undesigned load-bearing path, now asserted. |
 | Cutover | A pre-D-018 record adopts its close instead of re-stepping it: no consumed exit, no false event, bookkeeping stamped. |
 | Grade reconciliation | `compute_grade_inputs` splits the forming bar — intraday grade inputs equal the confirmed close's, and step post-close. |
 
@@ -180,6 +254,11 @@ invariant absolute.
 Adversarially verified (5-dimension fan-out, 42 agents: 37 findings, 17
 confirmed and fixed — including three critical ones that reshaped the
 re-render branch and added the cutover migration; 20 refuted).
+
+The amendment was adversarially verified (4-dimension fan-out, 20 agents:
+16 findings, 8 confirmed and fixed — the two serious ones a re-step seed
+that drifted across oscillating revisions and an `auto_adjust` corporate-
+action re-basing that would phantom-fire; 8 refuted).
 
 PER-508 comment 11726 (2026-07-23, night). Ruled by the user in those terms;
 a transcription of an existing law onto a second ladder, reusing the

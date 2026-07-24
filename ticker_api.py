@@ -1834,18 +1834,35 @@ def _assessment_changes(data):
     if pg and cg and pg.get("open") != cg.get("open"):
         gate_changed = {"from_open": pg.get("open"), "to_open": cg.get("open")}
 
+    # D-018 pin (c) — THE AGGREGATION CONTRACT. Position transitions are
+    # stamped WALL-CLOCK (D-018: a caught-up or revised exit is announced
+    # when found, not back-dated to its bar), so they carry today's date and
+    # survive this startswith(run-date) filter. That is load-bearing, not
+    # incidental: it is the ONLY path by which a close-basis exit reaches the
+    # close report. The passthrough carries bar_date + the caught_up/revised
+    # markers so the event NAMES ITS BAR in the changes line — a caught-up or
+    # revised exit must be legible as such, never mistaken for a plain
+    # today-at-the-close transition. Pinned in test_assessment.
     transitions = []
     try:
         with open(os.path.join(DATA_DIR, "position_events.json"), "r") as f:
             for ev in json.load(f).get("changes", []):
+                if ev.get("type") != "position_state_change":
+                    continue
                 if str(ev.get("timestamp", "")).startswith(curr.get("date", "")):
                     d = ev.get("detail") or {}
-                    transitions.append({
+                    row = {
                         "ticker": ev.get("ticker"),
                         "from_state": d.get("from_state"),
                         "to_state": d.get("to_state"),
                         "timestamp": ev.get("timestamp"),
-                    })
+                        "bar_date": d.get("bar_date"),
+                    }
+                    if d.get("caught_up"):
+                        row["caught_up"] = True
+                    if d.get("revised"):
+                        row["revised"] = True
+                    transitions.append(row)
     except Exception:
         transitions = [{"error": "position_events.json unavailable"}]
 

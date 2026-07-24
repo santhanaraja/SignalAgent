@@ -152,7 +152,17 @@ def build_message(data, now_et):
         lines.append(f"Candidates: {ap_txt} · {nb} B · {nc} C"
                      + (f" · {nu} ungraded" if nu else ""))
 
-    bits = [f"{tr['ticker']} {tr.get('from_state') or '—'}→{tr['to_state']}"
+    # D-018 pin (c): a caught-up or revised exit must read AS SUCH in the
+    # close report, naming its bar — never mistaken for a plain
+    # today-at-the-close transition.
+    def _pos_bit(tr):
+        b = f"{tr['ticker']} {tr.get('from_state') or '—'}→{tr['to_state']}"
+        if tr.get("revised"):
+            b += f" (⟳ {tr.get('bar_date')} close revised)"
+        elif tr.get("caught_up"):
+            b += f" ({tr.get('bar_date')} close, caught up)"
+        return b
+    bits = [_pos_bit(tr)
             for tr in (changes or {}).get("position_transitions", [])
             if isinstance(tr, dict) and tr.get("ticker")]
     bits += [f"{v['gauge']} {v['from']}→{v['to']}"

@@ -1446,14 +1446,125 @@ def test_d018_close_replay_identity():
           f"distinct states — sequences identical: OK")
 
 
-def test_d018_rerender_never_moves_the_ladder():
-    """The re-render law (three review findings): a run that steps NO new
-    confirmed close must not move the ladder — not off a regime flip, not
-    off a universe drop, not off revised data. The disagreement is
-    reported on the row and left for the next confirmed close."""
+def test_d018_rerender_holds_on_nonbar_moves():
+    """PIN (b) — the critical-#3 property, amended: a run that steps NO new
+    confirmed close must not move the ladder when the last bar is
+    BYTE-IDENTICAL and only a NON-bar input moved (regime c3 / universe c5).
+    A watcher READY under Trending must HOLD at READY when the regime flips
+    to Caution and when its group drops from the universe — render_note set,
+    no event. This is what the revision discriminator must NOT break."""
+    positions = {"schema_version": "1.0", "holdings": [],
+                 "watching": [{"ticker": "CRWD",
+                               "entry_gate": "5 conditions"}]}
+    # flat then a 2-close reclaim -> RE_ENTRY_READY under Trending
+    frames = {"CRWD": _bars([100.0] * 25 + [100.5, 101.0], spread=1.0,
+                            end=_D18_DAY)}
+    tmp, eng, state_dir, data_dir, olds = _d018_env(
+        positions, lambda t, period="6mo": frames.get(t))
+    try:
+        eng._now_et_override = _et(_D18_DAY, 17, 0)
+        s0 = eng.compute({"regime": TRENDING})["tickers"]["CRWD"]["state"]
+        assert s0 == RE_ENTRY_READY, s0
+
+        # REGIME flips to Caution (c3 blocks) — byte-identical bar. The raw
+        # verdict would drop to ARMING; the ladder must HOLD at READY.
+        r = eng.compute({"regime": CAUTION})
+        row = r["tickers"]["CRWD"]
+        assert row["state"] == RE_ENTRY_READY, row["state"]
+        assert r["transitions"] == [], "a non-bar move emitted an event"
+        assert "render_note" in row and "byte-identical" in row["render_note"]
+        assert "revision" not in json.dumps(r.get("transitions"))
+
+        # UNIVERSE drops the group (c5 fails) — still byte-identical, HOLD.
+        with open(os.path.join(data_dir, "universe_active.json"), "w") as f:
+            json.dump({"groups": {"Other Group": {"tickers": ["ZZZ"]}}}, f)
+        r2 = eng.compute({"regime": TRENDING})
+        assert r2["tickers"]["CRWD"]["state"] == RE_ENTRY_READY
+        assert r2["transitions"] == []
+        rec = json.load(open(os.path.join(state_dir, "position_state.json")))
+        assert rec["CRWD"]["state"] == RE_ENTRY_READY   # persisted, unmoved
+    finally:
+        _d018_restore(tmp, olds)
+    print("  D-018 pin (b): regime flip + universe drop on a byte-identical "
+          "bar HOLD the ladder (render_note, no event, no revision): OK")
+
+
+def test_d018_revision_emits():
+    """PIN (a) — the discriminator's reason to exist: a provider REVISING
+    the last confirmed close down through the SMA20 must EMIT the exit,
+    loudly, with old→new values and a distinct `revised` marker. The bug
+    this closes: as shipped (6680efe) the re-render branch swallowed this
+    too, so a revised close would never fire its stop."""
     positions = {"schema_version": "1.0", "holdings": [
         {"ticker": "CRWD", "stop_on_entry": "sma20_close"}], "watching": []}
-    frames = {"CRWD": _crwd_frame(_CRWD_CLOSE_JUL21)}
+    # first the confirmed close is ABOVE the SMA20 -> HELD, fingerprint saved
+    frames = {"CRWD": _crwd_frame(_CRWD_CLOSE_JUL21)}     # 191.15 > SMA20
+    tmp, eng, state_dir, data_dir, olds = _d018_env(
+        positions, lambda t, period="6mo": frames.get(t))
+    try:
+        eng._now_et_override = _et(_D18_DAY, 17, 0)
+        assert eng.compute({"regime": TRENDING})[
+            "tickers"]["CRWD"]["state"] == HELD
+        rec0 = json.load(open(os.path.join(state_dir, "position_state.json")))
+        assert rec0["CRWD"]["last_bar_fingerprint"][3] == _CRWD_CLOSE_JUL21
+
+        # the provider REVISES the same-dated close down through the SMA20
+        frames["CRWD"] = _crwd_frame(_CRWD_CLOSE_JUL22)   # 188.42 < SMA20
+        r = eng.compute({"regime": TRENDING})
+        row = r["tickers"]["CRWD"]
+        assert row["state"] == EXIT_FIRED, "a revised close did not fire"
+        assert len(r["transitions"]) == 1, "the revision was not emitted"
+        ev = r["transitions"][0]
+        d = ev["detail"]
+        assert d["from_state"] == HELD and d["to_state"] == EXIT_FIRED
+        assert d["revised"] is True                       # the distinct marker
+        assert "caught_up" not in d and d["bar_date"] == _D18_DAY
+        assert d["revision"]["old_bar_ohlc"][3] == _CRWD_CLOSE_JUL21
+        assert d["revision"]["new_bar_ohlc"][3] == _CRWD_CLOSE_JUL22
+        assert "revised" in ev["description"] and \
+            f"{_CRWD_CLOSE_JUL21}" in ev["description"] and \
+            f"{_CRWD_CLOSE_JUL22}" in ev["description"]
+        assert ev["severity"] == "critical"
+        assert not ev["timestamp"].startswith(_D18_DAY)   # wall-clock (now)
+        rec = json.load(open(os.path.join(state_dir, "position_state.json")))
+        assert rec["CRWD"]["state"] == EXIT_FIRED
+        # the persisted seed is the ENTERING seed (None here — first-sight
+        # holding), NOT the pre-revision committed HELD (review finding: the
+        # from_state-as-seed drifts across oscillating revisions)
+        assert rec["CRWD"]["prev_before"] is None
+        assert rec["CRWD"]["last_bar_fingerprint"][3] == _CRWD_CLOSE_JUL22
+
+        # SEED PIN — oscillating revisions of the SAME bar must not corrupt
+        # the seed (review finding, reproduced): down→up→down must land
+        # EXIT_FIRED, not WATCHING. With from_state as the seed, the third
+        # revision re-steps from a poisoned EXIT_FIRED seed and reclaims to
+        # WATCHING — a disarmed stop written to the audit log.
+        frames["CRWD"] = _crwd_frame(_CRWD_CLOSE_JUL21)   # revise UP
+        assert eng.compute({"regime": TRENDING})[
+            "tickers"]["CRWD"]["state"] == HELD
+        frames["CRWD"] = _crwd_frame(_CRWD_CLOSE_JUL22)   # revise DOWN again
+        r3 = eng.compute({"regime": TRENDING})
+        assert r3["tickers"]["CRWD"]["state"] == EXIT_FIRED, \
+            "oscillating revisions poisoned the seed — the stop was disarmed"
+    finally:
+        _d018_restore(tmp, olds)
+    print("  D-018 pin (a): a revised last close through the SMA20 EMITS "
+          "(old→new, `revised` marker, critical); oscillating revisions keep "
+          "the seed stable (down→up→down → EXIT_FIRED, not WATCHING): OK")
+
+
+def test_d018_bound_older_bar_holds():
+    """THE BOUND (ruled): only the LAST confirmed bar is re-steppable. An
+    IN-WINDOW older bar revised so the SMA20 shifts enough to move the
+    verdict must NOT emit — the last bar's fingerprint is unchanged, so the
+    run HOLDS and the next close decides. (The prior fixture revised a bar
+    OUTSIDE the 20-window, so it changed nothing — a vacuous pin; review
+    finding.)"""
+    positions = {"schema_version": "1.0", "holdings": [
+        {"ticker": "CRWD", "stop_on_entry": "sma20_close"}], "watching": []}
+    # last close 100.5, just above an SMA20 of ~100.0 -> HELD
+    base = [100.0] * 29 + [100.5]
+    frames = {"CRWD": _bars(base, spread=1.0, end=_D18_DAY)}
     tmp, eng, state_dir, data_dir, olds = _d018_env(
         positions, lambda t, period="6mo": frames.get(t))
     try:
@@ -1461,34 +1572,119 @@ def test_d018_rerender_never_moves_the_ladder():
         assert eng.compute({"regime": TRENDING})[
             "tickers"]["CRWD"]["state"] == HELD
 
-        # same close, REGIME now blocked (c3 fails) — a non-price input
-        r = eng.compute({"regime": CAUTION})
-        row = r["tickers"]["CRWD"]
-        assert row["state"] == HELD, row["state"]
-        assert r["transitions"] == []
-        assert "render_note" not in row      # HELD is above SMA20: agrees
-
-        # same close, the UNIVERSE dropped the group (c5 fails)
-        with open(os.path.join(data_dir, "universe_active.json"), "w") as f:
-            json.dump({"groups": {"Other Group": {"tickers": ["ZZZ"]}}}, f)
-        r2 = eng.compute({"regime": TRENDING})
-        assert r2["tickers"]["CRWD"]["state"] == HELD
-        assert r2["transitions"] == []
-
-        # same close, REVISED data that would flip the verdict
-        frames["CRWD"] = _crwd_frame(_CRWD_CLOSE_JUL22)   # far below SMA20
-        r3 = eng.compute({"regime": TRENDING})
-        row3 = r3["tickers"]["CRWD"]
-        assert row3["state"] == HELD, "a re-render moved the ladder"
-        assert r3["transitions"] == [], "a re-render emitted an event"
-        assert "render_note" in row3 and "next confirmed close" in \
-            row3["render_note"]
-        rec = json.load(open(os.path.join(state_dir, "position_state.json")))
-        assert rec["CRWD"]["state"] == HELD
+        # revise an IN-WINDOW older bar (index 25, inside the trailing 20) UP
+        # hard: SMA20 rises ABOVE the unchanged 100.5 last close, so the
+        # RECOMPUTED verdict would be EXIT_FIRED — but the last bar is
+        # byte-identical, so the discriminator must HOLD.
+        older = _bars(base, spread=1.0, end=_D18_DAY)
+        older.iloc[25, older.columns.get_loc("Close")] = 200.0
+        frames["CRWD"] = older
+        r = eng.compute({"regime": TRENDING})
+        assert r["transitions"] == [], "an older-bar revision re-stepped"
+        assert r["tickers"]["CRWD"]["state"] == HELD, "the bound leaked"
+        assert "render_note" in r["tickers"]["CRWD"]
     finally:
         _d018_restore(tmp, olds)
-    print("  D-018 re-render law: regime flip / universe drop / revised "
-          "data all leave the ladder still, and say so: OK")
+    print("  D-018 bound: an in-window older-bar revision that shifts SMA20 "
+          "past the last close HOLDS (fingerprint unchanged) — no re-step: OK")
+
+
+def _rescale(df, k):
+    out = df.copy()
+    for c in ("Open", "High", "Low", "Close"):
+        out[c] = out[c] * k
+    return out
+
+
+def test_d018_split_is_not_a_revision():
+    """A corporate-action re-basing (auto_adjust split/dividend) rescales
+    every bar by one factor — scale-invariant to the ladder, so it changes
+    the fingerprint WITHOUT moving any verdict. It must never be read as a
+    revision, INCLUDING when it coincides with a genuine non-bar move on the
+    same run (review finding: the phantom the discriminator was built to
+    reject). And a benign split must REFRESH the stored fingerprint so a
+    LATER non-bar move still reads byte-identical (review finding, critical:
+    a stale fingerprint phantom-fires)."""
+    # (1) split alone, verdict held -> refresh, no emit; then a non-bar move
+    #     on the rescaled data stays silent (proves the refresh)
+    positions = {"schema_version": "1.0", "holdings": [],
+                 "watching": [{"ticker": "CRWD", "entry_gate": "5 cond"}]}
+    frames = {"CRWD": _bars([100.0] * 25 + [100.5, 101.0], end=_D18_DAY)}
+    tmp, eng, state_dir, data_dir, olds = _d018_env(
+        positions, lambda t, period="6mo": frames.get(t))
+    try:
+        eng._now_et_override = _et(_D18_DAY, 17, 0)
+        s0 = eng.compute({"regime": TRENDING})["tickers"]["CRWD"]["state"]
+        assert s0 == RE_ENTRY_READY, s0
+        fp0 = json.load(open(os.path.join(
+            state_dir, "position_state.json")))["CRWD"]["last_bar_fingerprint"]
+
+        # a 2:1 split re-bases every bar by 0.5 — verdict is scale-invariant
+        frames["CRWD"] = _rescale(frames["CRWD"], 0.5)
+        r = eng.compute({"regime": TRENDING})
+        assert r["tickers"]["CRWD"]["state"] == RE_ENTRY_READY
+        assert r["transitions"] == [], "a split emitted a revision"
+        fp1 = json.load(open(os.path.join(
+            state_dir, "position_state.json")))["CRWD"]["last_bar_fingerprint"]
+        assert fp1 != fp0 and fp1[3] == round(101.0 * 0.5, 4), fp1  # refreshed
+
+        # NOW a regime flip on the (rescaled, byte-stable) data — must HOLD,
+        # not phantom-fire against the pre-split fingerprint
+        r2 = eng.compute({"regime": CAUTION})
+        assert r2["tickers"]["CRWD"]["state"] == RE_ENTRY_READY
+        assert r2["transitions"] == [], "stale fingerprint phantom-fired"
+        assert "render_note" in r2["tickers"]["CRWD"]
+    finally:
+        _d018_restore(tmp, olds)
+
+    # (2) split COINCIDENT with a non-bar move on the SAME run -> HOLD, no
+    #     phantom (the uniform_rescale guard)
+    frames = {"CRWD": _bars([100.0] * 25 + [100.5, 101.0], end=_D18_DAY)}
+    tmp, eng, state_dir, data_dir, olds = _d018_env(
+        positions, lambda t, period="6mo": frames.get(t))
+    try:
+        eng._now_et_override = _et(_D18_DAY, 17, 0)
+        assert eng.compute({"regime": TRENDING})[
+            "tickers"]["CRWD"]["state"] == RE_ENTRY_READY
+        # same run: rescale (fingerprint changes) AND regime blocks (verdict
+        # would move to ARMING). The guard must classify this as a rescale.
+        frames["CRWD"] = _rescale(frames["CRWD"], 0.5)
+        r = eng.compute({"regime": CAUTION})
+        assert r["tickers"]["CRWD"]["state"] == RE_ENTRY_READY, "phantom emit"
+        assert r["transitions"] == [], "a coincident split phantom-fired"
+        assert "split/dividend" in r["tickers"]["CRWD"].get("render_note", "")
+    finally:
+        _d018_restore(tmp, olds)
+    print("  D-018 split guard: a uniform re-basing is never a revision — "
+          "alone it refreshes the fingerprint; coincident with a non-bar "
+          "move it HOLDS (no phantom critical exit): OK")
+
+
+def test_d018_fingerprint_helpers():
+    """The discriminator's primitives: OHLC round(4) stable across fetch
+    noise + JSON round-trip; NaN -> None (routes to HOLD, not a phantom);
+    uniform_rescale separates a true split from a genuine revision."""
+    from framework.position_signals import bar_fingerprint, uniform_rescale
+    d = lambda c: pd.DataFrame({"Open": [c], "High": [c + 1], "Low": [c - 1],
+                                "Close": [c], "Volume": [1]})
+    fp = bar_fingerprint(d(191.15))
+    assert fp == json.loads(json.dumps(fp))              # JSON round-trip
+    assert bar_fingerprint(d(191.15 + 1e-9)) == fp       # fetch-noise stable
+    assert bar_fingerprint(d(191.15)) != bar_fingerprint(d(191.14))  # 1c
+    # NaN -> None (nan != nan would else read identical as changed)
+    nan = float("nan")
+    assert bar_fingerprint(pd.DataFrame({"Open": [1.0], "High": [nan],
+                           "Low": [1.0], "Close": [1.0], "Volume": [1]})) is None
+    # a true 2:1 split is uniform; a close-only revision is not
+    old = [100.0, 101.0, 99.0, 100.0]
+    assert uniform_rescale(old, [50.0, 50.5, 49.5, 50.0]) is True
+    assert uniform_rescale(old, [100.0, 101.0, 99.0, 97.0]) is False
+    # the real fixture revision (O=C, H=C±1) must read as NON-uniform -> emit
+    a = bar_fingerprint(d(_CRWD_CLOSE_JUL21))
+    b = bar_fingerprint(d(_CRWD_CLOSE_JUL22))
+    assert uniform_rescale(a, b) is False, "a genuine revision looked uniform"
+    print("  D-018 fingerprint helpers: round(4) noise/JSON stable, NaN→None, "
+          "uniform_rescale splits split-from-revision: OK")
 
 
 def test_d018_migration_from_pre_d018_state():
@@ -1599,7 +1795,11 @@ if __name__ == "__main__":
     test_d018_intraday_render_carries_and_previews()
     test_d018_gap_proof_catchup()
     test_d018_close_replay_identity()
-    test_d018_rerender_never_moves_the_ladder()
+    test_d018_rerender_holds_on_nonbar_moves()
+    test_d018_revision_emits()
+    test_d018_bound_older_bar_holds()
+    test_d018_split_is_not_a_revision()
+    test_d018_fingerprint_helpers()
     test_d018_migration_from_pre_d018_state()
     test_d018_artifact_watchers_reproduce()
     print("\nAll position-signal tests passed.\n")
