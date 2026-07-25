@@ -686,6 +686,19 @@ def test_breaker_outage_never_presumes_clear():
         W("signals.json", {"groups": [{"name": "Semis"}]})
         assert ticker_api._group_breaker_context("AAA")["status"] == "unavailable"
 
+        # 6b. signals artifact CORRUPT -> unavailable (was uncovered)
+        open(os.path.join(tmp, "signals.json"), "w").write("{not json")
+        g = ticker_api._group_breaker_context("AAA")
+        assert g["status"] == "unavailable" and "unreadable" in g["reason"], g
+
+        # 6c. universe artifact parses but carries NO groups -> unavailable,
+        #     never "not_in_universe" (an empty artifact is an outage, and
+        #     calling it an answer would un-gate every symbol)
+        W("universe_active.json", {"groups": {}})
+        g = ticker_api._group_breaker_context("AAA")
+        assert g["status"] == "unavailable" and "no groups" in g["reason"], g
+        W("universe_active.json", {"groups": {"Semis": {"tickers": ["AAA"]}}})
+
         # 7. the happy path still resolves, with the REAL status
         W("signals.json", {"groups": [{"name": "Semis",
                                        "breaker_status": "critical",
@@ -717,10 +730,34 @@ def test_swallowed_fetch_honest_failure_states():
     sr = rd("public/search.html")
     assert "d.trade_signal_gate" in sr and "SIGNAL WITHHELD" in sr
     assert "ts-withheld" in sr and ".ts-withheld{" in sr
-    # the withheld branch must come BEFORE any chip render
-    i_gate = sr.index("if (d.trade_signal_gate || !breakerProven)")
-    i_chip = sr.index("tradeBadge.className = 'ts-badge ' + tsClass(")
-    assert i_gate < i_chip, "the signal chip renders before the gate check"
+    # BEHAVIOURAL, not textual order (a source-order assert is a false-pass
+    # proxy — it survives a refactor that renders the chip anyway). Execute
+    # the page's own gate predicate over every payload shape that must
+    # withhold, and assert no signal string can win.
+    _pred = ("gcs === 'resolved' || gcs === 'not_in_universe'")
+    assert _pred in sr, "the gate predicate changed — re-derive this pin"
+    def _withholds(payload):
+        gcs = (payload.get("group_context") or {}).get("status")
+        breaker_proven = gcs in ("resolved", "not_in_universe")
+        return bool(payload.get("trade_signal_gate")) or not breaker_proven
+    must_withhold = [
+        {"trade_signal": "BUY NOW", "trade_signal_gate": "breaker unverified",
+         "group_context": {"status": "unavailable"}},
+        {"trade_signal": "BUY NOW",                      # old server, no gate
+         "group_context": {"status": "unavailable"}},
+        {"trade_signal": "BUY NOW", "group_context": None},   # null ctx
+        {"trade_signal": "BUY NOW"},                          # field absent
+        {"trade_signal": "BUY NOW", "group_context": {}},      # empty ctx
+    ]
+    for p in must_withhold:
+        assert _withholds(p), f"a BUY NOW would render on {p}"
+    for p in ({"trade_signal": "BUY NOW",
+               "group_context": {"status": "resolved",
+                                 "breaker_status": "clear"}},
+              {"trade_signal": "BUY NOW",
+               "group_context": {"status": "not_in_universe"}}):
+        assert not _withholds(p), f"a proven-breaker signal was withheld: {p}"
+
     # the withheld signal must not be PERSISTED as fact either — the search
     # history file outlives the outage and is read back by the page
     api = rd("ticker_api.py")
@@ -766,6 +803,9 @@ def test_swallowed_fetch_honest_failure_states():
         "fwStatus('⏳ Regime engine warming up'" in fw
     # showWarming must no longer bare-dereference #emptyState
     sw = fw[fw.index("function showWarming("):fw.index("function scheduleRetry(")]
+    # non-vacuity first: a reorder that collapses this slice would make the
+    # negative assertion below pass on an empty string (review finding)
+    assert len(sw) > 40, "showWarming slice collapsed — the pin went vacuous"
     assert "getElementById('emptyState')" not in sw, \
         "showWarming still dereferences the destroyed node"
     # load/parse failure, error status, and the assessment outage all speak.
@@ -789,6 +829,17 @@ def test_swallowed_fetch_honest_failure_states():
     assert "Run finished, but the artifact did not change" in fw
     assert "Lost contact with the run status endpoint" in fw
     assert "fwRunFromStamp" in fw
+    # the no-change verdict must be conditional on the reload SUCCEEDING —
+    # otherwise it clobbers loadData's accurate load-failure banner with a
+    # misleading "the run produced nothing" (review finding)
+    assert "const okLoad=await loadData();" in fw
+    assert "if(okLoad && before && DATA && DATA.generated_at===before)" in fw
+    # the lost-contact banner clears when polling recovers
+    assert "POLL_LOST" in fw and "if(POLL_LOST){POLL_LOST=false;fwStatusClear();}" in fw
+    # the API's error field is `error`, not `message`
+    assert "j.message" not in fw, "reads a field the API never sends"
+    # a FAILED sub-row cell must stay retryable, not frozen as filled
+    assert "if(sig!==null) cell.dataset.filled='1';" in fw
     # the Layer-2 gap message no longer asserts an empty artifact on failure
     assert "signals.json could not be loaded" in fw
     assert "may include names you already hold" in fw
@@ -796,6 +847,13 @@ def test_swallowed_fetch_honest_failure_states():
     # --- index.html: refresh honesty
     ix = rd("public/index.html")
     assert 'id="dashStatusBar"' in ix and "function dashStatus(" in ix
+    # it must live OUTSIDE the container index.html re-renders, for the same
+    # reason framework.html's did (review finding)
+    if 'id="mainContent"' in ix:
+        assert ix.index('id="dashStatusBar"') < ix.index('id="mainContent"'), \
+            "the dashboard status banner is inside the re-rendered container"
+    # the server's own reported failure must not read as a completed refresh
+    assert "status.last_error" in ix and "The server refresh FAILED" in ix
     assert "Refresh could not be started" in ix
     assert "Refresh timed out after 10 minutes" in ix
     assert "Refresh finished, but the data did not change" in ix

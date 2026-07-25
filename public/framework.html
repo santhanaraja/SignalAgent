@@ -443,6 +443,7 @@ let fwRunning = false;
 // the shape sentinel means a fresh regime computation is in progress
 // after a deploy — never show a blank page or an error wall for it.
 const RUN_BTN_HTML='<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 110 16A8 8 0 018 0zm0 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm-1.5 3L11 8l-4.5 3.5V4.5z"/></svg> Run Framework';
+let POLL_LOST = false;
 let fwRunFromStamp = null;   // artifact stamp when a run started
 let fwRetryDelay = 2000;
 let fwRetryTimer = null;
@@ -473,15 +474,17 @@ function scheduleRetry(msg){
   fwRetryDelay=Math.min(fwRetryDelay*2, 30000);
 }
 async function loadData(){
+  let LOAD_OK=false;
   if(fwRetryTimer){clearTimeout(fwRetryTimer);fwRetryTimer=null;}
   let r;
   try{
     r=await fetch('/api/framework/latest');
   }catch(e){
-    return scheduleRetry('Connection failed');
+    scheduleRetry('Connection failed'); return false;
   }
   if(r.status===503){
-    return scheduleRetry('Fresh regime computation in progress after deploy (typically ~3 minutes)');
+    scheduleRetry('Fresh regime computation in progress after deploy (typically ~3 minutes)');
+    return false;
   }
   try{
     const j=await r.json();
@@ -506,6 +509,7 @@ async function loadData(){
       // The panel degrades alone, but it must SAY so — an assessment
       // outage silently renders every tracked name as un-tracked in
       // Layer 2 (no badge, no grade, a +watch on a position you hold).
+      LOAD_OK=true;
       if(ASSESS_FAILED) fwStatus('⚠ Position data unavailable',
         'The regime above loaded, but /api/assessment.json did not. '
         + 'Position states, grades and tracked-name markers are missing — '
@@ -519,10 +523,12 @@ async function loadData(){
       // it hidden; the banner is the whole message. (review finding)
       const es=document.getElementById('emptyState');
       if(es) es.style.display='none';
+      // the API's own error text lives in `error`; `message` is never sent
       fwStatus('⚠ Framework data unavailable',
         `The API answered but reported ${j.status||'an error'}`
-        + `${j.message?': '+j.message:''}. This is a load failure, not an `
+        + `${j.error?': '+j.error:''}. This is a load failure, not an `
         + 'empty framework — the panels below may be stale or absent.');
+      return false;
     }
   }catch(e){
     // Reached the server, could not use the answer (bad JSON, truncated
@@ -533,7 +539,9 @@ async function loadData(){
       `${e && e.message ? e.message : 'parse or render failed'} — this is a `
       + 'load failure, not an empty result. Anything shown below is from a '
       + 'previous successful load.');
+    return false;
   }
+  return LOAD_OK;
 }
 
 async function runFramework(){
@@ -578,6 +586,7 @@ async function pollStatus(){
   try{
     const r=await fetch('/api/framework/status');
     const j=await r.json();
+    if(POLL_LOST){POLL_LOST=false;fwStatusClear();}   // polling recovered
     if(j.running){
       setTimeout(pollStatus,3000);
     }else{
@@ -586,11 +595,14 @@ async function pollStatus(){
       btn.classList.remove('spinning');
       btn.innerHTML=RUN_BTN_HTML;
       const before=fwRunFromStamp;
-      await loadData();
+      const okLoad=await loadData();
       // A run that "completed" without producing a new artifact must SAY
       // so. Otherwise the spinner clears, the same numbers re-render, and
       // the user believes live market data was just recomputed.
-      if(before && DATA && DATA.generated_at===before){
+      // only when the reload SUCCEEDED — otherwise loadData's own,
+      // accurate load-failure banner must stand (review finding: this
+      // clobbered it with a misleading "the run produced nothing")
+      if(okLoad && before && DATA && DATA.generated_at===before){
         fwStatus('⚠ Run finished, but the artifact did not change',
           `Still showing the run generated ${fmtEST(before)}. The engine `
           + 'reported completion without writing a newer artifact — treat '
@@ -600,6 +612,7 @@ async function pollStatus(){
   }catch(e){
     // The status endpoint is unreachable. Keep polling, but stop pretending
     // the run is progressing normally — this is a visible degraded state.
+    POLL_LOST=true;
     fwStatus('⚠ Lost contact with the run status endpoint',
       'Still retrying. The run may or may not be progressing; the panels '
       + 'below are unchanged until a new artifact loads.');
@@ -1127,15 +1140,22 @@ async function gl2Fill(rid,groupName){
     .map(([t,x])=>({ticker:t,score:null,trade_signal:null,
                     price:x.close!=null?x.close:null,
                     ma20:x.sma20!=null?x.sma20:null,rsi:null}));
-  cell.dataset.filled='1';
+  // a FAILED load must stay retryable — marking it filled froze the
+  // load-failure note in place for the life of the page (review finding)
+  if(sig!==null) cell.dataset.filled='1';
   if(!stocks.length&&!extras.length){
     // AN OUTAGE NEVER IMPERSONATES SAFETY: a FAILED signals fetch and a
     // group the artifact genuinely does not cover yet are different facts
     // and must not share this message. The old text asserted the second
     // ("signals.json has no rows for this group") for both.
-    cell.innerHTML = (sig===null)
+    const emptyNote = (sig===null)
       ? '<div class="gl2-note" style="color:var(--yellow);">signals.json could not be loaded — this is a load failure, not an empty group. Ticker rows, scores and candidate grades are missing.</div>'
       : '<div class="gl2-note">tickers unavailable this run (signals.json has no rows for this group yet)</div>';
+    // the ownership caveat applies here too: with the assessment down we
+    // cannot say this group holds nothing of yours (review finding)
+    cell.innerHTML = (ASSESS_FAILED
+      ? '<div class="gl2-note" style="color:var(--yellow);">Tracked-name data unavailable (assessment did not load) — ownership for this group is unknown.</div>'
+      : '') + emptyNote;
     return;
   }
   // ownership is UNKNOWN, not "none": without the assessment every row

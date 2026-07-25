@@ -825,6 +825,7 @@ async function triggerServerRefresh(){
   const beforeStamp = (DATA && DATA.timestamp) || null;
   dashStatusClear();
   let pollFailures = 0;
+  let serverError = null;
   try {
     // Trigger refresh on server
     const rr = await fetch('/api/refresh', {method:'POST'});
@@ -844,6 +845,7 @@ async function triggerServerRefresh(){
         const status = await st.json();
         if(!status.running){
           done = true;
+          serverError = status.last_error || null;
           // Reload dashboard data
           await loadData();
         }
@@ -862,12 +864,22 @@ async function triggerServerRefresh(){
             + 'was already available, not a confirmed fresh run.');
       return;
     }
+    // The server may report completion AND its own failure — treating that
+    // as success is exactly the invariant violation (review finding).
+    if(serverError){
+      dashStatus('⚠ The server refresh FAILED',
+        `${serverError} — the engine reported an error, so the data below `
+        + 'is whatever was already available, not a fresh run.');
+      return;
+    }
     // Completed — but did anything actually change?
     if(beforeStamp && DATA && DATA.timestamp===beforeStamp){
       dashStatus('⚠ Refresh finished, but the data did not change',
         `Still showing the run generated ${fmtEST(beforeStamp)}. The engine `
         + 'reported completion without writing newer data — treat this as '
-        + 'unchanged, not as freshly fetched market data.');
+        + 'unchanged, not as freshly fetched market data. (If the panels '
+        + 'below show a load error, that is the cause and this is a '
+        + 'symptom.)');
     }
   } catch(e) {
     console.error('Refresh failed:', e);
