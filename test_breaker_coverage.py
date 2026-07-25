@@ -774,9 +774,39 @@ def test_both_flavours_gate_everywhere():
     assert "coverage_event" in hm and "coverage INCOMPLETE" in hm
     assert "breaker coverage incomplete" in hm, \
         "a degraded group could still report 'all breaker checks clear'"
-    # the dashboard separates FIRED from UNVERIFIED
+    # the dashboard separates FIRED from UNVERIFIED, and every render path
+    # in the file goes through ONE verdict function. Three copies of the
+    # rule is how the heatmap kept painting a record-degraded group green
+    # while its own card rendered degraded (caught by rendering it).
     ix = open(os.path.join(REPO, "public", "index.html")).read()
     assert "firedGroups" in ix and "unverifiedGroups" in ix
+    assert "function breakerVerdict(" in ix
+    assert ix.count("function breakerVerdict(") == 1, "verdict rule duplicated"
+    # no render path may read breaker_status raw for its verdict
+    for bad in ("breakerIcon(g.breaker_status", "g.breaker_status||'clear')"):
+        assert bad not in ix, f"a render path bypasses breakerVerdict: {bad}"
+    # mirror the predicate and check the shapes that must disagree with
+    # the label
+    def verdict(g):
+        raw = g.get("breaker_status") or "clear"
+        if raw not in ("clear", "degraded"):
+            return raw                      # a trigger fired
+        unver = (raw == "degraded"
+                 or bool(g.get("breaker_degraded_reasons"))
+                 or bool(g.get("breaker_checks_expected")
+                         and g.get("breaker_checks_run")
+                         and any(c not in g["breaker_checks_run"]
+                                 for c in g["breaker_checks_expected"])))
+        return "degraded" if unver else "clear"
+    assert verdict({"breaker_status": "clear",
+                    "breaker_checks_expected": ["breadth_collapse"],
+                    "breaker_checks_run": ["breadth_collapse"],
+                    "breaker_degraded_reasons": ["baseline unavailable"]}) \
+        == "degraded", "a stamped-clear group with a contradicting record"
+    assert verdict({"breaker_status": "clear"}) == "clear"   # pre-D-019 era
+    assert verdict({"breaker_status": "critical",
+                    "breaker_checks_expected": ["a", "b"],
+                    "breaker_checks_run": ["a"]}) == "critical"  # trigger wins
     assert "degraded:'\u26a0\ufe0f'" in ix or "degraded:'⚠️'" in ix, \
         "the dashboard glyph falls through to the unknown '⚪'"
     assert ".card.breaker-degraded{" in ix

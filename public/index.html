@@ -371,6 +371,25 @@ function nearMissStrip(g){
 // D-019: 'degraded' gets its OWN glyph. Falling through to the unknown
 // '⚪' would make a group we could not check look like one we have no
 // data for — and neither may look like the green 'clear' claim.
+// D-019: the EFFECTIVE breaker verdict — ONE implementation, used by the
+// heatmap, the group cards and the header stat alike. Three copies of this
+// rule is how the heatmap kept painting a record-degraded group green while
+// its own card rendered degraded. A FIRED trigger wins; otherwise "clear"
+// is a positive claim that requires complete coverage, and the RECORD
+// outranks the label. Era-aware: a pre-D-019 group has no coverage fields,
+// so unverified is false and it reads exactly as it always did.
+function breakerUnverified(g){
+  if(!g) return false;
+  if((g.breaker_status||'')==='degraded') return true;
+  if(g.breaker_degraded_reasons && g.breaker_degraded_reasons.length) return true;
+  const e=g.breaker_checks_expected, r=g.breaker_checks_run;
+  return !!(e && r && e.some(c=>!r.includes(c)));
+}
+function breakerVerdict(g){
+  const raw=(g&&g.breaker_status)||'clear';
+  if(raw!=='clear' && raw!=='degraded') return raw;   // a trigger fired
+  return breakerUnverified(g)?'degraded':'clear';
+}
 function breakerIcon(status){return {critical:'🔴',warning:'🟠',watch:'🟡',clear:'🟢',degraded:'⚠️'}[status]||'⚪';}
 /* Earnings-proximity chip (PER-510, display-only): amber ≤7d, red ≤2d —
    same inline-chip pattern as the theme-leader warning chips. */
@@ -489,7 +508,7 @@ function renderHeatmap(){
     const stocks = query ? g.stocks.filter(s=>s.ticker.toLowerCase().includes(query)||g.name.toLowerCase().includes(query)) : g.stocks;
     if(query && !stocks.length && !g.name.toLowerCase().includes(query)) return;
 
-    html += `<div class="hm-group-label" onclick="drillToGroup(${gi})">#${g.rank} ${g.name} (${fmtYtd(g.avg_ytd)}) ${breakerIcon(g.breaker_status||'clear')}</div>`;
+    html += `<div class="hm-group-label" onclick="drillToGroup(${gi})">#${g.rank} ${g.name} (${fmtYtd(g.avg_ytd)}) ${breakerIcon(breakerVerdict(g))}</div>`;
     stocks.forEach(s=>{
       const stgLbl = s.stage_analysis ? 'S'+s.stage_analysis.stage+' '+s.stage_analysis.stage_name : '—';
       html += `<div class="hm-tile" style="background:${scoreBg(s.score)}" onmouseenter="showTT(event,this)" onmouseleave="hideTT()" data-ticker="${s.ticker}" data-score="${s.score}" data-signal="${s.signal}" data-ytd="${s.ytd_return==null?'':s.ytd_return}" data-price="${s.price?s.price.toFixed(2):'—'}" data-rsi="${fmtNum(s.rsi,1)}" data-group="${g.name}" data-trade="${s.trade_signal||'—'}" data-stage="${stgLbl}">
@@ -589,14 +608,9 @@ function render(){
   // let "0 ✓" mean "nothing fired" when it should mean "all clear, and we
   // looked". Split them, and never show the green tick unless coverage was
   // complete everywhere.
-  const firedGroups = groups.filter(g=>g.breaker_status
-    && !['clear','degraded'].includes(g.breaker_status)).length;
-  const unverifiedGroups = groups.filter(g=>{
-    if(g.breaker_status==='degraded') return true;
-    if(g.breaker_degraded_reasons && g.breaker_degraded_reasons.length) return true;
-    const e=g.breaker_checks_expected, r=g.breaker_checks_run;
-    return !!(e && r && e.some(c=>!r.includes(c)));
-  }).length;
+  const firedGroups = groups.filter(g=>breakerVerdict(g)!=='clear'
+    && breakerVerdict(g)!=='degraded').length;
+  const unverifiedGroups = groups.filter(g=>breakerVerdict(g)==='degraded').length;
   const breakerCount = firedGroups;
 
   document.getElementById('statsGrid').innerHTML = `
@@ -632,7 +646,12 @@ function renderGroups(){
     const stocks = query ? g.stocks.filter(s=>s.ticker.toLowerCase().includes(query)||g.name.toLowerCase().includes(query)) : g.stocks;
     if(query && !stocks.length && !g.name.toLowerCase().includes(query)) return;
 
-    const bs = g.breaker_status||'clear';
+    // D-019: the card must not trust the LABEL over the RECORD. A group
+    // stamped 'clear' whose coverage record says otherwise (a check that
+    // never ran, or one that ran on a degraded input) is unverified, and
+    // painting it as clear is the defect this ruling exists to kill.
+    // Same predicate as the header stat — one rule, not two.
+    const bs = breakerVerdict(g);
     const triggeredAlerts = (g.breaker_alerts||[]).filter(a=>a.triggered);
 
     html += `<div class="card ${bs!=='clear'?'breaker-'+bs:''}" id="group-card-${i}"><div class="card-head" onclick="tog(${i})">
