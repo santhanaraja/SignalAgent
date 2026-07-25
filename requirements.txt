@@ -7,3 +7,10 @@ flask-cors>=4.0.0
 gunicorn>=21.2.0
 anthropic>=0.40.0
 pyyaml>=6.0
+# lxml: REQUIRED by yfinance's get_earnings_dates(), which parses the
+# earnings-calendar table with pandas.read_html. Without it that call raises
+# ImportError, and earnings_calendar.py's fallback swallows the exception at
+# its except clause — so the fallback has never once executed in production.
+# Adding this ACTIVATES a previously-dead code path (D-019 build): see
+# test_earnings_fallback.py, which proves the path now works.
+lxml>=5.0

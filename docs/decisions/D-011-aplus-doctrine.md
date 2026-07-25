@@ -157,14 +157,37 @@ list are the two approved implementation knobs (Build-5 retest queued).
 2. Healthy setups repeatedly graded B on a single named row — the
    threshold-miscalibration signal.
 
+## Evidence note — Build 5 Layer A (2026-07-25)
+
+**The retest ran.** `scripts/backtest_doctrine.py` (which supersedes the
+recipe's `replay_ticker.py --grade-entries` per the Build 5 ruling)
+graded 529 pool names daily, point-in-time, 2020-01 → 2026-07: 848,328
+ticker-days, grade-lite (rows 1–5+7; c5 and row 6 excluded for
+honesty — no universe/breaker history), real `grade_setup` throughout,
+nine pins including exact parity with 516 recorded production grades.
+
+**Result: no positive discrimination — inverted.** A+ fwd-20d 0.83% vs
+B 1.15% vs C 1.63%; the A+−C spread is negative at every horizon in both
+D-006 spans (validate −0.92%, bootstrap CI [−1.27, −0.60]). **Revisit
+trigger 1 fires on the validate span** (A+ 0.97% vs B 1.76%). In Choppy
+— where this ruling enforces A+-only — B outperformed A+ by ~0.6%/20d.
+The `approach_swing_lookback` knob is inert at {10,20,40} (zero grade
+changes). Full packet: [docs/backtest-doctrine.md](../backtest-doctrine.md)
+— including the survivorship caveat that tempers (but does not reverse)
+the inversion, and the Build 5B scope note: signal quality only; the
+grade could still earn its keep through risk shaping after entry, which
+Layer A cannot see.
+
+This note is evidence, not a ruling. The D-011 revisit deliberation —
+including whether Q4's A+-only-in-Choppy stands — is its own decision.
+
 ## Retest recipe
 
 ```
-# Build 5 grades every historical entry (the trader's own + universe
-# replay): do A+-graded entries outperform B/C on forward returns and
-# stop-out rate?
-python3 scripts/replay_ticker.py --grade-entries   # (Build 5 deliverable)
-# The grade function, once shipped, pins like every 1B rule:
+# Build 5 Layer A (2026-07-25) — the recipe as actually built:
+python3 scripts/backtest_doctrine.py     # daily point-in-time grades, fwd returns
+python3 test_backtest_doctrine.py        # parity + lookahead + replay pins
+# The grade function pins like every 1B rule:
 python3 test_position_signals.py
 python3 test_position_lab.py
 ```
