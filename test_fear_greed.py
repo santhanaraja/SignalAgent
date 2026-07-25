@@ -94,7 +94,13 @@ def test_persistence_once_per_day():
         h = json.load(open(p)); assert len(h) == 2 and h[-1]["date"] == "2026-07-14"
         # entry shape + raw carried through
         e = h[-1]
-        assert set(e) == {"date", "composite", "label", "components"}, e
+        # D-012 record shape + the degraded stamp (swallowed-fetch
+        # remediation): a day whose indicators failed must be filterable,
+        # so an un-measured 50 can never enter D-016's backtest as a real
+        # neutral reading.
+        assert set(e) == {"date", "composite", "label", "degraded_count",
+                          "components"}, e
+        assert e["degraded_count"] == 0
         assert e["components"][0]["raw"] == "367/530 (69%)"
         # non-monotonic history: a same-day entry that is NOT last must still
         # upsert (scan-by-date), never append a duplicate date

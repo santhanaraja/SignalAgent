@@ -81,40 +81,94 @@ def _group_breaker_context(symbol):
     Membership comes from the active universe artifact (authoritative for
     the week); the group's live breaker status comes from the latest
     signals.json group entry — breakers are group-level and only computed
-    by the engine run. Returns None when the symbol has no group in the
-    active universe (caller then keeps breaker_status="clear" but must
-    say so explicitly).
+    by the engine run.
+
+    THE INVARIANT (swallowed-fetch remediation): AN OUTAGE NEVER
+    IMPERSONATES SAFETY. Every failure mode used to collapse to None (or,
+    worse, to a ctx carrying a FABRICATED breaker_status="clear"), and the
+    caller then computed a real trade signal — a BUY NOW — on a breaker
+    nobody verified. "Proven, never presumed" governs signal chips exactly
+    as it governs the D-011 grade. So the result is DISCRIMINATED:
+
+      {"status": "resolved",        group, breaker_status, breaker_reasons}
+      {"status": "not_in_universe"} — genuinely no group breaker applies
+      {"status": "unavailable", reason} — the lookup FAILED; the caller
+          must gate the signal, never presume clear.
+
+    Never returns None: an absent answer is itself an answer here, and
+    conflating "no breaker applies" with "we could not check" is the bug.
     """
+    ua_path = os.path.join(DATA_DIR, "universe_active.json")
     try:
-        ua_path = os.path.join(DATA_DIR, "universe_active.json")
         if not os.path.exists(ua_path):
-            return None
+            return {"status": "unavailable",
+                    "reason": "universe artifact missing",
+                    "breaker_status": "unknown"}
         with open(ua_path, "r") as f:
             groups = json.load(f).get("groups", {})
-        group_name = None
-        for gname, g in groups.items():
-            if symbol in (g.get("tickers") or []):
-                group_name = gname
-                break
-        if group_name is None:
-            return None
-        ctx = {"group": group_name, "breaker_status": "clear",
-               "breaker_reasons": []}
-        signals_path = os.path.join(DATA_DIR, "signals.json")
-        if os.path.exists(signals_path):
-            with open(signals_path, "r") as f:
-                for g in json.load(f).get("groups", []):
-                    if g.get("name") == group_name:
-                        ctx["breaker_status"] = g.get("breaker_status", "clear")
-                        ctx["breaker_reasons"] = [
-                            a.get("message", a.get("description", ""))
-                            for a in (g.get("breaker_alerts") or [])
-                            if a.get("triggered")
-                        ][:3]
-                        break
-        return ctx
-    except Exception:
-        return None
+    except Exception as e:
+        return {"status": "unavailable",
+                "reason": f"universe artifact unreadable ({type(e).__name__})",
+                "breaker_status": "unknown"}
+    if not isinstance(groups, dict) or not groups:
+        return {"status": "unavailable",
+                "reason": "universe artifact carries no groups",
+                "breaker_status": "unknown"}
+
+    group_name = None
+    for gname, g in groups.items():
+        if symbol in ((g or {}).get("tickers") or []):
+            group_name = gname
+            break
+    if group_name is None:
+        # genuinely outside the selected universe — no group breaker exists
+        # to check. This is an ANSWER, not an outage.
+        return {"status": "not_in_universe"}
+
+    signals_path = os.path.join(DATA_DIR, "signals.json")
+    try:
+        if not os.path.exists(signals_path):
+            return {"status": "unavailable", "group": group_name,
+                    "reason": "signals artifact missing — breaker unknown",
+                    "breaker_status": "unknown"}
+        with open(signals_path, "r") as f:
+            sig_groups = json.load(f).get("groups", [])
+    except Exception as e:
+        return {"status": "unavailable", "group": group_name,
+                "reason": f"signals artifact unreadable ({type(e).__name__})",
+                "breaker_status": "unknown"}
+
+    for g in sig_groups or []:
+        if (g or {}).get("name") == group_name:
+            bs = g.get("breaker_status")
+            if not bs:
+                # the group is there but carries no computed breaker — the
+                # engine has not scored it yet. Unknown, not clear.
+                return {"status": "unavailable", "group": group_name,
+                        "reason": "group carries no computed breaker status",
+                        "breaker_status": "unknown"}
+            return {
+                "status": "resolved",
+                "group": group_name,
+                "breaker_status": bs,
+                "breaker_reasons": [
+                    a.get("message", a.get("description", ""))
+                    for a in (g.get("breaker_alerts") or [])
+                    if a.get("triggered")
+                ][:3],
+            }
+    # in the universe, absent from signals.json: the rotation is ahead of
+    # the last engine run. Unknown — NOT clear (this exact fall-through
+    # used to fabricate a clear breaker and print BUY NOW).
+    return {"status": "unavailable", "group": group_name,
+            # DEPLOY-WINDOW SAFETY: a page cached from before this fix reads
+            # `breaker_status` directly and treats "clear"/absent as clear.
+            # "unknown" makes that old code take its NON-clear branch (an
+            # alarming breaker box) instead of printing "🟢 breakers clear".
+            # The server never feeds this to compute_trade_signal — the
+            # caller only trusts status=="resolved" (review finding).
+            "breaker_status": "unknown",
+            "reason": "group not in the latest signals run — breaker unknown"}
 
 
 def _analyze_ticker(symbol):
@@ -140,8 +194,19 @@ def _analyze_ticker(symbol):
     # to a selected group (PER-509 fix 1: hardcoded "clear" made J show
     # BUY NOW here while the dashboard showed AVOID from the same function)
     group_ctx = _group_breaker_context(symbol)
-    breaker_status = group_ctx["breaker_status"] if group_ctx else "clear"
+    breaker_status = (group_ctx.get("breaker_status", "clear")
+                      if group_ctx.get("status") == "resolved" else "clear")
     trade_sig, trade_reason = compute_trade_signal(details, breaker_status=breaker_status)
+    # AN OUTAGE NEVER IMPERSONATES SAFETY: when the breaker could not be
+    # checked, the signal above rests on a PRESUMED clear. Gate it — the
+    # D-011 grade_gate precedent (no new machine state; the render is
+    # blocked and says why). "not_in_universe" is NOT gated: no group
+    # breaker exists to check, which is a verified answer.
+    trade_signal_gate = None
+    if group_ctx.get("status") == "unavailable":
+        trade_signal_gate = (
+            f"breaker unverified — {group_ctx.get('reason', 'lookup failed')}; "
+            f"the signal below presumes a clear breaker and is NOT shown")
     swing_signal = compute_swing_trade_signal(details, df)
     intraday_signal = compute_intraday_trade_signal(details, df)
     stage_analysis = compute_stage_analysis(details, df)
@@ -156,6 +221,7 @@ def _analyze_ticker(symbol):
         "score_inputs": details.get("score_inputs"),
         "trade_signal": trade_sig,
         "trade_reasoning": trade_reason,
+        "trade_signal_gate": trade_signal_gate,
         "group_context": group_ctx,
         # Technicals
         "rsi": details.get("rsi", 0),
@@ -209,12 +275,20 @@ def search_ticker(symbol):
 
         # Add to search history
         history = _load_history()
+        # AN OUTAGE NEVER IMPERSONATES SAFETY — including in the RECORD.
+        # A signal the UI withheld must not be persisted as if it stood: the
+        # history file is read back by the page (and by anyone opening it),
+        # so a presumed-clear BUY NOW stored here outlives the outage that
+        # produced it (review finding). Record what the user was actually
+        # shown, and why.
+        _gated = bool(result.get("trade_signal_gate"))
         history["searches"].insert(0, {
             "ticker": symbol,
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "score": result["score"],
             "signal": result["signal"],
-            "trade_signal": result["trade_signal"],
+            "trade_signal": (None if _gated else result["trade_signal"]),
+            "trade_signal_withheld": result.get("trade_signal_gate"),
             "price": result["price"],
         })
         history["searches"] = history["searches"][:100]  # Keep last 100

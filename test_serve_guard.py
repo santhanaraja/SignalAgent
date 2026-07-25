@@ -640,6 +640,199 @@ def test_d018_preview_surfaces():
           "and un-badged, passthrough carries it: OK")
 
 
+def test_breaker_outage_never_presumes_clear():
+    """THE INVARIANT, server side: an outage never impersonates safety.
+    Every failure mode of the group-breaker lookup used to collapse to
+    None (or worse, to a ctx carrying a FABRICATED breaker_status="clear"),
+    and the caller then computed a real BUY NOW on a breaker nobody
+    verified. Each failure must now report `unavailable` and gate the
+    signal; only a genuine not-in-universe answer may proceed unguarded."""
+    import ticker_api
+    tmp = tempfile.mkdtemp(prefix="brk_")
+    old = ticker_api.DATA_DIR
+    ticker_api.DATA_DIR = tmp
+    W = lambda n, o: open(os.path.join(tmp, n), "w").write(json.dumps(o))
+    try:
+        # 1. universe artifact MISSING -> unavailable (was: None -> "clear")
+        g = ticker_api._group_breaker_context("AAA")
+        assert g["status"] == "unavailable" and "missing" in g["reason"], g
+
+        # 2. universe artifact CORRUPT -> unavailable (was: except -> None)
+        open(os.path.join(tmp, "universe_active.json"), "w").write("{not json")
+        g = ticker_api._group_breaker_context("AAA")
+        assert g["status"] == "unavailable" and "unreadable" in g["reason"], g
+
+        # 3. genuinely outside the universe -> an ANSWER, not an outage
+        W("universe_active.json", {"groups": {"Semis": {"tickers": ["AAA"]}}})
+        W("signals.json", {"groups": [{"name": "Semis",
+                                       "breaker_status": "clear"}]})
+        assert ticker_api._group_breaker_context("ZZZ") == \
+            {"status": "not_in_universe"}
+
+        # 4. in the universe, signals artifact MISSING -> unavailable.
+        #    THIS is the one that fabricated a clear breaker and printed
+        #    BUY NOW: the old code returned {"breaker_status": "clear"}.
+        os.remove(os.path.join(tmp, "signals.json"))
+        g = ticker_api._group_breaker_context("AAA")
+        assert g["status"] == "unavailable" and g["group"] == "Semis", g
+
+        # 5. in the universe, group ABSENT from the signals run -> unavailable
+        W("signals.json", {"groups": [{"name": "Other",
+                                       "breaker_status": "clear"}]})
+        g = ticker_api._group_breaker_context("AAA")
+        assert g["status"] == "unavailable" and "not in the latest" in g["reason"]
+
+        # 6. group present but carrying NO computed breaker -> unavailable
+        W("signals.json", {"groups": [{"name": "Semis"}]})
+        assert ticker_api._group_breaker_context("AAA")["status"] == "unavailable"
+
+        # 7. the happy path still resolves, with the REAL status
+        W("signals.json", {"groups": [{"name": "Semis",
+                                       "breaker_status": "critical",
+                                       "breaker_alerts": [
+                                           {"triggered": True,
+                                            "message": "momentum gone"}]}]})
+        g = ticker_api._group_breaker_context("AAA")
+        assert g["status"] == "resolved" and g["breaker_status"] == "critical"
+        assert g["breaker_reasons"] == ["momentum gone"]
+        # never None on any path — an absent answer is itself an answer
+        for sym in ("AAA", "ZZZ", ""):
+            assert ticker_api._group_breaker_context(sym) is not None
+    finally:
+        ticker_api.DATA_DIR = old
+        shutil.rmtree(tmp, ignore_errors=True)
+    print("  breaker outage: all 5 failure modes report unavailable (never a "
+          "fabricated clear), not-in-universe stays an answer: OK")
+
+
+def test_swallowed_fetch_honest_failure_states():
+    """The 7 HIGH swallowed-failure sites: each must render a DISTINCT
+    load-failure state, and no fabricated default may reach the DOM.
+    Source-structure pins — the failure branch exists, says it is a load
+    failure, and the old silent/fabricating code is gone."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    rd = lambda p: open(os.path.join(here, p)).read()
+
+    # --- search.html: the signal chip is BLOCKED on unverified breakers
+    sr = rd("public/search.html")
+    assert "d.trade_signal_gate" in sr and "SIGNAL WITHHELD" in sr
+    assert "ts-withheld" in sr and ".ts-withheld{" in sr
+    # the withheld branch must come BEFORE any chip render
+    i_gate = sr.index("if (d.trade_signal_gate || !breakerProven)")
+    i_chip = sr.index("tradeBadge.className = 'ts-badge ' + tsClass(")
+    assert i_gate < i_chip, "the signal chip renders before the gate check"
+    # the withheld signal must not be PERSISTED as fact either — the search
+    # history file outlives the outage and is read back by the page
+    api = rd("ticker_api.py")
+    assert '"trade_signal": (None if _gated else result["trade_signal"])' in api
+    assert '"trade_signal_withheld"' in api
+    # FAIL CLOSED across a deploy window, BOTH directions:
+    #  * new page + OLD server (no gate field / loose group_context) must
+    #    still withhold — gate on positive proof, not on a field's presence
+    assert "breakerProven" in sr and "!breakerProven" in sr
+    assert "gcs === 'resolved' || gcs === 'not_in_universe'" in sr
+    #  * OLD cached page + NEW server must not read "clear": every
+    #    unavailable result carries breaker_status "unknown", which the old
+    #    page's own non-clear branch renders as an alarming breaker box
+    api2 = rd("ticker_api.py")
+    # comment-insensitive: strip # comments so an explanatory block can't
+    # push the guard out of the inspection window
+    _nc = "\n".join(_l for _l in api2.splitlines()
+                    if not _l.strip().startswith("#"))
+    _un = [b for b in _nc.split('return {"status": "unavailable"')[1:]]
+    assert _un and all('"breaker_status": "unknown"' in b[:300] for b in _un), \
+        "an unavailable result lacks the deploy-window breaker_status guard"
+    # interpolated error text is escaped before it reaches innerHTML
+    for _p in ("public/framework.html", "public/index.html",
+               "public/feargreed.html"):
+        _s = rd(_p)
+        assert "function _escHtml(" in _s and "_escHtml(sub)" in _s, _p
+    # unavailable is its own branch, and never reuses the not-in-universe claim
+    assert "GROUP BREAKER UNVERIFIED" in sr
+    assert "gc.status === 'unavailable'" in sr
+    assert "gc.status === 'not_in_universe'" in sr
+    assert "gc.status === 'resolved'" in sr
+    assert sr.count("not in the active universe; group breaker checks not applied")\
+        == 1, "the not-in-universe claim leaked into another branch"
+
+    # --- framework.html: a persistent banner OUTSIDE the wiped container
+    fw = rd("public/framework.html")
+    assert 'id="fwStatusBar"' in fw and "function fwStatus(" in fw
+    # it must not live inside #mainContent (the wipe that broke #emptyState)
+    i_bar = fw.index('id="fwStatusBar"')
+    i_main = fw.index('id="mainContent"')
+    assert i_bar < i_main, "the status banner is inside the re-rendered container"
+    assert "function showWarming(" in fw and \
+        "fwStatus('⏳ Regime engine warming up'" in fw
+    # showWarming must no longer bare-dereference #emptyState
+    sw = fw[fw.index("function showWarming("):fw.index("function scheduleRetry(")]
+    assert "getElementById('emptyState')" not in sw, \
+        "showWarming still dereferences the destroyed node"
+    # load/parse failure, error status, and the assessment outage all speak.
+    # Compare on a concat-normalized copy: these strings are split across
+    # JS line continuations, and a literal search would pin formatting.
+    import re as _re
+    fw_flat = _re.sub(r"`\s*\+\s*[`']|['`]\s*\+\s*[`']", "", fw)
+    assert "load failure, not an empty framework" in fw_flat
+    # the cold-start panel must NOT be shown on an error (it contradicted
+    # the banner: "click Run Framework" for a system already running)
+    err_branch = fw[fw.index("A real error response is NOT a cold start"):
+                    fw.index("Framework data unavailable")]
+    assert "es.style.display='none'" in err_branch, \
+        "the cold-start panel still shows on an API error"
+    assert "load failure, not an empty result" in fw_flat
+    assert "Framework data unavailable" in fw
+    assert "Framework data could not be read" in fw
+    assert "not a flat book" in fw and "ASSESS_FAILED" in fw
+    # run honesty: start failure, no-op run, status-endpoint outage
+    assert "Run could not be started" in fw
+    assert "Run finished, but the artifact did not change" in fw
+    assert "Lost contact with the run status endpoint" in fw
+    assert "fwRunFromStamp" in fw
+    # the Layer-2 gap message no longer asserts an empty artifact on failure
+    assert "signals.json could not be loaded" in fw
+    assert "may include names you already hold" in fw
+
+    # --- index.html: refresh honesty
+    ix = rd("public/index.html")
+    assert 'id="dashStatusBar"' in ix and "function dashStatus(" in ix
+    assert "Refresh could not be started" in ix
+    assert "Refresh timed out after 10 minutes" in ix
+    assert "Refresh finished, but the data did not change" in ix
+    assert "was NOT refreshed" in ix
+    assert "pollFailures" in ix          # silent poll failures are counted
+
+    # --- feargreed.html: stale gauge + dead indicators
+    fg = rd("public/feargreed.html")
+    assert 'id="fgStatusBar"' in fg and "function fgStatus(" in fg
+    assert "is from the last successful load and is NOT current" in fg
+    assert "ind-dead" in fg and "lbl-dead" in fg and "UNAVAILABLE" in fg
+    assert "indicators could not be computed" in fg
+    # a dead indicator must not paint a score bar or a live label
+    ind = fg[fg.index("const degraded = indicators.filter"):
+             fg.index("// The composite is a mean")]
+    assert "dead ? 'var(--dim)'" in ind and "${dead?'—':ind.score}" in ind
+    assert "dead?'UNAVAILABLE':ind.label" in ind
+
+    # --- the engine flags them at source (no string-sniffing on the page).
+    # STRUCTURAL, not a count: EVERY fallback that returns a 50/Neutral
+    # without measuring anything must carry the flag. A count pin cemented
+    # an incomplete remediation once (7 of 9 fallbacks were unflagged and
+    # still rendered as live neutral readings) — this cannot.
+    eng = rd("fear_greed_engine.py")
+    import re as _re2
+    unflagged = []
+    for m in _re2.finditer(r'\{"score": 50,.*?\}', eng, _re2.S):
+        if '"degraded"' not in m.group(0):
+            unflagged.append(m.group(0)[:70])
+    assert not unflagged, \
+        f"un-flagged 50/Neutral fallbacks would render as live readings: {unflagged}"
+    assert eng.count('"degraded": True') >= 9
+    print("  swallowed-fetch HIGH sites: search chip gated, framework banner "
+          "persistent + run honesty, dashboard refresh honesty, F&G stale + "
+          "dead-indicator states, engine flags degraded at source: OK")
+
+
 def test_missing_file_still_404():
     env = _Env()
     try:
@@ -666,5 +859,7 @@ if __name__ == "__main__":
     test_one_grammar_page_sources()
     test_signal_refresh_chases_framework()
     test_d018_preview_surfaces()
+    test_breaker_outage_never_presumes_clear()
+    test_swallowed_fetch_honest_failure_states()
     test_missing_file_still_404()
     print("\nAll serve-guard tests passed.\n")

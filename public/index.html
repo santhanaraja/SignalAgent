@@ -24,6 +24,9 @@
   .live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
   .ts{font-size:11px;color:var(--dim);padding:3px 28px;}
+  #dashStatusBar{margin:8px 28px;padding:9px 12px;border-radius:6px;font-size:12px;
+    border:1px solid rgba(210,153,34,.45);background:rgba(210,153,34,.08);color:#d29922;}
+  #dashStatusBar .sub{display:block;margin-top:3px;color:var(--dim);font-size:11px;}
 
   /* Index ticker bar */
   .index-bar{display:flex;gap:0;padding:0 28px;border-bottom:1px solid var(--border);background:var(--surface);overflow-x:auto;}
@@ -227,6 +230,9 @@
 </div>
 
 <div class="ts" id="tsLine"></div>
+<!-- Persistent refresh/load status. Outside #mainContent so a render
+     wipe can never destroy it (the framework page shipped that bug). -->
+<div id="dashStatusBar" style="display:none;"></div>
 <div class="stale-banner" id="staleBanner">&#9888; Data is stale — signal engine hasn't run recently. Pipeline runs every 15 min during market hours (Mon–Fri 9:30 AM – 4:30 PM ET).</div>
 
 <div class="nav">
@@ -792,6 +798,22 @@ function sortG(gi,field){
   },10);
 }
 
+// AN OUTAGE NEVER IMPERSONATES SAFETY: a refresh that fails, times out, or
+// completes without producing newer data must SAY so. All three used to end
+// in the same place — spinner clears, same numbers, no word to the user.
+function _escHtml(v){return String(v==null?'':v)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function dashStatus(title, sub){
+  const el=document.getElementById('dashStatusBar');
+  if(!el) return;
+  el.innerHTML=`<b>${title}</b>${sub?`<span class="sub">${_escHtml(sub)}</span>`:''}`;
+  el.style.display='block';
+}
+function dashStatusClear(){
+  const el=document.getElementById('dashStatusBar');
+  if(el){el.style.display='none';el.innerHTML='';}
+}
+
 async function triggerServerRefresh(){
   /** Call the server API to re-run the signal engine with fresh market data. */
   if(refreshInProgress) return;
@@ -800,9 +822,18 @@ async function triggerServerRefresh(){
   btn.classList.add('spinning'); btn.disabled = true;
   btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refreshing...';
 
+  const beforeStamp = (DATA && DATA.timestamp) || null;
+  dashStatusClear();
+  let pollFailures = 0;
   try {
     // Trigger refresh on server
-    await fetch('/api/refresh', {method:'POST'});
+    const rr = await fetch('/api/refresh', {method:'POST'});
+    if(!rr.ok){
+      dashStatus('⚠ Refresh could not be started',
+        `The refresh endpoint answered HTTP ${rr.status}. Nothing was `
+        + 'recomputed — the data below is unchanged.');
+      return;               // finally{} still restores the button
+    }
 
     // Poll for completion (check every 5 seconds, max 10 min)
     let done = false;
@@ -816,16 +847,36 @@ async function triggerServerRefresh(){
           // Reload dashboard data
           await loadData();
         }
-      }catch(e){}
+      }catch(e){ pollFailures++; }
     }
     if(!done){
-      // Timeout — just reload whatever we have
+      // Timed out. This is NOT a completed refresh — say so, then show
+      // whatever we have rather than pretending the wait succeeded.
       await loadData();
+      dashStatus('⚠ Refresh timed out after 10 minutes',
+        pollFailures
+          ? `The status endpoint failed ${pollFailures} time(s) — the refresh `
+            + 'may never have started. The data below is whatever was already '
+            + 'available, not a confirmed fresh run.'
+          : 'The engine never reported completion. The data below is whatever '
+            + 'was already available, not a confirmed fresh run.');
+      return;
+    }
+    // Completed — but did anything actually change?
+    if(beforeStamp && DATA && DATA.timestamp===beforeStamp){
+      dashStatus('⚠ Refresh finished, but the data did not change',
+        `Still showing the run generated ${fmtEST(beforeStamp)}. The engine `
+        + 'reported completion without writing newer data — treat this as '
+        + 'unchanged, not as freshly fetched market data.');
     }
   } catch(e) {
     console.error('Refresh failed:', e);
-    // Still try to reload in case the server has new data
+    // Still try to reload in case the server has new data — but never let
+    // the reload's success masquerade as the refresh having worked.
     await loadData();
+    dashStatus('⚠ Refresh failed',
+      `${e && e.message ? e.message : 'the request failed'} — the data below `
+      + 'was NOT refreshed; it is whatever was already loaded.');
   } finally {
     refreshInProgress = false;
     btn.classList.remove('spinning'); btn.disabled = false;

@@ -93,7 +93,8 @@ def compute_market_momentum():
     """S&P 500 price relative to its 125-day moving average."""
     df = fetch_data("^GSPC", period="1y")
     if df is None or len(df) < 126:
-        return {"score": 50, "value": 0, "detail": "Insufficient data", "label": "Neutral"}
+        return {"score": 50, "value": 0, "detail": "Insufficient data", "label": "Neutral",
+                "degraded": True, "degraded_reason": "^GSPC history unavailable or <126 bars"}
 
     price = float(df["Close"].iloc[-1])
     sma125 = float(df["Close"].rolling(125).mean().iloc[-1])
@@ -137,7 +138,8 @@ def compute_stock_strength():
             near_low += 1
 
     if total == 0:
-        return {"score": 50, "value": 0, "detail": "No data", "label": "Neutral"}
+        return {"score": 50, "value": 0, "detail": "No data", "label": "Neutral",
+                "degraded": True, "degraded_reason": "no 52-week high/low readings returned"}
 
     # Net ratio: all near highs = 100, all near lows = 0
     if near_high + near_low == 0:
@@ -185,7 +187,8 @@ def compute_stock_breadth():
 
     total = advancing + declining
     if total == 0:
-        return {"score": 50, "value": "0/0", "detail": "No data", "label": "Neutral"}
+        return {"score": 50, "value": "0/0", "detail": "No data", "label": "Neutral",
+                "degraded": True, "degraded_reason": "no advancing/declining readings returned"}
 
     ratio = advancing / total
     score = _clamp(ratio * 100)
@@ -209,7 +212,8 @@ def compute_put_call_proxy():
     """
     df = fetch_data("^VIX", period="6mo")
     if df is None or len(df) < 55:
-        return {"score": 50, "value": 0, "detail": "Insufficient VIX data", "label": "Neutral"}
+        return {"score": 50, "value": 0, "detail": "Insufficient VIX data", "label": "Neutral",
+                "degraded": True, "degraded_reason": "^VIX history unavailable or <55 bars"}
 
     vix = float(df["Close"].iloc[-1])
     vix_5d_ago = float(df["Close"].iloc[-6])
@@ -259,7 +263,11 @@ def compute_market_internals(path=None):
         with open(path) as f:
             uni = json.load(f)
     except (OSError, ValueError):
-        return {"score": 50, "value": "n/a", "detail": "Universe breadth unavailable", "label": "Neutral"}
+        # flagged, not silently neutral (see the composite loop's note)
+        return {"score": 50, "value": "n/a",
+                "detail": "Universe breadth unavailable", "label": "Neutral",
+                "degraded": True,
+                "degraded_reason": "universe artifact unreadable"}
 
     states = [
         _ticker_above_50dma(t)
@@ -269,7 +277,8 @@ def compute_market_internals(path=None):
     states = [s for s in states if s is not None]
     total = len(states)
     if total == 0:
-        return {"score": 50, "value": "n/a", "detail": "No universe breadth data", "label": "Neutral"}
+        return {"score": 50, "value": "n/a", "detail": "No universe breadth data", "label": "Neutral",
+                "degraded": True, "degraded_reason": "no above-50DMA readings in the universe"}
 
     above = sum(1 for s in states if s)
     pct = above / total * 100
@@ -294,7 +303,8 @@ def compute_safe_haven_demand():
     tlt_df = fetch_data("TLT", period="6mo")
 
     if spy_df is None or tlt_df is None or len(spy_df) < 25 or len(tlt_df) < 25:
-        return {"score": 50, "value": 0, "detail": "Insufficient data", "label": "Neutral"}
+        return {"score": 50, "value": 0, "detail": "Insufficient data", "label": "Neutral",
+                "degraded": True, "degraded_reason": "SPY/TLT history unavailable or <25 bars"}
 
     spy_ret = (float(spy_df["Close"].iloc[-1]) - float(spy_df["Close"].iloc[-21])) / float(spy_df["Close"].iloc[-21]) * 100
     tlt_ret = (float(tlt_df["Close"].iloc[-1]) - float(tlt_df["Close"].iloc[-21])) / float(tlt_df["Close"].iloc[-21]) * 100
@@ -326,7 +336,8 @@ def compute_junk_bond_demand():
     lqd_df = fetch_data("LQD", period="6mo")
 
     if hyg_df is None or lqd_df is None or len(hyg_df) < 25 or len(lqd_df) < 25:
-        return {"score": 50, "value": 0, "detail": "Insufficient data", "label": "Neutral"}
+        return {"score": 50, "value": 0, "detail": "Insufficient data", "label": "Neutral",
+                "degraded": True, "degraded_reason": "HYG/LQD history unavailable or <25 bars"}
 
     hyg_ret = (float(hyg_df["Close"].iloc[-1]) - float(hyg_df["Close"].iloc[-21])) / float(hyg_df["Close"].iloc[-21]) * 100
     lqd_ret = (float(lqd_df["Close"].iloc[-1]) - float(lqd_df["Close"].iloc[-21])) / float(lqd_df["Close"].iloc[-21]) * 100
@@ -381,9 +392,15 @@ def get_fear_greed_index():
             print(f"Score: {result['score']} ({result['label']})")
         except Exception as e:
             print(f"Error: {e}")
+            # AN OUTAGE NEVER IMPERSONATES SAFETY: a dead input still has
+            # to occupy its slot (the composite is an equal-weight mean of
+            # 7), but it must be FLAGGED — un-flagged it renders as a live
+            # amber 50/NEUTRAL, indistinguishable from a real neutral read.
             indicators.append({
                 "name": name, "score": 50, "value": "N/A",
                 "detail": f"Error: {str(e)}", "label": "Neutral",
+                "degraded": True,
+                "degraded_reason": f"{type(e).__name__}: {e}",
             })
 
     # Composite: equal weight average
@@ -418,12 +435,25 @@ def append_daily_history(path=None, reading=None, today=None):
     reading = reading if reading is not None else get_fear_greed_index()
     today = today or datetime.date.today().isoformat()
 
+    # AN OUTAGE NEVER IMPERSONATES SAFETY — least of all in the PERMANENT
+    # RECORD. An indicator that could not be computed contributes a 50 to
+    # the composite; storing that as an ordinary reading would let a future
+    # consumer (D-016's extreme-fear backtest reads exactly this forward
+    # series) treat a measurement failure as a measured neutral, biasing the
+    # very sample the ruling exists to protect. Carry the flag through, and
+    # stamp how many slots were dead so a whole day can be filtered.
+    _degraded = [ind for ind in reading["indicators"] if ind.get("degraded")]
     entry = {
         "date": today,
         "composite": reading["composite_score"],
         "label": reading["composite_label"],
+        "degraded_count": len(_degraded),
         "components": [
-            {"name": ind["name"], "score": ind["score"], "raw": ind.get("value")}
+            dict({"name": ind["name"], "score": ind["score"],
+                  "raw": ind.get("value")},
+                 **({"degraded": True,
+                     "degraded_reason": ind.get("degraded_reason")}
+                    if ind.get("degraded") else {}))
             for ind in reading["indicators"]
         ],
     }

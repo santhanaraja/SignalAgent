@@ -72,6 +72,9 @@
   .ts-hold,.ts-range-bound{background:rgba(139,148,158,.1);color:#8b949e;border:1px solid rgba(139,148,158,.2);}
   .ts-reduce,.ts-exit-swing,.ts-fade-rally{background:rgba(240,136,62,.15);color:#f0883e;border:1px solid rgba(240,136,62,.25);}
   .ts-avoid,.ts-no-setup,.ts-short-entry{background:rgba(248,81,73,.18);color:#f85149;border:1px solid rgba(248,81,73,.3);}
+  /* signal withheld on unverified breaker data — amber+dashed, deliberately
+     NOT green and NOT a neutral grey: an outage must look like an outage */
+  .ts-withheld{background:rgba(210,153,34,.12);color:#d29922;border:1px dashed rgba(210,153,34,.5);}
   .trade-reasoning{font-size:12px;color:var(--dim);line-height:1.6;margin-top:8px;}
 
   /* Trade signal sub-tabs */
@@ -721,17 +724,50 @@ function renderResults(d){
     factorsEl.innerHTML = '';
   }
 
-  // Position trade signal
+  // Position trade signal.
+  // AN OUTAGE NEVER IMPERSONATES SAFETY: when the group breaker could not
+  // be verified the server sets trade_signal_gate, and NO signal chip
+  // renders — a BUY NOW computed on a presumed-clear breaker is exactly
+  // the false green this fix exists to prevent. Same law as the D-011
+  // grade gate: proven, never presumed.
   const tradeBadge = document.getElementById('tradeBadge');
-  tradeBadge.textContent = d.trade_signal;
-  tradeBadge.className = 'ts-badge ' + tsClass(d.trade_signal);
-  document.getElementById('tradeReasoning').textContent = d.trade_reasoning;
+  // FAIL CLOSED, both directions of a deploy window: gate on the server's
+  // explicit flag OR whenever the breaker context does not POSITIVELY
+  // prove one of the two safe states. An older server (no gate field, a
+  // null/loose group_context) must not silently un-gate the chip —
+  // over-gating is safe, under-gating is the bug this fix exists for.
+  const gcs = (d.group_context || {}).status;
+  const breakerProven = (gcs === 'resolved' || gcs === 'not_in_universe');
+  if (d.trade_signal_gate || !breakerProven) {
+    tradeBadge.textContent = 'SIGNAL WITHHELD';
+    tradeBadge.className = 'ts-badge ts-withheld';
+    tradeBadge.title = d.trade_signal_gate
+      || 'breaker context not proven by the server response';
+    document.getElementById('tradeReasoning').textContent =
+      'The group breaker could not be verified, so no trade signal is shown. '
+      + 'This is a data outage, not a neutral reading — the signal is '
+      + 'withheld rather than computed on an assumed-clear breaker.';
+  } else {
+    tradeBadge.textContent = d.trade_signal;
+    tradeBadge.className = 'ts-badge ' + tsClass(d.trade_signal);
+    tradeBadge.title = '';
+    document.getElementById('tradeReasoning').textContent = d.trade_reasoning;
+  }
 
   // Group breaker context (PER-509): the trade signal above was computed
   // WITH this status — surface it, or say explicitly that none applied.
+  // Three distinct states, never conflated: resolved / not-in-universe /
+  // UNAVAILABLE (a load failure, which must never read as "clear").
   const bc = document.getElementById('breakerContext');
-  const gc = d.group_context;
-  if (gc && gc.breaker_status && gc.breaker_status !== 'clear') {
+  const gc = d.group_context || {};
+  if (gc.status === 'unavailable') {
+    bc.innerHTML = `<div style="margin-top:10px;padding:10px 12px;border:1px solid var(--orange);border-radius:8px;background:rgba(210,153,34,.08);">
+      <span style="font-weight:700;color:var(--orange);font-size:12px;">⚠ GROUP BREAKER UNVERIFIED</span>
+      <span style="color:var(--dim);font-size:11px;margin-left:6px;">${gc.group||''}</span>
+      <div style="margin-top:4px;color:var(--dim);font-size:11px;">${gc.reason||'lookup failed'} — this is a load failure, NOT a clear breaker. The trade signal is withheld.</div></div>`;
+  } else if (gc.status === 'not_in_universe') {
+    bc.innerHTML = `<div style="margin-top:8px;font-size:11px;color:var(--dim);">No group context — not in the active universe; group breaker checks not applied.</div>`;
+  } else if (gc.breaker_status && gc.breaker_status !== 'clear') {
     const col = gc.breaker_status==='critical' ? 'var(--red)'
               : gc.breaker_status==='warning' ? 'var(--orange)' : 'var(--yellow)';
     const icon = {critical:'🔴',warning:'🟠',watch:'🟡'}[gc.breaker_status]||'⚪';
@@ -740,10 +776,13 @@ function renderResults(d){
     bc.innerHTML = `<div style="margin-top:10px;padding:10px 12px;border:1px solid ${col};border-radius:8px;background:rgba(248,81,73,.06);">
       <span style="font-weight:700;color:${col};font-size:12px;">${icon} GROUP BREAKER: ${gc.breaker_status.toUpperCase()}</span>
       <span style="color:var(--dim);font-size:11px;margin-left:6px;">${gc.group}</span>${reasons}</div>`;
-  } else if (gc) {
+  } else if (gc.status === 'resolved') {
     bc.innerHTML = `<div style="margin-top:8px;font-size:11px;color:var(--dim);">🟢 Group breakers clear — ${gc.group}</div>`;
   } else {
-    bc.innerHTML = `<div style="margin-top:8px;font-size:11px;color:var(--dim);">No group context — not in the active universe; group breaker checks not applied.</div>`;
+    // No recognizable status (an older/cached response shape, or the field
+    // absent). Unknown is unknown — it must NOT reuse the
+    // "not in the active universe" wording, which is an affirmative claim.
+    bc.innerHTML = `<div style="margin-top:8px;font-size:11px;color:var(--orange);">⚠ Group breaker state unknown — the response carried no breaker context. Not a clear breaker.</div>`;
   }
 
   // Swing trade signal

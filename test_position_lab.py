@@ -83,7 +83,18 @@ def test_replay_committed_artifact():
     Inputs reconstructed from the recorded row; sma20_5d_ago synthesized
     on the recorded slope verdict (its exact value is not persisted
     pre-refactor — the met-flags and state are the pin)."""
-    fw = json.load(open(os.path.join(REPO, "public", "framework.json")))
+    # Read the COMMITTED artifact (git HEAD), not the working tree: earlier
+    # tests in a full sweep regenerate public/framework.json, and a fresh
+    # compute legitimately disagrees with the recorded states (real market
+    # movement). Reading the working tree made this pin order-dependent —
+    # the identical bug already fixed in test_position_signals' replay pin.
+    import subprocess
+    _out = subprocess.run(["git", "show", "HEAD:public/framework.json"],
+                          capture_output=True, text=True, cwd=REPO)
+    if _out.returncode != 0:
+        print("  replay pin: no committed artifact — skipped")
+        return
+    fw = json.loads(_out.stdout.replace(": NaN", ": null"))
     rows = (fw.get("position_signals") or {}).get("tickers") or {}
     regime = fw["regime"]["regime"]
     checked = 0
