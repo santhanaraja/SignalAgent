@@ -907,6 +907,8 @@ function switchTab(tab){
   });
 }
 
+function _esc2(v){return String(v==null?'':v)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 async function loadHistory(){
   try {
     const r = await fetch('/api/history');
@@ -920,11 +922,15 @@ async function loadHistory(){
     }
 
     list.innerHTML = searches.slice(0,50).map(h=>{
+      // D-019/withheld: the server records trade_signal null +
+      // trade_signal_withheld for a search whose breaker was unverified.
+      // The sidebar must not paint a confident chip over that absence.
+      const wh = h.trade_signal_withheld || (!h.trade_signal && h.score!=null);
       const col = h.score>=70?'var(--green)':h.score>=55?'var(--yellow)':'var(--red)';
       return `<div class="history-item" onclick="searchTicker('${h.ticker}')">
         <span class="hi-ticker">${h.ticker}</span>
         <span class="hi-score" style="color:${col}">${Math.round(h.score)}</span>
-        <span class="hi-trade ${tsClass(h.trade_signal)}" style="font-size:8px;padding:1px 5px;border-radius:3px;">${h.trade_signal||h.signal}</span>
+        <span class="hi-trade ${wh?'ts-withheld':tsClass(h.trade_signal)}" style="font-size:8px;padding:1px 5px;border-radius:3px;" title="${wh?_esc2(h.trade_signal_withheld||'breaker unverified — no signal was shown'):''}">${wh?'withheld':(h.trade_signal||h.signal)}</span>
         <span class="hi-price">$${h.price?h.price.toFixed(2):'—'}</span>
       </div>`;
     }).join('');

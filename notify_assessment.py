@@ -169,7 +169,11 @@ def build_message(data, now_et):
             _missing = ([c for c in _exp if c not in set(_ran)]
                         if isinstance(_exp, list) and isinstance(_ran, list)
                         else [])
-            if _g.get("breaker_status") == "degraded" or _missing:
+            # both flavours: a check that never ran, AND a check that ran
+            # on a degraded input (expected==run but not certified)
+            _reasons = _g.get("breaker_degraded_reasons") or []
+            if (_g.get("breaker_status") == "degraded" or _missing
+                    or _reasons):
                 _deg.append((_g.get("name") or "?", _missing))
         if _deg:
             _names = ", ".join(n for n, _ in _deg[:4])

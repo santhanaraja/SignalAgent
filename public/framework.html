@@ -400,6 +400,7 @@
               <option value="watch">watch</option>
               <option value="warning">warning</option>
               <option value="critical">critical</option>
+              <option value="degraded">degraded (coverage incomplete)</option>
               <option value="">unknown</option>
             </select>
             <label for="plRunway" style="width:auto;" title="Trading sessions strictly before the earnings print (amendment 2)">Runway</label>
@@ -1527,14 +1528,20 @@ function render(){
       // ran. It renders AMBER WITH A WARNING GLYPH and a reason tooltip —
       // never the green 'clear' chip, which is a positive claim. Era-aware:
       // an artifact with no coverage fields renders exactly as before.
-      const brkDeg=brk==='degraded';
+      // both flavours (review finding): the engine's label, OR a coverage
+      // record that contradicts it — a check that never ran, or one that
+      // ran on a degraded input (which never enters `expected`)
+      const brkDeg=brk==='degraded'
+        ||!!(g.breaker_degraded_reasons&&g.breaker_degraded_reasons.length)
+        ||!!(g.breaker_checks_expected&&g.breaker_checks_run
+             &&g.breaker_checks_expected.some(c=>!g.breaker_checks_run.includes(c)));
       const brkMiss=(g.breaker_checks_expected&&g.breaker_checks_run)
         ?g.breaker_checks_expected.filter(c=>!g.breaker_checks_run.includes(c)):[];
       const brkTip=brkDeg
         ?((g.breaker_degraded_reasons||[]).slice(0,3).join(' · ')
           ||(brkMiss.length?('checks did not run: '+brkMiss.join(', ')):'coverage incomplete'))
         :'';
-      const brkChip=brk?`<span class="ps-er" title="${brkTip.replace(/"/g,'&quot;')}" style="background:${brk==='clear'?'rgba(63,185,80,.12)':brk==='critical'?'rgba(248,81,73,.18)':'rgba(210,153,34,.15)'};color:${brk==='clear'?'var(--green)':brk==='critical'?'var(--red)':'var(--yellow)'};${brkDeg?'border:1px dashed rgba(210,153,34,.6);':''}">${brkDeg?'&#9888; degraded':brk}</span>`:'<span style="color:var(--dim);font-size:11px;">—</span>';
+      const brkChip=brk?`<span class="ps-er" title="${brkTip.replace(/"/g,'&quot;')}" style="background:${(brk==='clear'&&!brkDeg)?'rgba(63,185,80,.12)':brk==='critical'?'rgba(248,81,73,.18)':'rgba(210,153,34,.15)'};color:${(brk==='clear'&&!brkDeg)?'var(--green)':brk==='critical'?'var(--red)':'var(--yellow)'};${brkDeg?'border:1px dashed rgba(210,153,34,.6);':''}">${brkDeg?'&#9888; '+(brk==='clear'?'unverified':brk):brk}</span>`:'<span style="color:var(--dim);font-size:11px;">—</span>';
       const rid='gl2-'+(gl2Idx++);
       html+=`<tr id="${rid}-row" style="cursor:pointer;" onclick="gl2Toggle('${rid}',this.dataset.g)" data-g="${g.name.replace(/"/g,'&quot;')}">
         <td class="rank-cell">${g.rank!=null?'#'+g.rank:'—'}</td>

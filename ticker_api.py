@@ -163,9 +163,20 @@ def _group_breaker_context(symbol):
             # retro-claim coverage that was never measured.
             expected = g.get("breaker_checks_expected")
             ran = g.get("breaker_checks_run")
+            # Two flavours of incomplete, and BOTH must gate:
+            #  * a called-for check that never RAN (expected \ run), and
+            #  * a check that ran on a DEGRADED INPUT or an unimplemented
+            #    pairing — those never enter `expected`, so expected==run
+            #    while the group is explicitly not certified. The engine
+            #    records them in breaker_degraded_reasons, which is [] on
+            #    a complete run, so this cannot over-gate. (Review
+            #    finding: the trigger branch below already used this
+            #    predicate; the clear branch trusted the label it exists
+            #    to distrust.)
             cov_incomplete = (
-                isinstance(expected, list) and isinstance(ran, list)
-                and bool([c for c in expected if c not in set(ran)]))
+                (isinstance(expected, list) and isinstance(ran, list)
+                 and bool([c for c in expected if c not in set(ran)]))
+                or bool(g.get("breaker_degraded_reasons")))
             # A TRIGGER STILL WINS (the D-019 ladder law). Something that
             # FIRED is news regardless of what else could not be measured
             # — downgrading a fired critical to "degraded" would hide the
@@ -836,8 +847,11 @@ def position_simulate():
             if not isinstance(score_waived, bool):
                 raise ValueError("score_waived must be a boolean")
             breaker_status = body.get("breaker_status")
+            # D-019: "degraded" is a real breaker state the engine now
+            # emits, so the lab must be able to seed it — otherwise a
+            # degraded group cannot be reproduced in the lab at all.
             if breaker_status is not None and breaker_status not in (
-                    "clear", "watch", "warning", "critical"):
+                    "clear", "watch", "warning", "critical", "degraded"):
                 raise ValueError("breaker_status must be clear/watch/warning/"
                                  "critical or null")
             runway = body.get("runway_sessions")

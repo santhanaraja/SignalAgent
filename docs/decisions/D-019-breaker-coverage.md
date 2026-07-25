@@ -102,7 +102,25 @@ rather than adding a flag is deliberate: an older cached page renders an
 unfamiliar label harmlessly, whereas it would ignore a new flag and print
 the false `BUY NOW`.
 
-### 5. A missing INPUT is not always a missing CHECK
+### 5. Three flavours of incomplete — all must gate
+
+Coverage can be incomplete in ways `expected \ run` cannot see:
+
+| flavour | shape | example |
+|---|---|---|
+| **never ran** | `expected ⊅ run` | a macro fetch failed, so the check was omitted |
+| **degraded input** | `expected == run` | `breadth_collapse` ran against a fabricated 0% S&P baseline |
+| **config gap** | `expected == run` | a sensitivity declared with a pairing that has no implemented check |
+
+The last two never enter `expected`, so a consumer deriving
+incompleteness from the set difference alone sees a complete run. Every
+consumer therefore treats a non-empty `breaker_degraded_reasons` as
+incompleteness too — the list is `[]` on a complete run, so this cannot
+over-gate. (Found by review: the serve layer's *trigger* branch already
+used this predicate while its *clear* branch, five lines below, trusted
+the very label the re-derivation exists to distrust.)
+
+### 6. A missing INPUT is not always a missing CHECK
 
 `sp500_ytd` comes from a **separate** fetch (`get_index_data`) and used to
 default to `0.0` on failure — so every "beating the S&P" comparison
@@ -111,7 +129,7 @@ produced a confident number. Expected-vs-run cannot see this, because the
 check *did* run. Degraded **inputs** are therefore reported directly
 (`degraded_inputs`), and `sp500_baseline_ok` is recorded on the run.
 
-### 6. Coverage is derived, never re-implemented
+### 7. Coverage is derived, never re-implemented
 
 `breaker_coverage(group_info, checks_run, macro_status)` compares the
 generator's **own output** (ground truth for what ran) against the
@@ -121,7 +139,7 @@ never duplicated, so coverage cannot drift from them.
 Per group the artifact gains `breaker_checks_expected`,
 `breaker_checks_run`, `breaker_degraded_reasons`.
 
-### 7. Surfaces
+### 8. Surfaces
 
 - **search.html** — a degraded breaker gates the trade signal exactly as
   an unavailable one does: `SIGNAL WITHHELD`, with a
@@ -130,11 +148,23 @@ Per group the artifact gains `breaker_checks_expected`,
   a dashed border, tooltipped with the reasons. Green is reserved for a
   positive `clear`.
 - **Close report** — one line when any selected group's breaker is
-  degraded, naming the groups and the unrun checks.
+  degraded, naming the groups and the unrun checks. It fails **loud**: if
+  the check itself cannot run, it says so rather than producing a report
+  that reads all-clear.
+- **Dashboard (index.html)** — `FIRED` and `UNVERIFIED` are counted
+  separately. Conflating them reported an outage as N red breaker alerts,
+  and let "0 ✓" mean "nothing fired" when it should mean "all clear, and
+  we looked".
+- **History** — a move to or from `degraded` is recorded as a COVERAGE
+  event (`coverage_event: true`, low severity) carrying its reasons, not
+  as an unexplained breaker escalation. A degraded group can no longer
+  summarise as "all breaker checks clear".
+- **Position Lab** — `degraded` is a seedable breaker state, so the case
+  can be reproduced in the lab.
 - **The serve layer does not trust the label over the record:** an
   artifact stamped `clear` whose `expected` ⊄ `run` still gates.
 
-### 8. Era-awareness
+### 9. Era-awareness
 
 Artifacts written before this ruling carry no coverage fields. They
 render exactly as they did in the old world — resolved on `clear`, no
@@ -156,6 +186,7 @@ never measured.
 | (e) **writer half** | Drives the real `run_engine` with a stubbed network and one dead macro ticker: asserts `macro_status`, the per-group coverage fields, the degraded verdict, and the withheld published signal are all actually written. Era-awareness makes a writer regression *invisible* — silently stop emitting the fields and every consumer reads the artifact as pre-D-019 and un-gates |
 | (f) trigger wins | The ladder's headline rule, in `resolve_breaker_status` AND at the serve layer, with the caveat preserved |
 | (g) gate behaviour | Executes the page's own gate predicate over every degraded shape; a fired critical still renders its `AVOID` |
+| (i) all three flavours | Each flavour gates at the serve layer even when the artifact is stamped `clear`, survives a trigger as a caveat, and reaches the close report, history and dashboard; a genuinely complete group is not over-gated |
 | (h) degraded input | A check that ran on a fabricated baseline degrades; the artifact withholds its published signal; dashboard/leadership/close-report all carry it |
 
 ## Consequences

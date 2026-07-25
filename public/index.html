@@ -114,6 +114,7 @@
   .card.breaker-critical{border-color:var(--red);}
   .card.breaker-warning{border-color:var(--orange);}
   .card.breaker-watch{border-color:var(--yellow);}
+  .card.breaker-degraded{border-color:var(--yellow);border-style:dashed;}
   .card-head{padding:14px 18px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:.15s;}
   .card-head:hover{background:var(--surface2);}
   .card-head.open{border-bottom:1px solid var(--border);}
@@ -367,7 +368,10 @@ function nearMissStrip(g){
   });
   return `<div class="near-miss-strip">Not selected: ${items.join(' · ')}</div>`;
 }
-function breakerIcon(status){return {critical:'🔴',warning:'🟠',watch:'🟡',clear:'🟢'}[status]||'⚪';}
+// D-019: 'degraded' gets its OWN glyph. Falling through to the unknown
+// '⚪' would make a group we could not check look like one we have no
+// data for — and neither may look like the green 'clear' claim.
+function breakerIcon(status){return {critical:'🔴',warning:'🟠',watch:'🟡',clear:'🟢',degraded:'⚠️'}[status]||'⚪';}
 /* Earnings-proximity chip (PER-510, display-only): amber ≤7d, red ≤2d —
    same inline-chip pattern as the theme-leader warning chips. */
 function erChip(d){
@@ -580,7 +584,20 @@ function render(){
   const buys = groups.reduce((a,g)=>a+g.stocks.filter(s=>s.signal==='buy'||s.signal==='strong-buy').length,0);
   const sells = groups.reduce((a,g)=>a+g.stocks.filter(s=>s.signal==='sell'||s.signal==='strong-sell').length,0);
   const avgScore = groups.length ? Math.round(groups.reduce((a,g)=>a+g.avg_score,0)/groups.length) : 0;
-  const breakerCount = groups.filter(g=>g.breaker_status && g.breaker_status!=='clear').length;
+  // D-019: a FIRED breaker and a breaker we could not CHECK are different
+  // facts. Counting them together reported an outage as N alerts (red) and
+  // let "0 ✓" mean "nothing fired" when it should mean "all clear, and we
+  // looked". Split them, and never show the green tick unless coverage was
+  // complete everywhere.
+  const firedGroups = groups.filter(g=>g.breaker_status
+    && !['clear','degraded'].includes(g.breaker_status)).length;
+  const unverifiedGroups = groups.filter(g=>{
+    if(g.breaker_status==='degraded') return true;
+    if(g.breaker_degraded_reasons && g.breaker_degraded_reasons.length) return true;
+    const e=g.breaker_checks_expected, r=g.breaker_checks_run;
+    return !!(e && r && e.some(c=>!r.includes(c)));
+  }).length;
+  const breakerCount = firedGroups;
 
   document.getElementById('statsGrid').innerHTML = `
     <div class="stat"><div class="l">Groups Tracked</div><div class="v">${groups.length}</div></div>
@@ -588,7 +605,7 @@ function render(){
     <div class="stat"><div class="l">Buy Signals</div><div class="v" style="color:var(--green)">${buys}</div></div>
     <div class="stat"><div class="l">Sell Signals</div><div class="v" style="color:var(--red)">${sells}</div></div>
     <div class="stat"><div class="l">Avg Score</div><div class="v" style="color:${scoreColor(avgScore)}">${avgScore}</div></div>
-    <div class="stat"><div class="l">Breaker Alerts</div><div class="v" style="color:${breakerCount>0?'var(--red)':'var(--green)'}">${breakerCount>0?breakerCount+' ⚠':'0 ✓'}</div></div>
+    <div class="stat"><div class="l">Breaker Alerts</div><div class="v" style="color:${firedGroups>0?'var(--red)':unverifiedGroups>0?'var(--yellow)':'var(--green)'}" title="${unverifiedGroups>0?unverifiedGroups+' group(s) could not be fully checked — unverified, not clear':''}">${firedGroups>0?firedGroups+' ⚠':'0 ✓'}${unverifiedGroups>0?` <span style="font-size:12px;color:var(--yellow);">+${unverifiedGroups} unverified</span>`:''}</div></div>
   `;
 
   renderHeatmap();

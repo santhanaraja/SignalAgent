@@ -110,6 +110,7 @@
   .breaker-critical{background:rgba(248,81,73,.18);color:var(--red);}
   .breaker-warning{background:rgba(240,136,62,.15);color:var(--orange);}
   .breaker-watch{background:rgba(210,153,34,.12);color:var(--yellow);}
+  .breaker-degraded{background:rgba(210,153,34,.12);color:var(--yellow);border:1px dashed rgba(210,153,34,.5);}
   .breaker-clear{background:rgba(63,185,80,.1);color:var(--green);}
   .sig-badge{padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;text-transform:uppercase;}
   .sig-strong-buy,.sig-buy{background:rgba(63,185,80,.12);color:var(--green);}
@@ -203,7 +204,8 @@ function fmtPct(v){if(v===null||v===undefined)return '—';return (v*100).toFixe
 function fmtNum(v,d){if(v===null||v===undefined)return '—';return Number(v).toFixed(d||1);}
 /* Percent-ish detail values can be null (sanitized NaN from old events) */
 function pv(v){return (v===null||v===undefined)?'—':v+'%';}
-function breakerIcon(s){return {critical:'🔴',warning:'🟠',watch:'🟡',clear:'🟢'}[s]||'⚪';}
+// D-019: a snapshot replayed from a degraded run must not read as unknown
+function breakerIcon(s){return {critical:'🔴',warning:'🟠',watch:'🟡',clear:'🟢',degraded:'⚠️'}[s]||'⚪';}
 
 let retryDelay = 2000;
 let retryTimer = null;

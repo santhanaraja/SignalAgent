@@ -90,6 +90,10 @@ def _breaker_reason(group):
             parts.append(str(msg))
     if parts:
         return "; ".join(parts)
+    if (group.get("breaker_status") or "").lower() == "degraded":
+        rs = group.get("breaker_degraded_reasons") or []
+        return ("breaker coverage incomplete — "
+                + ("; ".join(rs[:2]) if rs else "some checks did not run"))
     if (group.get("breaker_status") or "").lower() == "clear":
         return "all breaker checks clear"
     return "no triggered checks recorded"
@@ -120,13 +124,34 @@ def detect_coverage_events(previous, current):
         if not prev_bs or not curr_bs or prev_bs == curr_bs:
             continue
         severity = {"critical": "critical", "warning": "high"}.get(curr_bs, "medium")
+        # D-019: a move to/from "degraded" is a COVERAGE event, not a
+        # market one. Recording "CLEAR → DEGRADED" as an unexplained
+        # breaker escalation would file every transient macro outage as a
+        # thesis change and bury the reason. Say what it is, and carry the
+        # reasons so the timeline explains itself.
+        _cov_event = "degraded" in (prev_bs, curr_bs)
+        if _cov_event:
+            severity = "low"
+        _reasons = list(
+            (curr_groups[name].get("breaker_degraded_reasons") or []))[:3]
+        if curr_bs == "degraded":
+            _desc = (f"{name}: breaker coverage INCOMPLETE — unverified, "
+                     f"not clear"
+                     + (f" ({_reasons[0]})" if _reasons else ""))
+        elif prev_bs == "degraded":
+            _desc = (f"{name}: breaker coverage restored — "
+                     f"{curr_bs.upper()} is now a checked verdict")
+        else:
+            _desc = f"{name}: Breaker {prev_bs.upper()} → {curr_bs.upper()}"
         events.append({
             "timestamp": timestamp,
             "type": "breaker_change",
             "severity": severity,
             "group": name,
             "ticker": None,
-            "description": f"{name}: Breaker {prev_bs.upper()} → {curr_bs.upper()}",
+            "coverage_event": _cov_event,
+            "degraded_reasons": _reasons,
+            "description": _desc,
             "detail": {
                 "from_status": prev_bs,
                 "to_status": curr_bs,

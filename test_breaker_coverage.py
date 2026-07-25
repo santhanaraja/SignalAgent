@@ -125,13 +125,16 @@ def test_macro_outage_degrades_every_dependent_group():
     """Kill each macro ticker in turn. EVERY group whose sensitivities
     depend on it must read degraded and NAME the reason; groups that do
     not depend on it must be untouched."""
-    # which groups depend on which macro ticker, derived from the TABLE
-    dep = {}
-    for spec in eng.BREAKER_CHECK_SPECS:
-        if spec.get("macro"):
-            dep.setdefault(spec["macro"], set()).add(spec["sensitivity"])
-
-    groups = {"sp500": GROUP_SP, "oil": GROUP_OIL, "gold": GROUP_GOLD}
+    # every macro ticker must have at least one group that depends on it,
+    # or the injection for that ticker proves nothing (review finding: UUP
+    # and XLE were unexercised). GROUP_ALL declares every sensitivity that
+    # needs a macro input, so no ticker's path goes untested.
+    GROUP_ALL = {"macro_sensitivities": ["sp500_drawdown", "commodity_drop",
+                                         "usd_strength", "oil_collapse",
+                                         "natgas_collapse", "energy_spike"],
+                 "commodity_proxy": "GLD", "sector_type": "mixed"}
+    groups = {"sp500": GROUP_SP, "oil": GROUP_OIL, "gold": GROUP_GOLD,
+              "all": GROUP_ALL}
     checked = 0
     for dead_ticker in eng.MACRO_TICKERS:
         macro = {t: df for t, df in ALL_MACRO.items() if t != dead_ticker}
@@ -164,7 +167,15 @@ def test_macro_outage_degrades_every_dependent_group():
                 assert status == "clear", (
                     f"{dead_ticker} dead, {gname} NOT sensitive -> {status}"
                     " (over-degradation)")
-    assert checked >= 5, f"only {checked} sensitive combinations exercised"
+    # every macro ticker's dependency path must have been exercised
+    exercised = set()
+    for spec in eng.BREAKER_CHECK_SPECS:
+        if spec.get("macro"):
+            exercised.add(spec["macro"])
+    assert exercised == set(eng.MACRO_TICKERS), (
+        f"macro tickers with no check depending on them: "
+        f"{set(eng.MACRO_TICKERS) - exercised}")
+    assert checked >= 11, f"only {checked} sensitive combinations exercised"
     print(f"  (a) macro outage: {checked} sensitive group/ticker "
           "combinations degrade with named reasons; insensitive groups "
           "stay clear: OK")
@@ -258,11 +269,55 @@ def test_mapping_table_complete_both_directions():
     # 2. every check the GENERATOR can emit is claimed by a spec. Derived
     #    from source, so a new branch added without a table entry fails
     #    here rather than silently shrinking "complete coverage".
-    import re
+    # AST, not regex (review finding: the regex missed checks[var]=,
+    # single quotes, dict.update, and emission from a helper). Walk the
+    # real function body and collect every literal key assigned into
+    # `checks`; a NON-literal key is reported as unpinnable rather than
+    # silently ignored, because it would slip the completeness guarantee.
+    import ast
     src = open(os.path.join(REPO, "signal_engine.py")).read()
-    body = src[src.index("def generate_dynamic_breaker_checks"):]
-    body = body[:body.index("\ndef ", 10)]
-    emitted = set(re.findall(r'checks\["([a-z0-9_]+)"\]\s*=', body))
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef)
+              and n.name == "generate_dynamic_breaker_checks")
+    emitted, dynamic = set(), []
+    for node in ast.walk(fn):
+        # checks["x"] = ...
+        if isinstance(node, ast.Assign):
+            for tgt in node.targets:
+                if (isinstance(tgt, ast.Subscript)
+                        and isinstance(tgt.value, ast.Name)
+                        and tgt.value.id == "checks"):
+                    key = tgt.slice
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                        emitted.add(key.value)
+                    else:
+                        dynamic.append(ast.dump(key)[:60])
+        # checks.update({...}) / checks.setdefault("x", ...)
+        if (isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "checks"):
+            if node.func.attr == "setdefault" and node.args:
+                k = node.args[0]
+                if isinstance(k, ast.Constant) and isinstance(k.value, str):
+                    emitted.add(k.value)
+                else:
+                    dynamic.append("setdefault(non-literal)")
+            elif node.func.attr == "update":
+                for a in node.args:
+                    if isinstance(a, ast.Dict):
+                        for k in a.keys:
+                            if isinstance(k, ast.Constant) and isinstance(k.value, str):
+                                emitted.add(k.value)
+                            else:
+                                dynamic.append("update(non-literal key)")
+                    else:
+                        dynamic.append("update(non-dict)")
+    assert not dynamic, (
+        "a check id is emitted non-literally, so completeness cannot be "
+        f"verified statically: {dynamic}")
+    assert emitted, "the AST walk found no emitted checks — re-derive this pin"
     orphan_checks = sorted(emitted - set(spec_checks))
     assert not orphan_checks, f"checks with no spec: {orphan_checks}"
     unreachable = sorted(set(spec_checks) - emitted)
@@ -362,11 +417,43 @@ def test_pages_render_degraded_distinctly():
 
     fw = rd("public/framework.html")
     assert "brkDeg" in fw and "breaker_checks_expected" in fw
-    chip = fw[fw.index("const brkDeg="):fw.index("const rid='gl2-'")]
-    assert "&#9888; degraded" in chip, "degraded chip lacks the warning glyph"
-    assert "dashed" in chip, "degraded chip is not visually distinct"
-    # green is reserved for a positive 'clear' claim
-    assert "brk==='clear'?'var(--green)'" in chip
+    # BEHAVIOURAL (review finding: this was an index-sliced source grep
+    # that broke on formatting and could pass on a green chip). Mirror the
+    # page's own predicate and assert the verdict for each artifact shape.
+    def chip_degraded(g):
+        if g.get("breaker_status") == "degraded":
+            return True
+        if g.get("breaker_degraded_reasons"):
+            return True
+        e, r = g.get("breaker_checks_expected"), g.get("breaker_checks_run")
+        return bool(e and r and any(c not in r for c in e))
+
+    must_flag = [
+        {"breaker_status": "degraded"},
+        # stamped clear, but a called-for check never ran
+        {"breaker_status": "clear",
+         "breaker_checks_expected": ["a", "b"], "breaker_checks_run": ["a"]},
+        # stamped clear, but a check ran on a degraded INPUT
+        {"breaker_status": "clear",
+         "breaker_checks_expected": ["a"], "breaker_checks_run": ["a"],
+         "breaker_degraded_reasons": ["a: baseline unavailable"]},
+    ]
+    for g in must_flag:
+        assert chip_degraded(g), f"chip would paint this as checked: {g}"
+    must_not_flag = [
+        {"breaker_status": "clear",
+         "breaker_checks_expected": ["a"], "breaker_checks_run": ["a"],
+         "breaker_degraded_reasons": []},
+        {"breaker_status": "clear"},                      # pre-D-019 era
+        {"breaker_status": "critical"},                   # a real trigger
+    ]
+    for g in must_not_flag:
+        assert not chip_degraded(g), f"chip would over-flag: {g}"
+    # and the SOURCE must gate green on the same flag, so a degraded group
+    # can never be painted with the positive-clear colour
+    assert "(brk==='clear'&&!brkDeg)?'var(--green)'" in fw, \
+        "the green chip is not guarded by the degraded flag"
+    assert "&#9888; " in fw and "dashed" in fw
 
     nt = rd("notify_assessment.py")
     assert "Breaker coverage INCOMPLETE" in nt
@@ -615,6 +702,89 @@ def test_degraded_input_and_published_signal():
           "dashboard + leadership + close report carry it: OK")
 
 
+def test_both_flavours_gate_everywhere():
+    """The re-derivation must catch BOTH flavours of incomplete (review
+    finding, reproduced in production shape): a check that never RAN
+    (expected \\ run) and a check that RAN on a degraded input or an
+    unimplemented pairing — the latter never enters `expected`, so
+    expected == run while the group is explicitly not certified.
+
+    The trigger branch of _group_breaker_context already used the right
+    predicate; the clear branch trusted the label it exists to distrust."""
+    import ticker_api
+    tmp = tempfile.mkdtemp(prefix="flavours_")
+    old_dir = ticker_api.DATA_DIR
+    ticker_api.DATA_DIR = tmp
+    W = lambda n, o: open(os.path.join(tmp, n), "w").write(json.dumps(o))
+    try:
+        W("universe_active.json", {"groups": {"Gold": {"tickers": ["AAA"]}}})
+        flavours = {
+            "never-ran": {
+                "breaker_checks_expected": ["a", "b"],
+                "breaker_checks_run": ["a"],
+                "breaker_degraded_reasons": ["b: ^GSPC unavailable"]},
+            "degraded-input": {          # the check RAN — expected == run
+                "breaker_checks_expected": ["breadth_collapse"],
+                "breaker_checks_run": ["breadth_collapse"],
+                "breaker_degraded_reasons": [
+                    "breadth_collapse: S&P 500 YTD baseline unavailable"]},
+            "config-gap": {              # a pairing with no implemented check
+                "breaker_checks_expected": ["majority_below_ma50"],
+                "breaker_checks_run": ["majority_below_ma50"],
+                "breaker_degraded_reasons": [
+                    "sensitivity 'commodity_drop' declared with "
+                    "commodity_proxy 'USO' — no check implemented"]},
+        }
+        for name, cov in flavours.items():
+            # stamped CLEAR — the label must not be trusted over the record
+            W("signals.json", {"groups": [dict(
+                {"name": "Gold", "breaker_status": "clear",
+                 "breaker_alerts": []}, **cov)]})
+            g = ticker_api._group_breaker_context("AAA")
+            assert g["status"] == "degraded", (
+                f"{name}: a stamped-clear uncertified group served as "
+                f"{g['status']!r}")
+            assert g["degraded_reasons"], f"{name}: reasons dropped"
+
+            # with a TRIGGER, the trigger wins but the caveat survives
+            W("signals.json", {"groups": [dict(
+                {"name": "Gold", "breaker_status": "critical",
+                 "breaker_alerts": [{"check": "x", "triggered": True,
+                                     "severity": "critical",
+                                     "message": "fired"}]}, **cov)]})
+            g = ticker_api._group_breaker_context("AAA")
+            assert g["breaker_status"] == "critical", f"{name}: alarm lost"
+            assert g.get("coverage_incomplete") is True, f"{name}: caveat lost"
+
+        # a genuinely complete group is NOT gated (no over-gating)
+        W("signals.json", {"groups": [{
+            "name": "Gold", "breaker_status": "clear",
+            "breaker_checks_expected": ["a"], "breaker_checks_run": ["a"],
+            "breaker_degraded_reasons": [], "breaker_alerts": []}]})
+        assert ticker_api._group_breaker_context("AAA")["status"] == "resolved"
+    finally:
+        ticker_api.DATA_DIR = old_dir
+
+    # the close report must announce all three flavours too
+    nt = open(os.path.join(REPO, "notify_assessment.py")).read()
+    assert "_reasons = _g.get(\"breaker_degraded_reasons\")" in nt
+    assert "or _reasons" in nt, "the close report sees only the missing flavour"
+    # and history must not file a coverage event as a market escalation
+    hm = open(os.path.join(REPO, "history_manager.py")).read()
+    assert "coverage_event" in hm and "coverage INCOMPLETE" in hm
+    assert "breaker coverage incomplete" in hm, \
+        "a degraded group could still report 'all breaker checks clear'"
+    # the dashboard separates FIRED from UNVERIFIED
+    ix = open(os.path.join(REPO, "public", "index.html")).read()
+    assert "firedGroups" in ix and "unverifiedGroups" in ix
+    assert "degraded:'\u26a0\ufe0f'" in ix or "degraded:'⚠️'" in ix, \
+        "the dashboard glyph falls through to the unknown '⚪'"
+    assert ".card.breaker-degraded{" in ix
+    print("  (i) both flavours gate at the serve layer, survive a trigger, "
+          "and reach close report / history / dashboard; complete groups "
+          "are not over-gated: OK")
+
+
 if __name__ == "__main__":
     print("\n=== D-019 breaker coverage pins ===")
     test_full_coverage_reads_clear()
@@ -627,4 +797,5 @@ if __name__ == "__main__":
     test_a_trigger_still_wins_over_incomplete_coverage()
     test_degraded_gate_is_behavioural()
     test_degraded_input_and_published_signal()
+    test_both_flavours_gate_everywhere()
     print("\nAll breaker-coverage tests passed.\n")
