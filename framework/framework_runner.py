@@ -155,10 +155,19 @@ def build_universe_leadership(universe_active, signals_data):
         if isinstance(g, dict) and g.get("name"):
             rank_by_name[g["name"]] = g
     breaker_by_name = {}
+    breaker_cov_by_name = {}
     if isinstance(signals_data, dict):
         for g in signals_data.get("groups") or []:
             if isinstance(g, dict) and g.get("name"):
                 breaker_by_name[g["name"]] = g.get("breaker_status")
+                # D-019: the chip's reasons must travel with it — without
+                # these the Layer-2 tooltip can only say "coverage
+                # incomplete" and never which checks went unrun
+                breaker_cov_by_name[g["name"]] = {
+                    "breaker_checks_expected": g.get("breaker_checks_expected"),
+                    "breaker_checks_run": g.get("breaker_checks_run"),
+                    "breaker_degraded_reasons": g.get("breaker_degraded_reasons"),
+                }
     rows = []
     for name, g in selected.items():
         if not isinstance(g, dict):
@@ -173,6 +182,8 @@ def build_universe_leadership(universe_active, signals_data):
             "tickers": len(g.get("tickers") or []),
             "weeks_in_universe": g.get("weeks_in_universe"),
             "breaker_status": breaker_by_name.get(name),
+            **{k: v for k, v in (breaker_cov_by_name.get(name) or {}).items()
+               if v is not None},
         })
     rows.sort(key=lambda x: (x["rank"] is None, x["rank"] or 0, x["name"]))
     return rows

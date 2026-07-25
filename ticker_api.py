@@ -147,15 +147,62 @@ def _group_breaker_context(symbol):
                 return {"status": "unavailable", "group": group_name,
                         "reason": "group carries no computed breaker status",
                         "breaker_status": "unknown"}
+            triggered = [
+                a.get("message", a.get("description", ""))
+                for a in (g.get("breaker_alerts") or [])
+                if a.get("triggered")
+            ][:3]
+            # D-019: a group whose checks did not all RUN cannot claim
+            # clear. The engine already says so (breaker_status
+            # "degraded" + reasons), but re-derive from the coverage
+            # record too, so an artifact written by an engine that
+            # recorded coverage without applying the ladder still gates.
+            # ERA-AWARE: pre-D-019 artifacts have no coverage fields —
+            # `expected` is None, the comparison is skipped, and the
+            # group reads exactly as it did in the old world. We never
+            # retro-claim coverage that was never measured.
+            expected = g.get("breaker_checks_expected")
+            ran = g.get("breaker_checks_run")
+            cov_incomplete = (
+                isinstance(expected, list) and isinstance(ran, list)
+                and bool([c for c in expected if c not in set(ran)]))
+            # A TRIGGER STILL WINS (the D-019 ladder law). Something that
+            # FIRED is news regardless of what else could not be measured
+            # — downgrading a fired critical to "degraded" would hide the
+            # alarm behind the caveat. The coverage caveat rides along as
+            # its own field instead of replacing the verdict.
+            if bs in ("critical", "warning", "watch"):
+                out = {
+                    "status": "resolved",
+                    "group": group_name,
+                    "breaker_status": bs,
+                    "breaker_reasons": triggered,
+                }
+                if cov_incomplete or g.get("breaker_degraded_reasons"):
+                    out["coverage_incomplete"] = True
+                    out["degraded_reasons"] = list(
+                        g.get("breaker_degraded_reasons") or [])[:4]
+                return out
+            if bs == "degraded" or cov_incomplete:
+                reasons = list(g.get("breaker_degraded_reasons") or [])
+                if not reasons:
+                    missing = ([c for c in expected if c not in set(ran)]
+                               if cov_incomplete else [])
+                    reasons = ([f"checks did not run: {', '.join(missing)}"]
+                               if missing else ["breaker coverage incomplete"])
+                return {
+                    "status": "degraded",
+                    "group": group_name,
+                    "breaker_status": "degraded",
+                    "breaker_reasons": triggered,
+                    "degraded_reasons": reasons[:4],
+                    "reason": "; ".join(reasons[:2]),
+                }
             return {
                 "status": "resolved",
                 "group": group_name,
                 "breaker_status": bs,
-                "breaker_reasons": [
-                    a.get("message", a.get("description", ""))
-                    for a in (g.get("breaker_alerts") or [])
-                    if a.get("triggered")
-                ][:3],
+                "breaker_reasons": triggered,
             }
     # in the universe, absent from signals.json: the rotation is ahead of
     # the last engine run. Unknown — NOT clear (this exact fall-through
@@ -203,7 +250,7 @@ def _analyze_ticker(symbol):
     # blocked and says why). "not_in_universe" is NOT gated: no group
     # breaker exists to check, which is a verified answer.
     trade_signal_gate = None
-    if group_ctx.get("status") == "unavailable":
+    if group_ctx.get("status") in ("unavailable", "degraded"):
         trade_signal_gate = (
             f"breaker unverified — {group_ctx.get('reason', 'lookup failed')}; "
             f"the signal below presumes a clear breaker and is NOT shown")

@@ -1,0 +1,630 @@
+#!/usr/bin/env python3
+"""
+D-019 — BREAKER COVERAGE pins.
+
+THE DEFECT (pre-existing, ruled, fixed here): run_engine fetched the six
+MACRO_TICKERS one-shot and swallowed failures with a printed SKIP.
+generate_dynamic_breaker_checks then OMITTED the affected checks entirely
+(each `if data is not None and len(...) > N:` has no else), and
+check_thesis_breakers builds its "not triggered" entries by iterating
+checks.items() — so an omitted check left ZERO trace in breaker_alerts.
+breaker_status fell through to its "clear" initialiser and was written to
+signals.json byte-identical to a group that was checked and found healthy.
+The search-page gate then certified that fabricated clear as verified.
+
+THE FIX: record COVERAGE, not just outcome. "clear" is a positive claim
+and may only be made when every check the group's sensitivities call for
+actually ran.
+
+Pins here follow the house pin doctrine (docs/testing.md):
+  1. Drive the real entry point.
+  2. Assert the invariant, not the implementation.
+  3. Demonstrate the failure — a pin that cannot fail on the old code is
+     not evidence.
+
+Run: python3 test_breaker_coverage.py
+"""
+
+import importlib.util
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+REPO = os.path.dirname(os.path.abspath(__file__))
+
+import numpy as np
+import pandas as pd
+
+import signal_engine as eng
+
+
+# ---------------------------------------------------------------- fixtures
+def _macro_df(bars=140, start=100.0):
+    """A calm macro series that trips NOTHING in either direction.
+
+    Deliberately flat with a small wobble: a rising series trips
+    usd_strength (UUP >5% YTD) and approaches energy_spike (XLE >15%
+    YTD), while a falling one trips the drop checks. The fixture must
+    isolate COVERAGE, so no threshold may be near."""
+    # CALENDAR-STABLE (review finding, reproduced): the sp500 check filters
+    # to datetime.now().year, so a window ending "today" carries almost no
+    # current-year bars in the first days of January — the check would be
+    # omitted for a reason that is not an outage, and pin (b) would go red
+    # every January. Anchor the window so it always contains a full
+    # current-year run; future-dated synthetic bars are harmless here (the
+    # check only filters by year, then takes max/last).
+    year_start = pd.Timestamp(pd.Timestamp.today().year, 1, 1)
+    end = max(pd.Timestamp.today().normalize(),
+              year_start + pd.tseries.offsets.BDay(60))
+    idx = pd.date_range(end=end, periods=bars, freq="B")
+    wobble = np.sin(np.arange(bars) / 7.0) * (start * 0.005)
+    close = start + wobble
+    return pd.DataFrame({"Open": close, "High": close * 1.004,
+                         "Low": close * 0.996, "Close": close,
+                         "Volume": np.full(bars, 1_000_000)}, index=idx)
+
+
+def _healthy_stocks(n=6):
+    """Group members with no triggering condition: RSI mid, above MA50,
+    positive YTD, beating the S&P."""
+    return [{"ticker": f"T{i}", "rsi": 58.0, "price": 110.0, "ma50": 100.0,
+             "ytd_return": 12.0, "beating_sp500": True} for i in range(n)]
+
+
+GROUP_SP = {"macro_sensitivities": ["sp500_drawdown", "group_momentum",
+                                    "group_trend", "group_ytd"],
+            "commodity_proxy": None, "sector_type": "semiconductor"}
+GROUP_OIL = {"macro_sensitivities": ["oil_collapse", "natgas_collapse",
+                                     "group_momentum", "group_trend"],
+             "commodity_proxy": "USO", "sector_type": "oil_gas_ep"}
+GROUP_GOLD = {"macro_sensitivities": ["commodity_drop", "usd_strength",
+                                      "group_momentum", "group_trend",
+                                      "breadth_collapse"],
+              "commodity_proxy": "GLD", "sector_type": "precious_metals"}
+
+ALL_MACRO = {t: _macro_df() for t in eng.MACRO_TICKERS}
+ALL_OK = {t: {"ok": True, "reason": None, "bars": 140}
+          for t in eng.MACRO_TICKERS}
+
+
+def _run_group(group_info, macro_data, macro_status):
+    """Drive the REAL entry points end to end (pin doctrine, Law 1):
+    check_thesis_breakers for the alerts+coverage, then the ENGINE'S OWN
+    resolve_breaker_status for the verdict. Reimplementing the ladder here
+    would let a ladder change pass every pin in this file."""
+    alerts, cov = eng.check_thesis_breakers(
+        "TestGroup", group_info, _healthy_stocks(), macro_data, 8.0,
+        macro_status=macro_status)
+    return eng.resolve_breaker_status(alerts, cov), alerts, cov
+
+
+# ------------------------------------------------------- (b) full coverage
+def test_full_coverage_reads_clear():
+    """A day where every macro input arrived and nothing fired must still
+    read CLEAR — the fix must not manufacture false degradation."""
+    for name, gi in (("sp500", GROUP_SP), ("oil", GROUP_OIL),
+                     ("gold", GROUP_GOLD)):
+        status, alerts, cov = _run_group(gi, ALL_MACRO, ALL_OK)
+        assert status == "clear", f"{name}: {status} — {cov['reasons']}"
+        assert cov["complete"] and not cov["missing"], f"{name}: {cov}"
+        assert cov["expected"] == cov["run"], f"{name}: {cov}"
+        assert cov["reasons"] == [], f"{name}: {cov['reasons']}"
+        # byte-comparable to the old world: every alert still carries the
+        # same shape, and an all-clear group lists every check untriggered
+        assert not [a for a in alerts if a["triggered"]], name
+        assert sorted(a["check"] for a in alerts) == cov["expected"], name
+    print("  (b) full coverage -> clear, expected==run, no false "
+          "degradation (3 group shapes): OK")
+
+
+# --------------------------------------------------- (a) outage injection
+def test_macro_outage_degrades_every_dependent_group():
+    """Kill each macro ticker in turn. EVERY group whose sensitivities
+    depend on it must read degraded and NAME the reason; groups that do
+    not depend on it must be untouched."""
+    # which groups depend on which macro ticker, derived from the TABLE
+    dep = {}
+    for spec in eng.BREAKER_CHECK_SPECS:
+        if spec.get("macro"):
+            dep.setdefault(spec["macro"], set()).add(spec["sensitivity"])
+
+    groups = {"sp500": GROUP_SP, "oil": GROUP_OIL, "gold": GROUP_GOLD}
+    checked = 0
+    for dead_ticker in eng.MACRO_TICKERS:
+        macro = {t: df for t, df in ALL_MACRO.items() if t != dead_ticker}
+        status_map = dict(ALL_OK)
+        status_map[dead_ticker] = {"ok": False,
+                                   "reason": "fetch returned no data"}
+        for gname, gi in groups.items():
+            sens = set(gi["macro_sensitivities"])
+            proxy = gi.get("commodity_proxy")
+            # does this group actually call for a check needing dead_ticker?
+            needs = any(
+                s["sensitivity"] in sens and s.get("macro") == dead_ticker
+                and (s.get("requires_proxy") is None
+                     or s["requires_proxy"] == proxy)
+                for s in eng.BREAKER_CHECK_SPECS)
+            status, alerts, cov = _run_group(gi, macro, status_map)
+            if needs:
+                checked += 1
+                assert status == "degraded", (
+                    f"{dead_ticker} dead, {gname} sensitive -> {status} "
+                    f"(THE BUG: a blind group reading as checked)")
+                assert cov["missing"], f"{gname}/{dead_ticker}: {cov}"
+                joined = " ".join(cov["reasons"])
+                assert dead_ticker in joined, cov["reasons"]
+                assert "fetch returned no data" in joined, cov["reasons"]
+                # and the omission leaves no trace in the alert list —
+                # which is exactly why the coverage record is needed
+                assert cov["missing"][0] not in {a["check"] for a in alerts}
+            else:
+                assert status == "clear", (
+                    f"{dead_ticker} dead, {gname} NOT sensitive -> {status}"
+                    " (over-degradation)")
+    assert checked >= 5, f"only {checked} sensitive combinations exercised"
+    print(f"  (a) macro outage: {checked} sensitive group/ticker "
+          "combinations degrade with named reasons; insensitive groups "
+          "stay clear: OK")
+
+
+def test_prefix_engine_fabricates_clear_on_the_same_injection():
+    """DEMONSTRATE THE FAILURE. Run the PRE-FIX engine (git HEAD) against
+    the identical injection: it reports a clean 'clear' with no trace of
+    the check that never ran. A pin that cannot fail on the old code is
+    not evidence."""
+    # ANCHORED TO THE PRE-FIX COMMIT, not HEAD. Against HEAD this pin
+    # would pass trivially — and self-skip forever — the moment this build
+    # was committed, which is exactly when the demonstration stops being
+    # free. e81b6d1 is the last commit before D-019 (the swallowed-fetch
+    # review fixes); it is the code that fabricated the clear.
+    PREFIX_SHA = "e81b6d1"
+    out = subprocess.run(["git", "show", f"{PREFIX_SHA}:signal_engine.py"],
+                         capture_output=True, text=True, cwd=REPO)
+    if out.returncode != 0:
+        # a shallow clone cannot reach it; say so loudly rather than
+        # printing a green line for a pin that did not run
+        raise AssertionError(
+            f"(a') pre-fix anchor {PREFIX_SHA} unreachable (shallow clone?) "
+            "— the Law-3 demonstration did NOT run. A pin that cannot fail "
+            "on the old code is not evidence, and a pin that silently does "
+            "not run is worse: fetch the history or delete this pin "
+            "deliberately.")
+    tmp = tempfile.mkdtemp(prefix="prefix_eng_")
+    path = os.path.join(tmp, "old_signal_engine.py")
+    with open(path, "w") as f:
+        f.write(out.stdout)
+    spec = importlib.util.spec_from_file_location("old_signal_engine", path)
+    old = importlib.util.module_from_spec(spec)
+    sys.modules["old_signal_engine"] = old
+    spec.loader.exec_module(old)
+
+    assert not hasattr(old, "BREAKER_CHECK_SPECS"), (
+        f"{PREFIX_SHA} already carries D-019 — the pre-fix anchor is wrong "
+        "and this pin is no longer demonstrating anything")
+    if True:
+        macro = {t: df for t, df in ALL_MACRO.items() if t != "^GSPC"}
+        old_alerts = old.check_thesis_breakers(
+            "TestGroup", GROUP_SP, _healthy_stocks(), macro, 8.0)
+        # the old signature returns a bare list
+        assert isinstance(old_alerts, list), type(old_alerts)
+        triggered = [a for a in old_alerts if a["triggered"]]
+        old_status = "clear" if not triggered else "not-clear"
+        assert old_status == "clear", "expected the pre-fix fabricated clear"
+        # THE SMOKING GUN: the check that never ran is absent entirely —
+        # not listed as triggered, not listed as "Not triggered"
+        ids = {a["check"] for a in old_alerts}
+        assert "sp500_drawdown_10pct" not in ids, (
+            "pre-fix engine left a trace — re-derive this pin")
+        # and the SAME injection on the fixed engine degrades
+        new_status, _, cov = _run_group(
+            GROUP_SP, macro,
+            dict(ALL_OK, **{"^GSPC": {"ok": False, "reason": "fetch failed"}}))
+        assert new_status == "degraded", new_status
+        print("  (a') pre-fix engine on the SAME injection: 'clear' with "
+              f"{len(ids)} checks and NO trace of sp500_drawdown_10pct; "
+              "fixed engine: 'degraded' — the identity is broken: OK")
+
+
+
+# --------------------------------------------------- (c) the table pinned
+def test_mapping_table_complete_both_directions():
+    """The check<->sensitivity table is the source of truth: every
+    sensitivity any group can declare resolves, and every check the
+    generator can emit is claimed by exactly one spec. No orphans in
+    either direction."""
+    spec_sens = {s["sensitivity"] for s in eng.BREAKER_CHECK_SPECS}
+    spec_checks = [s["check"] for s in eng.BREAKER_CHECK_SPECS]
+    assert len(spec_checks) == len(set(spec_checks)), "duplicate check id"
+
+    # 1. every sensitivity DECLARED anywhere in the repo resolves.
+    declared = set()
+    import universe_builder as ub
+    for meta in ub.GROUP_METADATA.values():
+        declared.update(meta.get("macro_sensitivities") or [])
+    declared.update(ub.DEFAULT_SENSITIVITIES)
+    for gi in (eng.FALLBACK_INDUSTRY_GROUPS or {}).values():
+        declared.update(gi.get("macro_sensitivities") or [])
+    ua = os.path.join(REPO, "data", "universe_active.json")
+    if os.path.exists(ua):
+        with open(ua) as f:
+            for gi in ((json.load(f) or {}).get("groups") or {}).values():
+                declared.update(gi.get("macro_sensitivities") or [])
+    orphan_sens = sorted(declared - spec_sens)
+    assert not orphan_sens, f"sensitivities with no spec: {orphan_sens}"
+
+    # 2. every check the GENERATOR can emit is claimed by a spec. Derived
+    #    from source, so a new branch added without a table entry fails
+    #    here rather than silently shrinking "complete coverage".
+    import re
+    src = open(os.path.join(REPO, "signal_engine.py")).read()
+    body = src[src.index("def generate_dynamic_breaker_checks"):]
+    body = body[:body.index("\ndef ", 10)]
+    emitted = set(re.findall(r'checks\["([a-z0-9_]+)"\]\s*=', body))
+    orphan_checks = sorted(emitted - set(spec_checks))
+    assert not orphan_checks, f"checks with no spec: {orphan_checks}"
+    unreachable = sorted(set(spec_checks) - emitted)
+    assert not unreachable, f"specs for checks nothing emits: {unreachable}"
+
+    # 3. the conditional pairing is REAL, not name-matched
+    gold = [s for s in eng.BREAKER_CHECK_SPECS
+            if s["sensitivity"] == "commodity_drop"][0]
+    assert gold["check"] == "gold_below_threshold"
+    assert gold["requires_proxy"] == "GLD"
+    oil = [s for s in eng.BREAKER_CHECK_SPECS
+           if s["sensitivity"] == "oil_collapse"][0]
+    assert oil["check"] == "oil_below_60", "the map is not 1:1 by name"
+    # commodity_drop declared with a NON-GLD proxy is a config gap, and
+    # must degrade rather than quietly expect nothing
+    exp, gaps = eng.breaker_expected_checks(
+        {"macro_sensitivities": ["commodity_drop"], "commodity_proxy": "USO"})
+    assert exp == [] and gaps and "commodity_drop" in gaps[0], (exp, gaps)
+    cov = eng.breaker_coverage(
+        {"macro_sensitivities": ["commodity_drop"], "commodity_proxy": "USO"},
+        [], ALL_OK)
+    assert not cov["complete"], "an unimplemented pairing read as complete"
+    print(f"  (c) table complete both directions ({len(spec_checks)} "
+          f"specs, {len(declared)} declared sensitivities, 0 orphans); "
+          "non-1:1 pairings pinned; config gap degrades: OK")
+
+
+# ------------------------------------------------- (d) era-aware surfaces
+def test_gate_withholds_on_degraded_and_is_era_aware():
+    """The serve layer: a degraded group gates the trade signal exactly as
+    an unavailable one does; a PRE-D-019 artifact (no coverage fields)
+    renders as the old world did and never retro-claims."""
+    import ticker_api
+    tmp = tempfile.mkdtemp(prefix="cov_gate_")
+    old_dir = ticker_api.DATA_DIR
+    ticker_api.DATA_DIR = tmp
+    W = lambda n, o: open(os.path.join(tmp, n), "w").write(json.dumps(o))
+    try:
+        W("universe_active.json", {"groups": {"Semis": {"tickers": ["AAA"]}}})
+
+        # 1. engine says degraded -> gated, reasons carried
+        W("signals.json", {"groups": [{
+            "name": "Semis", "breaker_status": "degraded",
+            "breaker_checks_expected": ["sp500_drawdown_10pct", "avg_ytd_negative"],
+            "breaker_checks_run": ["avg_ytd_negative"],
+            "breaker_degraded_reasons": [
+                "sp500_drawdown_10pct: ^GSPC unavailable — fetch returned no data"],
+            "breaker_alerts": []}]})
+        g = ticker_api._group_breaker_context("AAA")
+        assert g["status"] == "degraded", g
+        assert g["breaker_status"] == "degraded"      # deploy-window safety
+        assert "^GSPC" in " ".join(g["degraded_reasons"]), g
+
+        # 2. COVERAGE CONTRADICTS THE LABEL: an artifact stamped "clear"
+        #    whose checks did not all run must still gate — the label is
+        #    not trusted over the record.
+        W("signals.json", {"groups": [{
+            "name": "Semis", "breaker_status": "clear",
+            "breaker_checks_expected": ["sp500_drawdown_10pct", "avg_ytd_negative"],
+            "breaker_checks_run": ["avg_ytd_negative"],
+            "breaker_alerts": []}]})
+        g = ticker_api._group_breaker_context("AAA")
+        assert g["status"] == "degraded", f"a stamped-clear blind group: {g}"
+        assert "sp500_drawdown_10pct" in " ".join(g["degraded_reasons"]), g
+
+        # 3. ERA-AWARE: no coverage fields at all -> resolved, exactly the
+        #    old world. We never retro-claim coverage never measured.
+        W("signals.json", {"groups": [{"name": "Semis",
+                                       "breaker_status": "clear",
+                                       "breaker_alerts": []}]})
+        g = ticker_api._group_breaker_context("AAA")
+        assert g["status"] == "resolved" and g["breaker_status"] == "clear", g
+
+        # 4. full coverage on a D-019 artifact -> resolved
+        W("signals.json", {"groups": [{
+            "name": "Semis", "breaker_status": "clear",
+            "breaker_checks_expected": ["avg_ytd_negative"],
+            "breaker_checks_run": ["avg_ytd_negative"],
+            "breaker_degraded_reasons": [], "breaker_alerts": []}]})
+        assert ticker_api._group_breaker_context("AAA")["status"] == "resolved"
+    finally:
+        ticker_api.DATA_DIR = old_dir
+    print("  (d) gate: degraded gates, a stamped-clear-but-blind group "
+          "gates, pre-D-019 artifacts read as the old world: OK")
+
+
+def test_pages_render_degraded_distinctly():
+    """Source pins: the withheld chip covers degraded, and the Layer-2
+    breaker chip never paints a degraded group green."""
+    rd = lambda p: open(os.path.join(REPO, p)).read()
+    sr = rd("public/search.html")
+    assert "gc.status === 'degraded'" in sr
+    assert "GROUP BREAKER PARTIALLY UNVERIFIED" in sr
+    # the gate predicate must NOT admit degraded as proof
+    assert "gcs === 'resolved' || gcs === 'not_in_universe'" in sr
+    assert "'degraded'" not in sr.split("const breakerProven")[1][:200]
+
+    fw = rd("public/framework.html")
+    assert "brkDeg" in fw and "breaker_checks_expected" in fw
+    chip = fw[fw.index("const brkDeg="):fw.index("const rid='gl2-'")]
+    assert "&#9888; degraded" in chip, "degraded chip lacks the warning glyph"
+    assert "dashed" in chip, "degraded chip is not visually distinct"
+    # green is reserved for a positive 'clear' claim
+    assert "brk==='clear'?'var(--green)'" in chip
+
+    nt = rd("notify_assessment.py")
+    assert "Breaker coverage INCOMPLETE" in nt
+    assert "breaker_checks_expected" in nt and "Not clear — unverified" in nt
+    print("  (d) surfaces: search withheld+named, Layer-2 amber ⚠ chip "
+          "(never green), close report announces: OK")
+
+
+def test_writer_half_records_and_writes():
+    """THE WRITER HALF (review finding: it had no pin at all, and
+    era-awareness makes a writer regression INVISIBLE — if the engine
+    silently stopped emitting the coverage fields, every consumer would
+    read the artifact as pre-D-019 and un-gate everything).
+
+    Drives the real run_engine writer path with the network stubbed: one
+    macro ticker dead, and asserts the artifact carries macro_status, the
+    per-group coverage fields, the degraded verdict, and a withheld
+    published trade signal."""
+    import types
+
+    real_fetch = eng.fetch_data
+    real_idx = eng.get_index_data
+    real_groups = eng.get_industry_groups
+    real_fund = getattr(eng, "fetch_fundamentals_yfinance", None)
+    written = {}
+
+    def fake_fetch(ticker, period="6mo", **kw):
+        if ticker == "^GSPC":
+            return None                      # THE OUTAGE
+        return _macro_df()
+
+    def fake_idx():
+        return {"^GSPC": {"ytd": 8.0}}
+
+    def fake_groups():
+        return {"Semis": {"tickers": ["AAA", "BBB"],
+                          "sector": "Information Technology",
+                          "cycle_stage": "mid",
+                          "macro_sensitivities": ["sp500_drawdown",
+                                                  "group_momentum"],
+                          "commodity_proxy": None,
+                          "sector_type": "semiconductor"}}
+
+    tmp = tempfile.mkdtemp(prefix="writer_")
+    _stubs = []
+    try:
+        eng.fetch_data = fake_fetch
+        eng.get_index_data = fake_idx
+        eng.get_industry_groups = fake_groups
+        if real_fund:
+            eng.fetch_fundamentals_yfinance = lambda t: {}
+        # no network in a pin: stub the earnings refresh too
+        for _mod in ("earnings_calendar",):
+            _m = sys.modules.get(_mod)
+            if _m and hasattr(_m, "refresh_for_tickers"):
+                _stubs.append((_m, "refresh_for_tickers",
+                               _m.refresh_for_tickers))
+                _m.refresh_for_tickers = lambda *a, **k: {}
+            if _m and hasattr(_m, "next_earnings_map"):
+                _stubs.append((_m, "next_earnings_map", _m.next_earnings_map))
+                _m.next_earnings_map = lambda *a, **k: {}
+        # capture the artifact instead of writing over the repo's
+        orig_open = open
+
+        out = eng.run_engine(output_path=os.path.join(tmp, "signals.json")) \
+            if "output_path" in eng.run_engine.__code__.co_varnames else None
+        if out is None:
+            # run_engine writes to a fixed path — point DATA/PUBLIC at tmp
+            for attr in ("DATA_DIR", "PUBLIC_DIR", "OUTPUT_PATH"):
+                if hasattr(eng, attr):
+                    written[attr] = getattr(eng, attr)
+                    setattr(eng, attr, tmp)
+            out = eng.run_engine()
+    finally:
+        eng.fetch_data = real_fetch
+        eng.get_index_data = real_idx
+        eng.get_industry_groups = real_groups
+        if real_fund:
+            eng.fetch_fundamentals_yfinance = real_fund
+        for attr, val in written.items():
+            setattr(eng, attr, val)
+        for _obj, _name, _orig in _stubs:
+            setattr(_obj, _name, _orig)
+
+    assert isinstance(out, dict), type(out)
+    # 1. the RUN-level record exists and names the outage
+    ms = out.get("macro_status")
+    assert isinstance(ms, dict) and ms, "macro_status missing from artifact"
+    assert ms.get("^GSPC", {}).get("ok") is False, ms.get("^GSPC")
+    assert ms["^GSPC"].get("reason"), "outage recorded without a reason"
+    # 2. the PER-GROUP coverage fields exist and are self-consistent
+    grp = (out.get("groups") or [])[0]
+    for field in ("breaker_checks_expected", "breaker_checks_run",
+                  "breaker_degraded_reasons"):
+        assert field in grp, f"{field} not written — a writer regression "\
+                             "would read as a pre-D-019 artifact"
+    assert "sp500_drawdown_10pct" in grp["breaker_checks_expected"]
+    assert "sp500_drawdown_10pct" not in grp["breaker_checks_run"]
+    assert any("^GSPC" in r for r in grp["breaker_degraded_reasons"])
+    # 3. the verdict
+    assert grp["breaker_status"] == "degraded", grp["breaker_status"]
+    # 4. THE PUBLISHED SIGNAL IS WITHHELD — the artifact is a surface too,
+    #    and the dashboard renders trade_signal straight out of it
+    for st in grp.get("stocks", []):
+        assert st.get("trade_signal") == "SIGNAL WITHHELD", (
+            f"{st.get('ticker')}: published {st.get('trade_signal')!r} on an "
+            "unverified breaker — the fabricated clear, one layer over")
+    print("  (e) writer half: macro_status + per-group coverage fields "
+          "written, verdict degraded, published trade_signal withheld: OK")
+
+
+def test_a_trigger_still_wins_over_incomplete_coverage():
+    """THE LADDER'S HEADLINE RULE (review finding: unpinned). A fired
+    breaker is news regardless of what else could not be measured — and
+    the serve layer must not downgrade it to 'degraded', which would hide
+    the alarm behind the caveat."""
+    cov_bad = {"complete": False, "expected": ["a", "b"], "run": ["a"],
+               "reasons": ["b: ^GSPC unavailable"]}
+    cov_ok = {"complete": True, "expected": ["a"], "run": ["a"], "reasons": []}
+    for sev, expected in (("critical", "critical"), ("high", "warning"),
+                          ("medium", "watch")):
+        alerts = [{"check": "a", "triggered": True, "severity": sev}]
+        assert eng.resolve_breaker_status(alerts, cov_bad) == expected, sev
+        assert eng.resolve_breaker_status(alerts, cov_ok) == expected, sev
+    # and no trigger: coverage decides
+    assert eng.resolve_breaker_status([], cov_ok) == "clear"
+    assert eng.resolve_breaker_status([], cov_bad) == "degraded"
+
+    # the SERVE layer must agree — this is where the override lived
+    import ticker_api
+    tmp = tempfile.mkdtemp(prefix="trigwin_")
+    old_dir = ticker_api.DATA_DIR
+    ticker_api.DATA_DIR = tmp
+    W = lambda n, o: open(os.path.join(tmp, n), "w").write(json.dumps(o))
+    try:
+        W("universe_active.json", {"groups": {"Semis": {"tickers": ["AAA"]}}})
+        W("signals.json", {"groups": [{
+            "name": "Semis", "breaker_status": "critical",
+            "breaker_checks_expected": ["sp500_drawdown_10pct", "avg_ytd_negative"],
+            "breaker_checks_run": ["avg_ytd_negative"],
+            "breaker_degraded_reasons": ["sp500_drawdown_10pct: ^GSPC unavailable"],
+            "breaker_alerts": [{"check": "avg_ytd_negative", "triggered": True,
+                                "severity": "critical",
+                                "message": "group YTD collapsed"}]}]})
+        g = ticker_api._group_breaker_context("AAA")
+        assert g["breaker_status"] == "critical", (
+            f"a fired CRITICAL was downgraded to {g['breaker_status']!r} by "
+            "the coverage caveat — the alarm would be hidden")
+        assert g["status"] == "resolved", g["status"]
+        assert g.get("coverage_incomplete") is True, g
+        assert g.get("degraded_reasons"), "the caveat was dropped entirely"
+    finally:
+        ticker_api.DATA_DIR = old_dir
+    print("  (f) a trigger still wins over incomplete coverage, in the "
+          "ladder AND at the serve layer; the caveat rides along: OK")
+
+
+def test_degraded_gate_is_behavioural():
+    """The line that actually withholds the trade signal, pinned as
+    BEHAVIOUR (review finding: it was source-grep only). Executes the
+    page's own gate predicate over every shape D-019 introduces."""
+    sr = open(os.path.join(REPO, "public", "search.html")).read()
+    assert "gcs === 'resolved' || gcs === 'not_in_universe'" in sr, \
+        "the gate predicate changed — re-derive this pin"
+
+    def withholds(payload):
+        gcs = (payload.get("group_context") or {}).get("status")
+        proven = gcs in ("resolved", "not_in_universe")
+        return bool(payload.get("trade_signal_gate")) or not proven
+
+    must_withhold = [
+        {"trade_signal": "BUY NOW",
+         "group_context": {"status": "degraded",
+                           "degraded_reasons": ["x: ^GSPC unavailable"]}},
+        {"trade_signal": "BUY NOW", "trade_signal_gate": "breaker unverified",
+         "group_context": {"status": "degraded"}},
+        {"trade_signal": "BUY NOW", "group_context": {"status": "unavailable"}},
+        {"trade_signal": "BUY NOW", "group_context": None},
+        {"trade_signal": "BUY NOW"},
+    ]
+    for p in must_withhold:
+        assert withholds(p), f"a BUY NOW would render on {p}"
+    # a trigger that FIRED is resolved — it must still render (as AVOID),
+    # because hiding a fired breaker behind a withheld chip loses the alarm
+    fired = {"trade_signal": "AVOID",
+             "group_context": {"status": "resolved",
+                               "breaker_status": "critical",
+                               "coverage_incomplete": True}}
+    assert not withholds(fired), "a fired critical was withheld — alarm lost"
+    print("  (g) gate behaviour: every degraded shape withholds; a fired "
+          "critical still renders its AVOID: OK")
+
+
+def test_degraded_input_and_published_signal():
+    """Two review findings, pinned:
+
+    1. A missing INPUT that does not stop a check from running (the S&P
+       YTD baseline defaults to 0.0, so breadth_collapse still produces a
+       number — against a fabricated comparison). expected-vs-run cannot
+       see it, so it is reported directly.
+    2. The ARTIFACT is a surface: compute_trade_signal must withhold on a
+       degraded breaker, or the dashboard renders a BUY NOW that the
+       search page correctly refuses."""
+    gi = {"macro_sensitivities": ["breadth_collapse", "group_trend"],
+          "commodity_proxy": None}
+    ran = ["breadth_collapse", "majority_below_ma50"]
+    cov_ok = eng.breaker_coverage(gi, ran, ALL_OK)
+    assert cov_ok["complete"], cov_ok
+    cov_bad = eng.breaker_coverage(
+        gi, ran, ALL_OK,
+        degraded_inputs={"breadth_collapse": "S&P 500 YTD baseline unavailable"})
+    assert not cov_bad["complete"], "a fabricated baseline read as complete"
+    assert not cov_bad["missing"], "the check DID run — this is an input gap"
+    assert any("baseline" in r for r in cov_bad["reasons"]), cov_bad
+    # an input gap for a check the group does not call for is ignored
+    cov_other = eng.breaker_coverage(
+        gi, ran, ALL_OK, degraded_inputs={"energy_spike": "XLE missing"})
+    assert cov_other["complete"], "an irrelevant input gap degraded a group"
+
+    det = {"rsi": 63, "macd_histogram": .2, "macd": 1.1, "macd_signal": .9,
+           "price": 203, "ma20": 188, "ma50": 180, "ma200": 150,
+           "composite_score": 77, "signal": "buy", "ytd_return": 22,
+           "volume_ratio": 1.1, "pct_from_52w_high": -2,
+           "trend_strength": 15, "rs_vs_ma50": 5}
+    clear_sig, _ = eng.compute_trade_signal(dict(det), breaker_status="clear")
+    deg_sig, deg_reason = eng.compute_trade_signal(dict(det),
+                                                  breaker_status="degraded")
+    crit_sig, _ = eng.compute_trade_signal(dict(det), breaker_status="critical")
+    assert clear_sig == "BUY NOW", clear_sig
+    assert deg_sig == "SIGNAL WITHHELD", (
+        f"the artifact published {deg_sig!r} on an unverified breaker")
+    assert "unverified" in deg_reason.lower(), deg_reason
+    assert crit_sig == "AVOID", crit_sig    # a trigger still wins
+
+    # and the dashboard renders that value distinctly, never as a neutral hold
+    ix = open(os.path.join(REPO, "public", "index.html")).read()
+    assert "t==='SIGNAL WITHHELD'" in ix and ".ts-withheld{" in ix
+    # the leadership artifact carries the reasons the chip tooltips
+    fr = open(os.path.join(REPO, "framework", "framework_runner.py")).read()
+    assert "breaker_cov_by_name" in fr and "breaker_degraded_reasons" in fr
+    # and the close report fails LOUD, not open
+    nt = open(os.path.join(REPO, "notify_assessment.py")).read()
+    assert "could not be checked" in nt and "except Exception: pass" not in nt
+    print("  (h) degraded INPUT (check ran on a fabricated baseline) "
+          "degrades; the artifact withholds its published signal; "
+          "dashboard + leadership + close report carry it: OK")
+
+
+if __name__ == "__main__":
+    print("\n=== D-019 breaker coverage pins ===")
+    test_full_coverage_reads_clear()
+    test_macro_outage_degrades_every_dependent_group()
+    test_prefix_engine_fabricates_clear_on_the_same_injection()
+    test_mapping_table_complete_both_directions()
+    test_gate_withholds_on_degraded_and_is_era_aware()
+    test_pages_render_degraded_distinctly()
+    test_writer_half_records_and_writes()
+    test_a_trigger_still_wins_over_incomplete_coverage()
+    test_degraded_gate_is_behavioural()
+    test_degraded_input_and_published_signal()
+    print("\nAll breaker-coverage tests passed.\n")

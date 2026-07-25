@@ -183,6 +183,7 @@
 
   /* Trade signal badges */
   .ts-badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.3px;white-space:nowrap;}
+  .ts-withheld{background:rgba(210,153,34,.12);color:#d29922;border:1px dashed rgba(210,153,34,.5);}
   .ts-buy-now{background:rgba(63,185,80,.2);color:#3fb950;border:1px solid rgba(63,185,80,.3);}
   .ts-wait{background:rgba(210,153,34,.15);color:#d29922;border:1px solid rgba(210,153,34,.25);}
   .ts-accumulate{background:rgba(88,166,255,.12);color:#58a6ff;border:1px solid rgba(88,166,255,.25);}
@@ -378,6 +379,10 @@ function erChip(d){
 function tsClass(ts){
   if(!ts) return 'ts-hold';
   const t = ts.toUpperCase();
+  // D-019: the engine publishes SIGNAL WITHHELD when a group's breaker
+  // could not be fully checked. It must never fall through to a neutral
+  // 'hold' chip — an unverified breaker is not a hold, it is a refusal.
+  if(t==='SIGNAL WITHHELD') return 'ts-withheld';
   if(t==='BUY NOW') return 'ts-buy-now';
   if(t.includes('WAIT')) return 'ts-wait';
   if(t.includes('ACCUMULATE')) return 'ts-accumulate';

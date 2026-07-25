@@ -737,6 +737,9 @@ function renderResults(d){
   // null/loose group_context) must not silently un-gate the chip —
   // over-gating is safe, under-gating is the bug this fix exists for.
   const gcs = (d.group_context || {}).status;
+  // D-019: 'degraded' is the same non-proof as 'unavailable' — some
+  // checks never ran, so no clear may be presumed. Only 'resolved' and
+  // 'not_in_universe' positively prove the breaker state.
   const breakerProven = (gcs === 'resolved' || gcs === 'not_in_universe');
   if (d.trade_signal_gate || !breakerProven) {
     tradeBadge.textContent = 'SIGNAL WITHHELD';
@@ -756,11 +759,26 @@ function renderResults(d){
 
   // Group breaker context (PER-509): the trade signal above was computed
   // WITH this status — surface it, or say explicitly that none applied.
-  // Three distinct states, never conflated: resolved / not-in-universe /
-  // UNAVAILABLE (a load failure, which must never read as "clear").
+  // Four distinct states, never conflated: resolved / not-in-universe /
+  // UNAVAILABLE (a load failure) / DEGRADED (the engine ran but some
+  // checks could not be computed) — neither of the last two may read as
+  // "clear".
   const bc = document.getElementById('breakerContext');
   const gc = d.group_context || {};
-  if (gc.status === 'unavailable') {
+  const _esc = v => String(v==null?'':v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if (gc.status === 'degraded') {
+    // COVERAGE, NOT OUTCOME (D-019): the group WAS scored, but some of
+    // the checks its sensitivities call for never ran. That is a
+    // partially-blind breaker, not a clear one — and it names which
+    // checks went unrun.
+    const dr = (gc.degraded_reasons || []).slice(0, 3);
+    bc.innerHTML = `<div style="margin-top:10px;padding:10px 12px;border:1px solid var(--yellow);border-radius:8px;background:rgba(210,153,34,.08);">
+      <span style="font-weight:700;color:var(--yellow);font-size:12px;">⚠ GROUP BREAKER PARTIALLY UNVERIFIED</span>
+      <span style="color:var(--dim);font-size:11px;margin-left:6px;">${_esc(gc.group||'')}</span>
+      <div style="margin-top:4px;color:var(--dim);font-size:11px;">Some breaker checks could not be computed this run, so this group is NOT certified clear. The trade signal is withheld.</div>
+      ${dr.length ? `<ul style="margin:6px 0 0 16px;color:var(--dim);font-size:11px;">${dr.map(r=>`<li>${_esc(r)}</li>`).join('')}</ul>` : ''}</div>`;
+  } else if (gc.status === 'unavailable') {
     bc.innerHTML = `<div style="margin-top:10px;padding:10px 12px;border:1px solid var(--orange);border-radius:8px;background:rgba(210,153,34,.08);">
       <span style="font-weight:700;color:var(--orange);font-size:12px;">⚠ GROUP BREAKER UNVERIFIED</span>
       <span style="color:var(--dim);font-size:11px;margin-left:6px;">${gc.group||''}</span>

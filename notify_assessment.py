@@ -152,6 +152,44 @@ def build_message(data, now_et):
         lines.append(f"Candidates: {ap_txt} · {nb} B · {nc} C"
                      + (f" · {nu} ungraded" if nu else ""))
 
+    # D-019: if any SELECTED group's breaker could not be fully checked
+    # today, the report says so ONCE, naming the groups. A degraded
+    # breaker is not a clear one, and a close report that stayed silent
+    # would let the reader assume every group was verified. Era-aware:
+    # artifacts with no coverage fields produce no line, never a claim.
+    try:
+        with open(os.path.join(api.PUBLIC_DIR, "signals.json")) as f:
+            _sig = json.load(f) or {}
+        _deg = []
+        for _g in (_sig.get("groups") or []):
+            if not isinstance(_g, dict):
+                continue
+            _exp = _g.get("breaker_checks_expected")
+            _ran = _g.get("breaker_checks_run")
+            _missing = ([c for c in _exp if c not in set(_ran)]
+                        if isinstance(_exp, list) and isinstance(_ran, list)
+                        else [])
+            if _g.get("breaker_status") == "degraded" or _missing:
+                _deg.append((_g.get("name") or "?", _missing))
+        if _deg:
+            _names = ", ".join(n for n, _ in _deg[:4])
+            _more = f" +{len(_deg) - 4}" if len(_deg) > 4 else ""
+            _checks = sorted({c for _, m in _deg for c in m})
+            lines.append(
+                f"⚠ Breaker coverage INCOMPLETE for {len(_deg)} group(s): "
+                f"{_names}{_more}"
+                + (f" — checks not run: {', '.join(_checks[:3])}"
+                   if _checks else "")
+                + ". Not clear — unverified.")
+    except Exception as _e:
+        # AN OUTAGE NEVER IMPERSONATES SAFETY — including here. Silently
+        # passing would delete the coverage warning and leave a report
+        # that reads all-clear, which is the exact defect this build
+        # exists to kill. Say that the check itself could not run.
+        lines.append(f"⚠ Breaker coverage could not be checked "
+                     f"({type(_e).__name__}) — treat group breakers as "
+                     f"unverified for this report.")
+
     # D-018 pin (c): a caught-up or revised exit must read AS SUCH in the
     # close report, naming its bar — never mistaken for a plain
     # today-at-the-close transition.

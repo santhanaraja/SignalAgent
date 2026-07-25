@@ -1523,7 +1523,18 @@ function render(){
     let gl2Idx=0;
     for(const g of lead){
       const brk=g.breaker_status;
-      const brkChip=brk?`<span class="ps-er" style="background:${brk==='clear'?'rgba(63,185,80,.12)':brk==='critical'?'rgba(248,81,73,.18)':'rgba(210,153,34,.15)'};color:${brk==='clear'?'var(--green)':brk==='critical'?'var(--red)':'var(--yellow)'};">${brk}</span>`:'<span style="color:var(--dim);font-size:11px;">—</span>';
+      // D-019: 'degraded' means some of this group's breaker checks never
+      // ran. It renders AMBER WITH A WARNING GLYPH and a reason tooltip —
+      // never the green 'clear' chip, which is a positive claim. Era-aware:
+      // an artifact with no coverage fields renders exactly as before.
+      const brkDeg=brk==='degraded';
+      const brkMiss=(g.breaker_checks_expected&&g.breaker_checks_run)
+        ?g.breaker_checks_expected.filter(c=>!g.breaker_checks_run.includes(c)):[];
+      const brkTip=brkDeg
+        ?((g.breaker_degraded_reasons||[]).slice(0,3).join(' · ')
+          ||(brkMiss.length?('checks did not run: '+brkMiss.join(', ')):'coverage incomplete'))
+        :'';
+      const brkChip=brk?`<span class="ps-er" title="${brkTip.replace(/"/g,'&quot;')}" style="background:${brk==='clear'?'rgba(63,185,80,.12)':brk==='critical'?'rgba(248,81,73,.18)':'rgba(210,153,34,.15)'};color:${brk==='clear'?'var(--green)':brk==='critical'?'var(--red)':'var(--yellow)'};${brkDeg?'border:1px dashed rgba(210,153,34,.6);':''}">${brkDeg?'&#9888; degraded':brk}</span>`:'<span style="color:var(--dim);font-size:11px;">—</span>';
       const rid='gl2-'+(gl2Idx++);
       html+=`<tr id="${rid}-row" style="cursor:pointer;" onclick="gl2Toggle('${rid}',this.dataset.g)" data-g="${g.name.replace(/"/g,'&quot;')}">
         <td class="rank-cell">${g.rank!=null?'#'+g.rank:'—'}</td>

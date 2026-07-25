@@ -429,6 +429,181 @@ def generate_dynamic_thesis_breaker(group_name, group_info, group_stocks, macro_
     return ". ".join(risks) + "."
 
 
+# ============================================================
+# BREAKER COVERAGE — the check<->sensitivity map (D-019)
+# ============================================================
+# THE INVARIANT: a breaker may report "clear" only when every check the
+# group's sensitivities CALL FOR actually ran. Before this table existed,
+# a swallowed macro fetch made generate_dynamic_breaker_checks silently
+# omit the affected check; check_thesis_breakers then had nothing to
+# trigger AND nothing to list as "not triggered", so breaker_status fell
+# through to its "clear" initialiser. A group that could not be checked
+# was byte-identical to a group that was checked and found healthy —
+# and the search-page gate certified that fabricated clear as verified.
+#
+# The map is NOT 1:1 and must not be reconstructed by name-matching:
+#   commodity_drop + commodity_proxy "GLD" -> gold_below_threshold
+#   oil_collapse                           -> oil_below_60
+#   natgas_collapse                        -> natgas_collapse (same id)
+# Four sensitivities need no macro input at all (they read the group's
+# own member rows), so they can never be degraded by a macro outage.
+#
+# THIS TABLE IS THE SOURCE OF TRUTH and is pinned complete in both
+# directions (test_breaker_coverage.py): every sensitivity any group can
+# declare resolves here, and every check the generator can emit is
+# claimed by exactly one spec.
+BREAKER_CHECK_SPECS = (
+    {"sensitivity": "sp500_drawdown", "check": "sp500_drawdown_10pct",
+     "macro": "^GSPC", "min_bars": 21},
+    {"sensitivity": "group_momentum", "check": "group_avg_rsi_below_40",
+     "macro": None, "min_bars": 0},
+    {"sensitivity": "group_trend", "check": "majority_below_ma50",
+     "macro": None, "min_bars": 0},
+    {"sensitivity": "group_ytd", "check": "avg_ytd_negative",
+     "macro": None, "min_bars": 0},
+    {"sensitivity": "breadth_collapse", "check": "breadth_collapse",
+     "macro": None, "min_bars": 0},
+    # conditional: the branch is gated on commodity_proxy == "GLD", so a
+    # group declaring commodity_drop with any other proxy gets NO check.
+    # That is a CONFIG gap, not an outage — reported as its own reason
+    # rather than silently expecting nothing.
+    {"sensitivity": "commodity_drop", "check": "gold_below_threshold",
+     "macro": "GLD", "min_bars": 21, "requires_proxy": "GLD"},
+    {"sensitivity": "usd_strength", "check": "usd_strength",
+     "macro": "UUP", "min_bars": 21},
+    {"sensitivity": "oil_collapse", "check": "oil_below_60",
+     "macro": "USO", "min_bars": 21},
+    {"sensitivity": "natgas_collapse", "check": "natgas_collapse",
+     "macro": "UNG", "min_bars": 21},
+    {"sensitivity": "energy_spike", "check": "energy_spike",
+     "macro": "XLE", "min_bars": 21},
+)
+
+
+def breaker_expected_checks(group_info):
+    """The checks a group's declared sensitivities CALL FOR.
+
+    Returns (expected_ids, config_gaps) where config_gaps names any
+    declared sensitivity that resolves to no check at all — an
+    unimplemented combination, which must degrade the group rather than
+    quietly shrink what "complete coverage" means.
+    """
+    sensitivities = list(group_info.get("macro_sensitivities") or [])
+    proxy = group_info.get("commodity_proxy")
+    by_sens = {}
+    for spec in BREAKER_CHECK_SPECS:
+        by_sens.setdefault(spec["sensitivity"], []).append(spec)
+
+    expected, gaps = [], []
+    for sens in sensitivities:
+        specs = by_sens.get(sens)
+        if not specs:
+            gaps.append(f"sensitivity '{sens}' has no implemented check")
+            continue
+        matched = False
+        for spec in specs:
+            need = spec.get("requires_proxy")
+            if need is not None and proxy != need:
+                continue
+            expected.append(spec["check"])
+            matched = True
+        if not matched:
+            gaps.append(
+                f"sensitivity '{sens}' declared with commodity_proxy "
+                f"{proxy!r} — no check implemented for that pairing")
+    return sorted(set(expected)), gaps
+
+
+def breaker_coverage(group_info, checks_run, macro_status=None,
+                     degraded_inputs=None):
+    """Compare the checks that RAN against the checks CALLED FOR.
+
+    `checks_run` is the generator's own output — the ground truth for
+    what was computed — so this never re-implements a guard and cannot
+    drift from it. Missing checks are explained from `macro_status`
+    (recorded at fetch time) where a macro input is implicated, and
+    reported honestly as an uncomputable input otherwise.
+
+    Returns {"expected": [...], "run": [...], "missing": [...],
+             "reasons": [...], "complete": bool}.
+    """
+    macro_status = macro_status or {}
+    expected, gaps = breaker_expected_checks(group_info)
+    # An input can be missing WITHOUT a check going unrun: breadth_collapse
+    # and the beating-S&P counts compare against sp500_ytd, which defaults
+    # to 0.0 when the (separate) index fetch fails — the check still runs,
+    # on a fabricated baseline. expected-vs-run cannot see that, so a
+    # degraded INPUT is reported directly.
+    input_gaps = []
+    for check_id, reason in (degraded_inputs or {}).items():
+        if check_id in expected:
+            input_gaps.append(f"{check_id}: {reason}")
+    run = sorted(set(checks_run or ()))
+    spec_by_check = {s["check"]: s for s in BREAKER_CHECK_SPECS}
+
+    missing = [c for c in expected if c not in set(run)]
+    reasons = list(gaps) + list(input_gaps)
+    for check_id in missing:
+        spec = spec_by_check.get(check_id) or {}
+        macro = spec.get("macro")
+        st = macro_status.get(macro) if macro else None
+        if macro and st and not st.get("ok"):
+            reasons.append(f"{check_id}: {macro} unavailable — "
+                           f"{st.get('reason') or 'fetch failed'}")
+        elif macro and macro not in macro_status:
+            # never fetched this run (e.g. an older engine or a partial
+            # replay) — say so rather than blaming the data
+            reasons.append(f"{check_id}: {macro} was not fetched this run")
+        elif macro:
+            # the fetch SUCCEEDED but the check still did not run: the
+            # series is too short for this check's own guard (run_engine
+            # accepts >5 bars; the checks need >20), or a computed input
+            # was empty (e.g. the S&P year-to-date window in the first
+            # days of January). Name the input and what we know about it
+            # rather than implying the fetch failed.
+            bars = (macro_status.get(macro) or {}).get("bars")
+            need = spec.get("min_bars")
+            if bars is not None and need and bars < need:
+                reasons.append(f"{check_id}: {macro} returned {bars} bars, "
+                               f"needs {need}")
+            else:
+                reasons.append(f"{check_id}: {macro} arrived but the check "
+                               f"inputs were not computable")
+        else:
+            reasons.append(f"{check_id}: inputs insufficient to compute "
+                           f"(no macro input required — group member data)")
+    return {
+        "expected": expected,
+        "run": run,
+        "missing": missing,
+        "reasons": reasons,
+        "complete": not missing and not gaps and not input_gaps,
+    }
+
+
+def resolve_breaker_status(alerts, coverage):
+    """The breaker status ladder — ONE implementation.
+
+    A TRIGGER STILL WINS: something that fired is news regardless of what
+    else could not be measured. Absent a trigger, "clear" is a POSITIVE
+    CLAIM about having looked, and may only be made on complete coverage
+    (D-019); otherwise the group is degraded.
+
+    run_engine and the pins both call this, so a change to the ladder
+    cannot pass a test that quietly reimplemented it.
+    """
+    triggered = [a for a in (alerts or []) if a.get("triggered")]
+    if any(a.get("severity") == "critical" for a in triggered):
+        return "critical"
+    if any(a.get("severity") == "high" for a in triggered):
+        return "warning"
+    if any(a.get("severity") == "medium" for a in triggered):
+        return "watch"
+    if (coverage or {}).get("complete"):
+        return "clear"
+    return "degraded"
+
+
 def generate_dynamic_breaker_checks(group_name, group_info, group_stocks, macro_data):
     """
     Generate dynamic breaker check definitions based on the group's
@@ -743,15 +918,23 @@ def compute_momentum_metrics(df):
 # ============================================================
 # THESIS-BREAKER MONITORING
 # ============================================================
-def check_thesis_breakers(group_name, group_info, group_stocks, macro_data, sp500_ytd):
+def check_thesis_breakers(group_name, group_info, group_stocks, macro_data,
+                          sp500_ytd, macro_status=None,
+                          degraded_inputs=None):
     """
     Check thesis-breaker conditions for a group.
     All checks are dynamically generated from live market data.
-    Returns list of triggered alerts with severity.
+
+    Returns (alerts, coverage) — coverage records which checks the group's
+    sensitivities CALLED FOR versus which actually RAN (D-019). The
+    generator's own output is the ground truth for "ran", so coverage can
+    never drift from the guards that decide computability.
     """
     alerts = []
     # Generate dynamic checks from live data instead of reading static config
     checks = generate_dynamic_breaker_checks(group_name, group_info, group_stocks, macro_data)
+    coverage = breaker_coverage(group_info, checks.keys(), macro_status,
+                                degraded_inputs=degraded_inputs)
 
     # Compute group-level metrics
     rsi_values = [s["rsi"] for s in group_stocks if s.get("rsi")]
@@ -917,7 +1100,7 @@ def check_thesis_breakers(group_name, group_info, group_stocks, macro_data, sp50
                 "value": None
             })
 
-    return alerts
+    return alerts, coverage
 
 
 # ============================================================
@@ -1204,7 +1387,10 @@ def compute_trade_signal(details, breaker_status="clear"):
     bearish = 0
 
     # --- Breaker check (overrides everything) ---
-    if breaker_status in ("critical", "warning"):
+    if breaker_status == "degraded":
+        reasons.append("Group breaker UNVERIFIED — some checks could not be "
+                       "computed this run")
+    elif breaker_status in ("critical", "warning"):
         reasons.append(f"Thesis breaker {breaker_status.upper()} — macro headwinds active")
         bearish += 3
 
@@ -1297,6 +1483,19 @@ def compute_trade_signal(details, breaker_status="clear"):
     # --- Determine trade signal ---
     net = bullish - bearish
 
+    # AN OUTAGE NEVER IMPERSONATES SAFETY, IN THE ARTIFACT TOO (D-019).
+    # "degraded" means some called-for check never ran, so every signal
+    # below would rest on a PRESUMED clear breaker. Withhold it here, at
+    # the point of publication — the dashboard reads trade_signal straight
+    # out of signals.json and would otherwise render a BUY NOW that the
+    # search page correctly refuses to show. Changing the VALUE (rather
+    # than adding a flag) is deliberate: an older cached page renders an
+    # unfamiliar label harmlessly, whereas it would ignore a new flag and
+    # print the false BUY NOW.
+    if breaker_status == "degraded":
+        return "SIGNAL WITHHELD", ("Group breaker unverified — some checks "
+                                   "could not be computed this run, so no "
+                                   "trade signal is published for this group.")
     if breaker_status == "critical":
         trade_signal = "AVOID"
     elif breaker_status == "warning" and net <= 0:
@@ -1964,19 +2163,48 @@ def run_engine():
 
     # Fetch all market indexes
     indexes = get_index_data()
-    sp500_ytd = indexes.get("^GSPC", {}).get("ytd", 0.0)
-    print(f"S&P 500 YTD: {sp500_ytd}%\n")
+    _sp_entry = indexes.get("^GSPC") or {}
+    _sp_ytd_raw = _sp_entry.get("ytd")
+    sp500_ytd = _sp_ytd_raw if _sp_ytd_raw is not None else 0.0
+    # COVERAGE, NOT OUTCOME (D-019): this is a SEPARATE fetch from the
+    # macro proxies, and its failure used to vanish into a 0.0 default —
+    # every "beating the S&P" comparison then measured against a
+    # fabricated baseline while breadth_collapse still reported a result.
+    _sp_baseline_ok = _sp_ytd_raw is not None
+    degraded_inputs = ({} if _sp_baseline_ok else
+                       {"breadth_collapse":
+                        "S&P 500 YTD baseline unavailable — the "
+                        "beating-S&P comparison defaulted to 0%"})
+    print(f"S&P 500 YTD: {sp500_ytd}%"
+          + ("" if _sp_baseline_ok else "  !! BASELINE UNAVAILABLE") + "\n")
 
     # Fetch macro proxy tickers for thesis-breaker checks
     print("Fetching macro proxy tickers...")
     macro_data = {}
+    # COVERAGE, NOT OUTCOME (D-019): every fetch outcome is RECORDED. A
+    # silent SKIP here used to make the affected breaker checks vanish and
+    # the group read "clear" — a group that could not be checked was
+    # byte-identical to one checked and found healthy. The reason travels
+    # with the run and lands in the artifact.
+    macro_status = {}
     for ticker in MACRO_TICKERS:
         df = fetch_data(ticker, period="6mo")
-        if df is not None and len(df) > 5:
-            macro_data[ticker] = df
-            print(f"  {ticker}: OK")
+        if df is None:
+            macro_status[ticker] = {"ok": False,
+                                    "reason": "fetch returned no data"}
+            print(f"  {ticker}: SKIP (no data)")
+        elif len(df) <= 5:
+            macro_status[ticker] = {"ok": False,
+                                    "reason": f"only {len(df)} bars returned"}
+            print(f"  {ticker}: SKIP ({len(df)} bars)")
         else:
-            print(f"  {ticker}: SKIP")
+            macro_data[ticker] = df
+            macro_status[ticker] = {"ok": True, "reason": None, "bars": len(df)}
+            print(f"  {ticker}: OK")
+    _degraded_macro = [t for t, v in macro_status.items() if not v["ok"]]
+    if _degraded_macro:
+        print(f"  !! macro coverage INCOMPLETE: {', '.join(_degraded_macro)}"
+              f" — dependent group breakers will report degraded, not clear")
 
     # Resolve this week's active universe (dynamic top-N; falls back to the
     # hardcoded groups only if no viable dynamic universe exists)
@@ -2142,17 +2370,11 @@ def run_engine():
         )
 
         # Check thesis breakers (uses dynamic checks internally)
-        breaker_alerts = check_thesis_breakers(
-            group_name, group_info, stocks_in_group, macro_data, sp500_ytd
+        breaker_alerts, breaker_cov = check_thesis_breakers(
+            group_name, group_info, stocks_in_group, macro_data, sp500_ytd,
+            macro_status=macro_status, degraded_inputs=degraded_inputs
         )
-        triggered_alerts = [a for a in breaker_alerts if a["triggered"]]
-        breaker_status = "clear"
-        if any(a["severity"] == "critical" for a in triggered_alerts):
-            breaker_status = "critical"
-        elif any(a["severity"] == "high" for a in triggered_alerts):
-            breaker_status = "warning"
-        elif any(a["severity"] == "medium" for a in triggered_alerts):
-            breaker_status = "watch"
+        breaker_status = resolve_breaker_status(breaker_alerts, breaker_cov)
 
         # Compute trade signal for each stock in the group
         for stock in stocks_in_group:
@@ -2202,6 +2424,12 @@ def run_engine():
             "beating_sp500_count": beating_count,
             "breaker_status": breaker_status,
             "breaker_alerts": breaker_alerts,
+            # D-019 coverage record: what the sensitivities CALLED FOR vs
+            # what actually RAN. A degraded group can never again be
+            # byte-identical to a clear one — that identity WAS the bug.
+            "breaker_checks_expected": breaker_cov["expected"],
+            "breaker_checks_run": breaker_cov["run"],
+            "breaker_degraded_reasons": breaker_cov["reasons"],
             # rotation-week audit: candidates that did NOT make the cut
             # (empty for fallback/legacy groups — UI omits the strip)
             "near_misses": group_info.get("near_misses", []),
@@ -2215,6 +2443,10 @@ def run_engine():
     output = {
         "timestamp": timestamp,
         "sp500_ytd": sp500_ytd,
+        # per-ticker macro fetch outcomes for this run (D-019) — the
+        # run-level companion to each group's coverage record
+        "macro_status": macro_status,
+        "sp500_baseline_ok": _sp_baseline_ok,
         "indexes": indexes,
         "total_tickers": len(ticker_signals),
         "total_groups": len(groups_output),
@@ -2239,7 +2471,8 @@ def run_engine():
     print(f"{'='*60}")
     for g in groups_output:
         triggered = [a for a in g["breaker_alerts"] if a["triggered"]]
-        icon = {"critical": "🔴", "warning": "🟠", "watch": "🟡", "clear": "🟢"}.get(g["breaker_status"], "⚪")
+        icon = {"critical": "🔴", "warning": "🟠", "watch": "🟡",
+                "clear": "🟢", "degraded": "⚠️"}.get(g["breaker_status"], "⚪")
         print(f"  {icon} {g['name']}: {g['breaker_status'].upper()}")
         for a in triggered:
             print(f"      ⚠ {a['message']}")
