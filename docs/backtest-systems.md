@@ -200,6 +200,93 @@ under its 25% ceiling; nothing enters Risk-off at 6.5% sizing.
    SPY concentrate in validate (where IRX also pays the cash half);
    reported per-span in the JSON, per D-006's both-numbers rule.
 
+## POST-REGISTRATION ADDENDUM — riders (a) and (c)
+
+*Everything in this section was computed AFTER the pre-registered
+verdict was recorded, at the reviewing trader's direction, against the
+committed artifacts (read-only re-simulation; deterministic seeds). None
+of it was a pre-registered hypothesis; it is labeled evidence for the
+D-011 revisit and the selection-rule deliberation, not a verdict.*
+
+### Rider (a): arm-vs-benchmark bands — Branch 4's substance
+
+Per-arm Sharpe under 50-seed random selection, against the fixed
+benchmark points (chassis-on-SPY 0.751 · SPY B&H 0.677 · EW pool 0.765):
+
+| Arm | Score Sharpe | Random-K Sharpe band [2.5–97.5%] | Chassis inside? |
+|---|---|---|---|
+| S1 | 0.912 | [0.087, 0.965] · med 0.587 | inside |
+| S2 | 0.929 | [0.256, 1.012] · med 0.609 | inside |
+| S3 | 0.721 | [−0.030, 0.994] · med 0.575 | inside |
+| S4 | 0.808 | [0.638, 1.119] · med 0.923 | inside |
+| S5 | 0.849 | [−0.025, 1.092] · med 0.412 | inside |
+
+**All three benchmark Sharpes fall inside every arm's selection-noise
+band.** By the same test the prereg applied to gate pairs, the
+stock-selection layer as a whole is not demonstrably better than the
+naked chassis (or SPY, or the EW pool) on Sharpe — **Branch 4's
+substance holds: entry selection is not the edge; the chassis and the
+stops are.** What separates the arms from the passive benchmarks under
+every seed is DRAWDOWN (arm random-MDD bands span [−25.2, −9.5] vs SPY
+−33.7 / EW −37.7) — and that is the chassis's contribution
+(chassis-on-SPY: −18.1). The layer's demonstrable addition is CAGR
+participation, concentrated in validate. The recorded Branch 5 verdict
+stands as pre-registered (its tests were defined over arm pairs);
+this construction is the post-hoc analogue for benchmarks.
+
+### Rider (c): the ordering effect, tested with the prereg's discipline
+
+Percentile rank of each realized ordering within that arm's 50-seed
+random distribution (midrank; resolution ±2pp at n=50):
+
+| Arm | Score ExpR pct | Score Sharpe pct | Native | Native ExpR pct | Native Sharpe pct |
+|---|---|---|---|---|---|
+| S1 | 96.0 | 96.0 | low-ext | 98.0 | 78.0 |
+| S2 | **98.0** | 96.0 | low-ext | **100** | 96.0 |
+| S3 | 80.0 | 80.0 | low-ext | 84.0 | 26.0 |
+| S4 | 54.0 | 28.0 | momentum | **100** | **100** |
+| S5 | **98.0** | 90.0 | = score | — | — |
+
+- **Clearing the 97.5th percentile**: on ExpR — score-order for S2 and
+  S5; native for S2 (100) and S4 (100). On Sharpe — only S4's native
+  momentum ordering (100). **The single standout cell of the study is
+  S4-native**: momentum-ordered momentum-gate beats all 50 random seeds
+  on BOTH metrics (ExpR 0.581, Sharpe 1.354). Post-registration, one
+  window, one cell out of eighteen examined — flagged against
+  cherry-picking, and exactly the kind of cell the selection-rule
+  deliberation exists to pre-register properly.
+- **Pooled, score-vs-random**: 5/5 arms above the random median on ExpR
+  (exact sign test p = 0.031), 4/5 on Sharpe (p = 0.19); Stouffer
+  combined z = 3.04 (p ≈ 0.001) on ExpR, z = 2.25 (p ≈ 0.012) on
+  Sharpe. **These p-values overstate the evidence**: the five arms
+  share the same days and heavily overlapping candidate sets (S3 ⊃ S2;
+  S5 admits nearly everything), so they are five dependent looks at one
+  window, not five trials. Directionally consistent, magnitudes large
+  (median lift ≈ +0.19R); joint significance not honestly quantifiable
+  from this design.
+- **Native-vs-score is metric-dependent**: native won 4/4 on ExpR
+  (sign p = 0.0625) but only **1/4 on Sharpe** (p = 0.94) — low-ext
+  picking earns expectancy while degrading the curve (S3 native Sharpe
+  0.431, 26th percentile; S1 0.715, 78th). "Which ordering is best" has
+  no single answer across metrics in this sample.
+- **What the sample can and cannot resolve**: it CAN support that
+  deliberate ordering ≠ worthless within this window — the effect is
+  consistent (9 of 10 arm-metric cells at/above the random median) and
+  large relative to every gate effect. It CANNOT resolve joint
+  significance past the dependence caveat, which deliberate ordering is
+  best (metric-dependent), or out-of-window generalization. **What
+  would give it power**: pre-registered ordering hypotheses with their
+  own decision table; block-split subperiods (quasi-independent
+  replicates in time); disjoint pool halves (independence in the cross
+  section); more seeds only sharpens the ±2pp resolution and adds no
+  independence.
+- **For the record (terminology)**: "native orderings span 0.343–0.581R"
+  in the main report is the spread ACROSS arms, each under its own
+  native ordering. The WITHIN-arm spread across the three orderings is
+  0.10–0.27R — larger than the biggest between-arm headline gap
+  (0.12R): the ordering choice moves outcomes more than the gate choice
+  does, on either statement.
+
 ## Reproduction
 
 ```
