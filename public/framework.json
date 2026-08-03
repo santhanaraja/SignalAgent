@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-07-31T22:32:28.766251+00:00",
+  "generated_at": "2026-08-03T15:41:29.541085+00:00",
   "schema": "regime-b-chassis",
   "framework_version": "1.0",
   "regime": {
-    "date": "2026-07-31",
+    "date": "2026-08-03",
     "regime": "Risk-on / Choppy",
     "regime_color": "#d29922",
     "engine": "chassis",
@@ -41,22 +41,41 @@
         "mode": "asymmetric"
       },
       "replay": {
-        "days_used": 60,
+        "days_used": 59,
         "window": 60,
-        "start": "2026-05-06",
+        "start": "2026-05-07",
         "end": "2026-07-31"
       },
       "hy_basis": "fred_oas_pctile",
       "hy_pctile": 96.7,
       "degraded": false,
-      "degraded_reason": null
+      "degraded_reason": null,
+      "intraday_preview": {
+        "as_of": "2026-08-03",
+        "raw_state": "In-Trend-Throttled",
+        "throttles": {
+          "vix": {
+            "firing": false,
+            "value": 17.5
+          },
+          "hy": {
+            "firing": true,
+            "pctile": 96.7
+          },
+          "breadth": {
+            "firing": false,
+            "value": -0.17
+          }
+        },
+        "note": "forming bar \u2014 display only, never steps the ladder (close-basis law, ruled 2026-07-23)"
+      }
     },
     "gauges": {
       "vix_5d_avg": {
-        "value": 18.12,
-        "signal": "caution",
-        "detail": "VIX 5d avg 18.1 (spot 16.0)",
-        "spot": 15.99
+        "value": 17.5,
+        "signal": "risk_on",
+        "detail": "VIX 5d avg 17.5 (spot 15.6)",
+        "spot": 15.57
       },
       "hy_spread": {
         "value": 2.84,
@@ -66,9 +85,9 @@
         "date": "2026-07-30"
       },
       "breadth": {
-        "value": 0.26,
+        "value": -0.17,
         "signal": "caution",
-        "detail": "RSP/SPY ratio change: +0.26% (20d) \u2014 breadth broadening",
+        "detail": "RSP/SPY ratio change: -0.17% (20d) \u2014 breadth narrowing",
         "source": "RSP/SPY fallback"
       }
     },
@@ -78,10 +97,10 @@
       "open": true,
       "capped": false,
       "reason": null,
-      "value": 7.12,
-      "detail": "SPY $747.03 vs 200DMA $697.41 (+7.1%)",
-      "price": 747.03,
-      "ma200": 697.41
+      "value": 8.29,
+      "detail": "SPY $755.78 vs 200DMA $697.90 (+8.3%)",
+      "price": 755.78,
+      "ma200": 697.9
     },
     "macro_inputs": {
       "yield_curve": {
@@ -98,8 +117,8 @@
         "role": "macro_input"
       }
     },
-    "risk_on_count": 1,
-    "caution_count": 2,
+    "risk_on_count": 2,
+    "caution_count": 1,
     "risk_off_count": 0,
     "unavailable_count": 0,
     "regime_change_pending": false,
@@ -114,11 +133,11 @@
     {
       "name": "Technology Hardware, Storage & Peripherals",
       "rank": 1,
-      "composite": 64.66,
-      "median_ytd": 98.96,
+      "composite": 58.45,
+      "median_ytd": 100.04,
       "sector": "Information Technology",
-      "tickers": 7,
-      "weeks_in_universe": 2,
+      "tickers": 4,
+      "weeks_in_universe": 3,
       "breaker_status": "clear",
       "breaker_checks_expected": [
         "avg_ytd_negative",
@@ -136,12 +155,12 @@
     },
     {
       "name": "Oil & Gas Refining & Marketing",
-      "rank": 3,
-      "composite": 57.74,
-      "median_ytd": 86.67,
+      "rank": 2,
+      "composite": 58.29,
+      "median_ytd": 92.08,
       "sector": "Energy",
       "tickers": 3,
-      "weeks_in_universe": 2,
+      "weeks_in_universe": 3,
       "breaker_status": "clear",
       "breaker_checks_expected": [
         "avg_ytd_negative",
@@ -152,86 +171,17 @@
         "avg_ytd_negative",
         "group_avg_rsi_below_40",
         "majority_below_ma50"
-      ],
-      "breaker_degraded_reasons": []
-    },
-    {
-      "name": "Semiconductor Materials & Equipment",
-      "rank": 5,
-      "composite": 42.54,
-      "median_ytd": 75.6,
-      "sector": "Information Technology",
-      "tickers": 2,
-      "weeks_in_universe": 2,
-      "breaker_status": "warning",
-      "breaker_checks_expected": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_checks_run": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_degraded_reasons": []
-    },
-    {
-      "name": "Managed Health Care",
-      "rank": 6,
-      "composite": 31.2,
-      "median_ytd": 38.94,
-      "sector": "Health Care",
-      "tickers": 3,
-      "weeks_in_universe": 2,
-      "breaker_status": "warning",
-      "breaker_checks_expected": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_checks_run": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_degraded_reasons": []
-    },
-    {
-      "name": "Cargo Ground Transportation",
-      "rank": 7,
-      "composite": 27.28,
-      "median_ytd": 46.46,
-      "sector": "Industrials",
-      "tickers": 2,
-      "weeks_in_universe": 2,
-      "breaker_status": "warning",
-      "breaker_checks_expected": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_checks_run": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
       ],
       "breaker_degraded_reasons": []
     },
     {
       "name": "Communications Equipment",
-      "rank": 11,
-      "composite": 26.45,
-      "median_ytd": 51.22,
+      "rank": 8,
+      "composite": 27.28,
+      "median_ytd": 53.94,
       "sector": "Information Technology",
-      "tickers": 3,
-      "weeks_in_universe": 2,
+      "tickers": 5,
+      "weeks_in_universe": 3,
       "breaker_status": "clear",
       "breaker_checks_expected": [
         "avg_ytd_negative",
@@ -248,105 +198,13 @@
       "breaker_degraded_reasons": []
     },
     {
-      "name": "Health Care REITs",
-      "rank": 13,
-      "composite": 24.95,
-      "median_ytd": 33.08,
-      "sector": "Real Estate",
-      "tickers": 3,
-      "weeks_in_universe": 2,
-      "breaker_status": "clear",
-      "breaker_checks_expected": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_checks_run": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_degraded_reasons": []
-    },
-    {
-      "name": "Electronic Components",
-      "rank": 14,
-      "composite": 24.85,
-      "median_ytd": 61.18,
+      "name": "Semiconductor Materials & Equipment",
+      "rank": 9,
+      "composite": 26.26,
+      "median_ytd": 58.64,
       "sector": "Information Technology",
       "tickers": 1,
-      "weeks_in_universe": 1,
-      "breaker_status": "clear",
-      "breaker_checks_expected": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_checks_run": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_degraded_reasons": []
-    },
-    {
-      "name": "Construction & Engineering",
-      "rank": 15,
-      "composite": 23.97,
-      "median_ytd": 48.75,
-      "sector": "Industrials",
-      "tickers": 1,
-      "weeks_in_universe": 2,
-      "breaker_status": "critical",
-      "breaker_checks_expected": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_checks_run": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_degraded_reasons": []
-    },
-    {
-      "name": "Rail Transportation",
-      "rank": 17,
-      "composite": 23.11,
-      "median_ytd": 32.6,
-      "sector": "Industrials",
-      "tickers": 3,
-      "weeks_in_universe": 2,
-      "breaker_status": "clear",
-      "breaker_checks_expected": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_checks_run": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_degraded_reasons": []
-    },
-    {
-      "name": "Semiconductors",
-      "rank": 18,
-      "composite": 23.05,
-      "median_ytd": 44.73,
-      "sector": "Information Technology",
-      "tickers": 6,
-      "weeks_in_universe": 2,
+      "weeks_in_universe": 3,
       "breaker_status": "warning",
       "breaker_checks_expected": [
         "avg_ytd_negative",
@@ -364,56 +222,10 @@
     },
     {
       "name": "Health Care Services",
-      "rank": 19,
-      "composite": 23.04,
-      "median_ytd": 32.85,
+      "rank": 10,
+      "composite": 24.17,
+      "median_ytd": 33.37,
       "sector": "Health Care",
-      "tickers": 3,
-      "weeks_in_universe": 1,
-      "breaker_status": "clear",
-      "breaker_checks_expected": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_checks_run": [
-        "avg_ytd_negative",
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "sp500_drawdown_10pct"
-      ],
-      "breaker_degraded_reasons": []
-    },
-    {
-      "name": "Oil & Gas Exploration & Production",
-      "rank": 21,
-      "composite": 19.06,
-      "median_ytd": 36.44,
-      "sector": "Energy",
-      "tickers": 7,
-      "weeks_in_universe": 1,
-      "breaker_status": "clear",
-      "breaker_checks_expected": [
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "natgas_collapse",
-        "oil_below_60"
-      ],
-      "breaker_checks_run": [
-        "group_avg_rsi_below_40",
-        "majority_below_ma50",
-        "natgas_collapse",
-        "oil_below_60"
-      ],
-      "breaker_degraded_reasons": []
-    },
-    {
-      "name": "Systems Software",
-      "rank": 22,
-      "composite": 18.76,
-      "median_ytd": 18.35,
-      "sector": "Information Technology",
       "tickers": 4,
       "weeks_in_universe": 2,
       "breaker_status": "clear",
@@ -432,13 +244,220 @@
       "breaker_degraded_reasons": []
     },
     {
-      "name": "Construction Machinery & Heavy Transportation Equipment",
-      "rank": 23,
-      "composite": 18.71,
-      "median_ytd": 33.16,
+      "name": "Construction & Engineering",
+      "rank": 12,
+      "composite": 22.2,
+      "median_ytd": 51.84,
       "sector": "Industrials",
       "tickers": 2,
+      "weeks_in_universe": 3,
+      "breaker_status": "clear",
+      "breaker_checks_expected": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_checks_run": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_degraded_reasons": []
+    },
+    {
+      "name": "Oil & Gas Exploration & Production",
+      "rank": 15,
+      "composite": 19.02,
+      "median_ytd": 34.76,
+      "sector": "Energy",
+      "tickers": 7,
+      "weeks_in_universe": 2,
+      "breaker_status": "clear",
+      "breaker_checks_expected": [
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "natgas_collapse",
+        "oil_below_60"
+      ],
+      "breaker_checks_run": [
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "natgas_collapse",
+        "oil_below_60"
+      ],
+      "breaker_degraded_reasons": []
+    },
+    {
+      "name": "Managed Health Care",
+      "rank": 17,
+      "composite": 18.44,
+      "median_ytd": 31.72,
+      "sector": "Health Care",
+      "tickers": 2,
+      "weeks_in_universe": 3,
+      "breaker_status": "clear",
+      "breaker_checks_expected": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_checks_run": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_degraded_reasons": []
+    },
+    {
+      "name": "Life & Health Insurance",
+      "rank": 18,
+      "composite": 18.12,
+      "median_ytd": 21.47,
+      "sector": "Financials",
+      "tickers": 5,
       "weeks_in_universe": 1,
+      "breaker_status": "clear",
+      "breaker_checks_expected": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_checks_run": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_degraded_reasons": []
+    },
+    {
+      "name": "Rail Transportation",
+      "rank": 19,
+      "composite": 17.75,
+      "median_ytd": 27.28,
+      "sector": "Industrials",
+      "tickers": 3,
+      "weeks_in_universe": 3,
+      "breaker_status": "clear",
+      "breaker_checks_expected": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_checks_run": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_degraded_reasons": []
+    },
+    {
+      "name": "Pharmaceuticals",
+      "rank": 20,
+      "composite": 17.41,
+      "median_ytd": 24.1,
+      "sector": "Health Care",
+      "tickers": 7,
+      "weeks_in_universe": 1,
+      "breaker_status": "clear",
+      "breaker_checks_expected": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_checks_run": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_degraded_reasons": []
+    },
+    {
+      "name": "Systems Software",
+      "rank": 21,
+      "composite": 17.01,
+      "median_ytd": 14.53,
+      "sector": "Information Technology",
+      "tickers": 6,
+      "weeks_in_universe": 3,
+      "breaker_status": "clear",
+      "breaker_checks_expected": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_checks_run": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_degraded_reasons": []
+    },
+    {
+      "name": "Retail REITs",
+      "rank": 22,
+      "composite": 16.9,
+      "median_ytd": 27.5,
+      "sector": "Real Estate",
+      "tickers": 5,
+      "weeks_in_universe": 1,
+      "breaker_status": "clear",
+      "breaker_checks_expected": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_checks_run": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_degraded_reasons": []
+    },
+    {
+      "name": "Health Care REITs",
+      "rank": 24,
+      "composite": 16.05,
+      "median_ytd": 26.28,
+      "sector": "Real Estate",
+      "tickers": 3,
+      "weeks_in_universe": 3,
+      "breaker_status": "clear",
+      "breaker_checks_expected": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_checks_run": [
+        "avg_ytd_negative",
+        "group_avg_rsi_below_40",
+        "majority_below_ma50",
+        "sp500_drawdown_10pct"
+      ],
+      "breaker_degraded_reasons": []
+    },
+    {
+      "name": "Construction Machinery & Heavy Transportation Equipment",
+      "rank": 25,
+      "composite": 15.51,
+      "median_ytd": 28.54,
+      "sector": "Industrials",
+      "tickers": 2,
+      "weeks_in_universe": 2,
       "breaker_status": "clear",
       "breaker_checks_expected": [
         "avg_ytd_negative",
@@ -456,7 +475,7 @@
     }
   ],
   "position_signals": {
-    "generated_at": "2026-07-31T22:32:28.765746+00:00",
+    "generated_at": "2026-08-03T15:41:29.540526+00:00",
     "account": "TOS",
     "schema_version": "1.0",
     "regime_state": "Risk-on / Choppy",
@@ -505,7 +524,7 @@
           "close": 27.270000457763672,
           "sma20": 25.079499912261962,
           "sma20_5d_ago": 23.780999851226806,
-          "atr14": 1.2463075092860632,
+          "atr14": 1.2464290346418108,
           "consecutive_closes_above": 18,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
@@ -516,14 +535,23 @@
           "level": 25.08,
           "detail": "exit on close below SMA20 (25.08)"
         },
+        "intraday_preview": {
+          "as_of": "2026-08-03",
+          "would_state": "HELD",
+          "close": 27.06,
+          "sma20": 25.3,
+          "conditions_met": 5,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "HPQ",
         "kind": "holding",
         "theme": null,
         "group": "Technology Hardware, Storage & Peripherals",
-        "weeks_in_universe": 2,
+        "weeks_in_universe": 3,
         "note": "added 2026-07-19 via +watch (first D-017 candidate appointment, graded A+) \u2014 Technology Hardware, Storage & Peripherals (breaker clear), score 84 BUY NOW, +6.1% vs SMA20, RSI 59 at add. FILLED 2026-07-20 09:30 ET: 194 @ $24.68",
         "next_earnings_date": "2026-08-26",
-        "days_to_earnings": 26
+        "days_to_earnings": 23
       },
       "ARWR": {
         "state": "RE_ENTRY_READY",
@@ -606,7 +634,7 @@
             },
             "7_runway": {
               "met": false,
-              "detail": "4 sessions before the print (< 15)"
+              "detail": "3 sessions before the print (< 15)"
             }
           },
           "failing": [
@@ -614,18 +642,27 @@
             "6_breaker",
             "7_runway"
           ],
-          "reasons": "close 84.65 below SMA5 85.90 \u2014 arriving from above; group breaker unknown (no group data); 4 sessions before the print (< 15)"
+          "reasons": "close 84.65 below SMA5 85.90 \u2014 arriving from above; group breaker unknown (no group data); 3 sessions before the print (< 15)"
         },
         "grade_inputs": {
           "sma5": 85.9,
           "up_close_since_swing_low": true,
-          "rsi14": 56.275223026214604,
+          "rsi14": 56.27529578795384,
           "quality_score": 81,
           "score_waived": false,
           "breaker_status": null,
-          "runway_sessions": 4
+          "runway_sessions": 3
         },
-        "grade_gate": "READY blocked \u2014 grade C under Choppy (A+ required): close 84.65 below SMA5 85.90 \u2014 arriving from above; group breaker unknown (no group data); 4 sessions before the print (< 15)",
+        "grade_gate": "READY blocked \u2014 grade C under Choppy (A+ required): close 84.65 below SMA5 85.90 \u2014 arriving from above; group breaker unknown (no group data); 3 sessions before the print (< 15)",
+        "intraday_preview": {
+          "as_of": "2026-08-03",
+          "would_state": "RE_ENTRY_READY",
+          "close": 84.32,
+          "sma20": 80.88,
+          "conditions_met": 5,
+          "a_plus_only": true,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "ARWR",
         "kind": "watching",
         "theme": "Biotech",
@@ -633,8 +670,8 @@
         "weeks_in_universe": null,
         "note": "sold 71 @ 76.40 2026-07-10 MOC \u2014 sma20_close stop fired at 7/9 close; watching for reclaim",
         "next_earnings_date": "2026-08-06",
-        "days_to_earnings": 6,
-        "earnings_note": "earnings in 6d \u2014 R8: binary catalyst window"
+        "days_to_earnings": 3,
+        "earnings_note": "earnings in 3d \u2014 R8: binary catalyst window"
       },
       "MRNA": {
         "state": "WATCHING",
@@ -715,8 +752,8 @@
               "detail": "group breaker unknown (no group data)"
             },
             "7_runway": {
-              "met": false,
-              "detail": "0 sessions before the print (< 15)"
+              "met": true,
+              "detail": "no known earnings print \u2014 runway unbounded"
             }
           },
           "failing": [
@@ -724,19 +761,27 @@
             "3_approach",
             "4_rsi",
             "5_score",
-            "6_breaker",
-            "7_runway"
+            "6_breaker"
           ],
-          "reasons": "five mechanical conditions not met; close 54.82 below SMA5 55.73 \u2014 arriving from above; RSI 41 outside [45, 70]; score 51 < 75; group breaker unknown (no group data); 0 sessions before the print (< 15)"
+          "reasons": "five mechanical conditions not met; close 54.82 below SMA5 55.73 \u2014 arriving from above; RSI 41 outside [45, 70]; score 51 < 75; group breaker unknown (no group data)"
         },
         "grade_inputs": {
           "sma5": 55.73300018310547,
           "up_close_since_swing_low": true,
-          "rsi14": 40.703042805195864,
+          "rsi14": 40.70349982530337,
           "quality_score": 51,
           "score_waived": false,
           "breaker_status": null,
-          "runway_sessions": 0
+          "runway_sessions": null
+        },
+        "intraday_preview": {
+          "as_of": "2026-08-03",
+          "would_state": "WATCHING",
+          "close": 56.57,
+          "sma20": 62.48,
+          "conditions_met": 1,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "MRNA",
         "kind": "watching",
@@ -745,7 +790,7 @@
         "weeks_in_universe": null,
         "note": "theme momentum leader +158% YTD; dashboard score 55, outranked",
         "next_earnings_date": "2026-07-31",
-        "days_to_earnings": 0
+        "days_to_earnings": null
       },
       "GEN": {
         "state": "RE_ENTRY_READY",
@@ -819,7 +864,7 @@
             },
             "5_score": {
               "met": true,
-              "detail": "score 80 >= 75"
+              "detail": "score 86 >= 75"
             },
             "6_breaker": {
               "met": true,
@@ -827,33 +872,42 @@
             },
             "7_runway": {
               "met": false,
-              "detail": "4 sessions before the print (< 15)"
+              "detail": "3 sessions before the print (< 15)"
             }
           },
           "failing": [
             "7_runway"
           ],
-          "reasons": "4 sessions before the print (< 15)"
+          "reasons": "3 sessions before the print (< 15)"
         },
         "grade_inputs": {
           "sma5": 27.338000106811524,
           "up_close_since_swing_low": true,
-          "rsi14": 61.41360618070091,
-          "quality_score": 80,
+          "rsi14": 61.41684486014972,
+          "quality_score": 86,
           "score_waived": false,
           "breaker_status": "clear",
-          "runway_sessions": 4
+          "runway_sessions": 3
         },
-        "grade_gate": "READY blocked \u2014 grade B under Choppy (A+ required): 4 sessions before the print (< 15)",
+        "grade_gate": "READY blocked \u2014 grade B under Choppy (A+ required): 3 sessions before the print (< 15)",
+        "intraday_preview": {
+          "as_of": "2026-08-03",
+          "would_state": "RE_ENTRY_READY",
+          "close": 28.07,
+          "sma20": 26.57,
+          "conditions_met": 5,
+          "a_plus_only": true,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "GEN",
         "kind": "watching",
         "theme": null,
         "group": "Systems Software",
-        "weeks_in_universe": 2,
+        "weeks_in_universe": 3,
         "note": "added 2026-07-18 off the Layer-2 GICS view \u2014 Systems Software #1 (breaker clear), score 72 BUY NOW, +5.2% vs SMA20, RSI 61 at add",
         "next_earnings_date": "2026-08-06",
-        "days_to_earnings": 6,
-        "earnings_note": "earnings in 6d \u2014 R8: binary catalyst window"
+        "days_to_earnings": 3,
+        "earnings_note": "earnings in 3d \u2014 R8: binary catalyst window"
       },
       "JBHT": {
         "state": "WATCHING",
@@ -868,7 +922,7 @@
             "met": false,
             "detail": "0/2 consecutive closes above SMA20",
             "consecutive_closes_above": 0,
-            "atr14": 9.21
+            "atr14": 9.22
           },
           "3_regime_gate": {
             "met": true,
@@ -883,11 +937,11 @@
           },
           "5_thesis": {
             "name": "thesis",
-            "met": true,
-            "detail": "group 'Cargo Ground Transportation' in universe (top-15)"
+            "met": false,
+            "detail": "group 'Cargo Ground Transportation' not in current universe (top-15)"
           }
         },
-        "conditions_met": 2,
+        "conditions_met": 1,
         "all_conditions_met": false,
         "extension_pct": -3.83,
         "extension_atr": -1.17,
@@ -900,10 +954,10 @@
           "close": 271.75,
           "sma20": 282.5594970703125,
           "sma20_5d_ago": 285.45149688720704,
-          "atr14": 9.211434500558036,
+          "atr14": 9.217147827148438,
           "consecutive_closes_above": 0,
           "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
+          "group_in_universe": false,
           "kind": "watching"
         },
         "grade": {
@@ -915,7 +969,7 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension -1.1734868298371595\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension -1.1727594341574845\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": false,
@@ -931,11 +985,11 @@
             },
             "6_breaker": {
               "met": false,
-              "detail": "group breaker warning"
+              "detail": "group breaker unknown (no group data)"
             },
             "7_runway": {
               "met": true,
-              "detail": "53 sessions before the print (\u2265 15)"
+              "detail": "52 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -945,25 +999,34 @@
             "5_score",
             "6_breaker"
           ],
-          "reasons": "five mechanical conditions not met; close 271.75 below SMA5 275.14 \u2014 arriving from above; RSI 42 outside [45, 70]; score 46 < 75; group breaker warning"
+          "reasons": "five mechanical conditions not met; close 271.75 below SMA5 275.14 \u2014 arriving from above; RSI 42 outside [45, 70]; score 46 < 75; group breaker unknown (no group data)"
         },
         "grade_inputs": {
           "sma5": 275.13599853515626,
           "up_close_since_swing_low": true,
-          "rsi14": 42.01308997729893,
+          "rsi14": 42.01106095630738,
           "quality_score": 46,
           "score_waived": false,
-          "breaker_status": "warning",
-          "runway_sessions": 53
+          "breaker_status": null,
+          "runway_sessions": 52
+        },
+        "intraday_preview": {
+          "as_of": "2026-08-03",
+          "would_state": "WATCHING",
+          "close": 271.84,
+          "sma20": 282.26,
+          "conditions_met": 1,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "JBHT",
         "kind": "watching",
         "theme": null,
         "group": "Cargo Ground Transportation",
-        "weeks_in_universe": 2,
+        "weeks_in_universe": null,
         "note": "added 2026-07-19 via +watch (D-017 candidate, graded A+) \u2014 Cargo Ground Transportation (breaker clear), score 92 BUY NOW, +3.8% vs SMA20, RSI 58 at add",
         "next_earnings_date": "2026-10-14",
-        "days_to_earnings": 75
+        "days_to_earnings": 72
       },
       "CFG": {
         "state": "RE_ENTRY_ARMING",
@@ -1044,7 +1107,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "55 sessions before the print (\u2265 15)"
+              "detail": "54 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -1057,11 +1120,20 @@
         "grade_inputs": {
           "sma5": 71.46816864013672,
           "up_close_since_swing_low": true,
-          "rsi14": 55.80234737191473,
+          "rsi14": 55.80124774501919,
           "quality_score": 65,
           "score_waived": false,
           "breaker_status": null,
-          "runway_sessions": 55
+          "runway_sessions": 54
+        },
+        "intraday_preview": {
+          "as_of": "2026-08-03",
+          "would_state": "RE_ENTRY_ARMING",
+          "close": 72.07,
+          "sma20": 71.09,
+          "conditions_met": 4,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "CFG",
         "kind": "watching",
@@ -1070,7 +1142,7 @@
         "weeks_in_universe": null,
         "note": "added 2026-07-19 via +watch (D-017 candidate, graded A+) \u2014 Regional Banks (breaker clear), score 81 BUY NOW, +2.7% vs SMA20, RSI 61 at add",
         "next_earnings_date": "2026-10-16",
-        "days_to_earnings": 77
+        "days_to_earnings": 74
       },
       "RF": {
         "state": "WATCHING",
@@ -1152,7 +1224,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "55 sessions before the print (\u2265 15)"
+              "detail": "54 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -1165,11 +1237,20 @@
         "grade_inputs": {
           "sma5": 30.950000381469728,
           "up_close_since_swing_low": true,
-          "rsi14": 54.94273316113617,
+          "rsi14": 54.940829730345754,
           "quality_score": 57,
           "score_waived": false,
           "breaker_status": null,
-          "runway_sessions": 55
+          "runway_sessions": 54
+        },
+        "intraday_preview": {
+          "as_of": "2026-08-03",
+          "would_state": "RE_ENTRY_ARMING",
+          "close": 31.23,
+          "sma20": 30.99,
+          "conditions_met": 3,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "RF",
         "kind": "watching",
@@ -1178,7 +1259,7 @@
         "weeks_in_universe": null,
         "note": "added 2026-07-19 via +watch (D-017 candidate, graded A+) \u2014 Regional Banks (breaker clear), score 75 BUY NOW, +4.1% vs SMA20, RSI 64 at add",
         "next_earnings_date": "2026-10-16",
-        "days_to_earnings": 77
+        "days_to_earnings": 74
       },
       "MTB": {
         "state": "RE_ENTRY_ARMING",
@@ -1193,7 +1274,7 @@
             "met": true,
             "detail": "2/2 consecutive closes above SMA20",
             "consecutive_closes_above": 49,
-            "atr14": 4.86
+            "atr14": 4.87
           },
           "3_regime_gate": {
             "met": true,
@@ -1224,7 +1305,7 @@
           "close": 246.2899932861328,
           "sma20": 245.98500061035156,
           "sma20_5d_ago": 243.5245002746582,
-          "atr14": 4.859285627092634,
+          "atr14": 4.8671417236328125,
           "consecutive_closes_above": 49,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": false,
@@ -1239,7 +1320,7 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension 0.06276492044031802\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension 0.06266361102663862\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": false,
@@ -1259,7 +1340,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "55 sessions before the print (\u2265 15)"
+              "detail": "54 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -1273,11 +1354,20 @@
         "grade_inputs": {
           "sma5": 248.9019989013672,
           "up_close_since_swing_low": true,
-          "rsi14": 54.871069989941745,
+          "rsi14": 54.87029634675512,
           "quality_score": 60,
           "score_waived": false,
           "breaker_status": null,
-          "runway_sessions": 55
+          "runway_sessions": 54
+        },
+        "intraday_preview": {
+          "as_of": "2026-08-03",
+          "would_state": "RE_ENTRY_ARMING",
+          "close": 248.23,
+          "sma20": 246.4,
+          "conditions_met": 4,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "MTB",
         "kind": "watching",
@@ -1286,7 +1376,7 @@
         "weeks_in_universe": null,
         "note": "added 2026-07-22 via +watch (D-017 candidate, graded A+ \u2014 the day's only A+) \u2014 Regional Banks (breaker clear), score 75 BUY NOW, +3.5% vs SMA20, RSI 67 at add",
         "next_earnings_date": "2026-10-16",
-        "days_to_earnings": 77
+        "days_to_earnings": 74
       },
       "CRWD": {
         "state": "WATCHING",
@@ -1333,7 +1423,7 @@
           "close": 190.86000061035156,
           "sma20": 192.25399932861328,
           "sma20_5d_ago": 193.33299865722657,
-          "atr14": 9.954563685825892,
+          "atr14": 9.954927716936384,
           "consecutive_closes_above": 0,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
@@ -1348,7 +1438,7 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension -0.140036144451675\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension -0.14003102361959835\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": true,
@@ -1368,7 +1458,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "22 sessions before the print (\u2265 15)"
+              "detail": "21 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -1380,20 +1470,29 @@
         "grade_inputs": {
           "sma5": 183.4740020751953,
           "up_close_since_swing_low": true,
-          "rsi14": 54.3352833765865,
+          "rsi14": 54.336085160592546,
           "quality_score": 59,
           "score_waived": false,
           "breaker_status": "clear",
-          "runway_sessions": 22
+          "runway_sessions": 21
+        },
+        "intraday_preview": {
+          "as_of": "2026-08-03",
+          "would_state": "RE_ENTRY_ARMING",
+          "close": 196.25,
+          "sma20": 192.1,
+          "conditions_met": 3,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "CRWD",
         "kind": "watching",
         "theme": null,
         "group": "Systems Software",
-        "weeks_in_universe": 2,
+        "weeks_in_universe": 3,
         "note": "sold 24 @ 189.085 2026-07-23 09:31 ET open \u2014 sma20_close stop fired at the 7/22 close (188.42 vs SMA20 191.89); realized \u2212$264.36 on the 7/20 entry @ 200.10 (entered via D-017 funnel A+ 7/18, held 2 sessions); watching for reclaim",
         "next_earnings_date": "2026-09-01",
-        "days_to_earnings": 32
+        "days_to_earnings": 29
       }
     },
     "transitions": []
@@ -1455,7 +1554,7 @@
     }
   },
   "rules": {
-    "date": "2026-07-31",
+    "date": "2026-08-03",
     "evaluations": [
       {
         "rule": "R1",
@@ -1781,28 +1880,10 @@
     "R27": "Flexibility means switching themes by rules, not by feel."
   },
   "candidate_grades": {
-    "DELL": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; score 44 < 75",
-      "failing": [
-        "1_conditions",
-        "5_score"
-      ],
-      "group": "Technology Hardware, Storage & Peripherals"
-    },
     "HPE": {
       "grade": "B",
       "reasons": "score 57 < 75",
       "failing": [
-        "5_score"
-      ],
-      "group": "Technology Hardware, Storage & Peripherals"
-    },
-    "STX": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; score 47 < 75",
-      "failing": [
-        "1_conditions",
         "5_score"
       ],
       "group": "Technology Hardware, Storage & Peripherals"
@@ -1813,59 +1894,19 @@
       "failing": [],
       "group": "Technology Hardware, Storage & Peripherals"
     },
-    "AAPL": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 308.91 below SMA5 331.50 \u2014 arriving from above; RSI 43 outside [45, 70]; score 40 < 75",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score"
-      ],
-      "group": "Technology Hardware, Storage & Peripherals"
-    },
     "SMCI": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; score 56 < 75; 7 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; score 56 < 75; 6 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "5_score",
         "7_runway"
       ],
       "group": "Technology Hardware, Storage & Peripherals"
-    },
-    "FTNT": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; score 61 < 75",
-      "failing": [
-        "1_conditions",
-        "5_score"
-      ],
-      "group": "Systems Software"
-    },
-    "PANW": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; score 59 < 75; 12 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Systems Software"
-    },
-    "HQ": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; RSI 36 outside [45, 70]; score 48 < 75",
-      "failing": [
-        "1_conditions",
-        "4_rsi",
-        "5_score"
-      ],
-      "group": "Systems Software"
     },
     "MPC": {
       "grade": "B",
-      "reasons": "score 56 < 75; 2 sessions before the print (< 15)",
+      "reasons": "score 56 < 75; 1 sessions before the print (< 15)",
       "failing": [
         "5_score",
         "7_runway"
@@ -1882,60 +1923,89 @@
     },
     "PSX": {
       "grade": "C",
-      "reasons": "extension 1.8195323990978043\u00d7ATR > 1.8\u00d7; 3 sessions before the print (< 15)",
+      "reasons": "extension 1.8195323990978043\u00d7ATR > 1.8\u00d7; 2 sessions before the print (< 15)",
       "failing": [
         "2_extension",
         "7_runway"
       ],
       "group": "Oil & Gas Refining & Marketing"
     },
-    "HUM": {
+    "FTNT": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 363.86 below SMA5 373.16 \u2014 arriving from above; RSI 41 outside [45, 70]; score 42 < 75; group breaker warning",
+      "reasons": "five mechanical conditions not met; score 51 < 75",
       "failing": [
         "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker"
+        "5_score"
       ],
-      "group": "Managed Health Care"
+      "group": "Systems Software"
+    },
+    "PANW": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; score 59 < 75",
+      "failing": [
+        "1_conditions",
+        "5_score"
+      ],
+      "group": "Systems Software"
+    },
+    "MSFT": {
+      "grade": "C",
+      "reasons": "extension 4.126296615958247\u00d7ATR > 1.8\u00d7; RSI 75 outside [45, 70]; score 70 < 75",
+      "failing": [
+        "2_extension",
+        "4_rsi",
+        "5_score"
+      ],
+      "group": "Systems Software"
+    },
+    "NOW": {
+      "grade": "A+",
+      "reasons": "",
+      "failing": [],
+      "group": "Systems Software"
     },
     "UNH": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 414.40 below SMA5 420.57 \u2014 arriving from above; score 58 < 75; group breaker warning",
+      "reasons": "five mechanical conditions not met; close 414.40 below SMA5 420.57 \u2014 arriving from above; score 58 < 75",
       "failing": [
         "1_conditions",
         "3_approach",
-        "5_score",
-        "6_breaker"
+        "5_score"
       ],
       "group": "Managed Health Care"
     },
     "CNC": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 62.22 below SMA5 62.57 \u2014 arriving from above; RSI 44 outside [45, 70]; score 54 < 75; group breaker warning",
+      "reasons": "five mechanical conditions not met; close 62.22 below SMA5 62.57 \u2014 arriving from above; RSI 44 outside [45, 70]; score 54 < 75",
       "failing": [
         "1_conditions",
         "3_approach",
         "4_rsi",
-        "5_score",
-        "6_breaker"
+        "5_score"
       ],
       "group": "Managed Health Care"
     },
     "VSAT": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; 2 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; 1 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "7_runway"
       ],
       "group": "Communications Equipment"
     },
-    "LITE": {
+    "FFIV": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; score 39 < 75; 7 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; score 66 < 75",
+      "failing": [
+        "1_conditions",
+        "5_score"
+      ],
+      "group": "Communications Equipment"
+    },
+    "CSCO": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; score 72 < 75; 7 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "5_score",
@@ -1945,99 +2015,33 @@
     },
     "ANET": {
       "grade": "B",
-      "reasons": "score 71 < 75; 2 sessions before the print (< 15)",
+      "reasons": "score 71 < 75; 1 sessions before the print (< 15)",
       "failing": [
         "5_score",
         "7_runway"
       ],
       "group": "Communications Equipment"
     },
-    "AMD": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; score 47 < 75; group breaker warning; 2 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "5_score",
-        "6_breaker",
-        "7_runway"
-      ],
-      "group": "Semiconductors"
-    },
-    "ON": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 81.61 below SMA5 83.53 \u2014 arriving from above; RSI 39 outside [45, 70]; score 43 < 75; group breaker warning; 1 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker",
-        "7_runway"
-      ],
-      "group": "Semiconductors"
-    },
-    "MPWR": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; score 72 < 75; group breaker warning",
-      "failing": [
-        "1_conditions",
-        "5_score",
-        "6_breaker"
-      ],
-      "group": "Semiconductors"
-    },
-    "TSM": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; score 37 < 75; group breaker warning",
-      "failing": [
-        "1_conditions",
-        "5_score",
-        "6_breaker"
-      ],
-      "group": "Semiconductors"
-    },
-    "AVGO": {
+    "MSI": {
       "grade": "B",
-      "reasons": "score 66 < 75; group breaker warning",
+      "reasons": "2 sessions before the print (< 15)",
+      "failing": [
+        "7_runway"
+      ],
+      "group": "Communications Equipment"
+    },
+    "DVA": {
+      "grade": "B",
+      "reasons": "score 61 < 75; 1 sessions before the print (< 15)",
       "failing": [
         "5_score",
-        "6_breaker"
+        "7_runway"
       ],
-      "group": "Semiconductors"
-    },
-    "NVDA": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; score 37 < 75; group breaker warning",
-      "failing": [
-        "1_conditions",
-        "5_score",
-        "6_breaker"
-      ],
-      "group": "Semiconductors"
-    },
-    "TER": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; group breaker warning",
-      "failing": [
-        "1_conditions",
-        "6_breaker"
-      ],
-      "group": "Semiconductor Materials & Equipment"
-    },
-    "ASML": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; RSI 43 outside [45, 70]; score 37 < 75; group breaker warning",
-      "failing": [
-        "1_conditions",
-        "4_rsi",
-        "5_score",
-        "6_breaker"
-      ],
-      "group": "Semiconductor Materials & Equipment"
+      "group": "Health Care Services"
     },
     "CVS": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 104.43 below SMA5 106.40 \u2014 arriving from above; score 58 < 75; 3 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; close 104.43 below SMA5 106.40 \u2014 arriving from above; score 58 < 75; 2 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -2067,7 +2071,7 @@
     },
     "DOC": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 21.83 below SMA5 22.34 \u2014 arriving from above; score 58 < 75; 2 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; close 21.83 below SMA5 22.34 \u2014 arriving from above; score 58 < 75; 1 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -2096,65 +2100,55 @@
       ],
       "group": "Health Care REITs"
     },
-    "APA": {
+    "TER": {
       "grade": "C",
-      "reasons": "extension 2.0024225647760097\u00d7ATR > 1.8\u00d7; 3 sessions before the print (< 15)",
-      "failing": [
-        "2_extension",
-        "7_runway"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "EOG": {
-      "grade": "C",
-      "reasons": "extension 2.3513463426622847\u00d7ATR > 1.8\u00d7; 2 sessions before the print (< 15)",
-      "failing": [
-        "2_extension",
-        "7_runway"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "OXY": {
-      "grade": "B",
-      "reasons": "3 sessions before the print (< 15)",
-      "failing": [
-        "7_runway"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "FANG": {
-      "grade": "B",
-      "reasons": "1 sessions before the print (< 15)",
-      "failing": [
-        "7_runway"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "COP": {
-      "grade": "C",
-      "reasons": "extension 2.0043728653604154\u00d7ATR > 1.8\u00d7; 4 sessions before the print (< 15)",
-      "failing": [
-        "2_extension",
-        "7_runway"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "DVN": {
-      "grade": "B",
-      "reasons": "2 sessions before the print (< 15)",
-      "failing": [
-        "7_runway"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "EQT": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; score 68 < 75",
+      "reasons": "five mechanical conditions not met; group breaker warning",
       "failing": [
         "1_conditions",
+        "6_breaker"
+      ],
+      "group": "Semiconductor Materials & Equipment"
+    },
+    "GL": {
+      "grade": "B",
+      "reasons": "score 71 < 75",
+      "failing": [
         "5_score"
       ],
-      "group": "Oil & Gas Exploration & Production"
+      "group": "Life & Health Insurance"
+    },
+    "MET": {
+      "grade": "C",
+      "reasons": "close 96.13 below SMA5 96.58 \u2014 arriving from above; 2 sessions before the print (< 15)",
+      "failing": [
+        "3_approach",
+        "7_runway"
+      ],
+      "group": "Life & Health Insurance"
+    },
+    "PFG": {
+      "grade": "A+",
+      "reasons": "",
+      "failing": [],
+      "group": "Life & Health Insurance"
+    },
+    "PRU": {
+      "grade": "C",
+      "reasons": "close 122.08 below SMA5 122.66 \u2014 arriving from above; 1 sessions before the print (< 15)",
+      "failing": [
+        "3_approach",
+        "7_runway"
+      ],
+      "group": "Life & Health Insurance"
+    },
+    "AFL": {
+      "grade": "C",
+      "reasons": "close 127.48 below SMA5 127.92 \u2014 arriving from above; 3 sessions before the print (< 15)",
+      "failing": [
+        "3_approach",
+        "7_runway"
+      ],
+      "group": "Life & Health Insurance"
     },
     "CSX": {
       "grade": "C",
@@ -2185,17 +2179,133 @@
       ],
       "group": "Rail Transportation"
     },
-    "ODFL": {
+    "PWR": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 212.14 below SMA5 220.09 \u2014 arriving from above; RSI 37 outside [45, 70]; score 37 < 75; group breaker warning",
+      "reasons": "five mechanical conditions not met",
+      "failing": [
+        "1_conditions"
+      ],
+      "group": "Construction & Engineering"
+    },
+    "J": {
+      "grade": "C",
+      "reasons": "close 134.93 below SMA5 135.89 \u2014 arriving from above; 1 sessions before the print (< 15)",
+      "failing": [
+        "3_approach",
+        "7_runway"
+      ],
+      "group": "Construction & Engineering"
+    },
+    "APA": {
+      "grade": "C",
+      "reasons": "extension 2.0024225647760097\u00d7ATR > 1.8\u00d7; 2 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "7_runway"
+      ],
+      "group": "Oil & Gas Exploration & Production"
+    },
+    "EOG": {
+      "grade": "C",
+      "reasons": "extension 2.348711673370936\u00d7ATR > 1.8\u00d7; 1 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "7_runway"
+      ],
+      "group": "Oil & Gas Exploration & Production"
+    },
+    "OXY": {
+      "grade": "B",
+      "reasons": "2 sessions before the print (< 15)",
+      "failing": [
+        "7_runway"
+      ],
+      "group": "Oil & Gas Exploration & Production"
+    },
+    "FANG": {
+      "grade": "B",
+      "reasons": "0 sessions before the print (< 15)",
+      "failing": [
+        "7_runway"
+      ],
+      "group": "Oil & Gas Exploration & Production"
+    },
+    "COP": {
+      "grade": "C",
+      "reasons": "extension 2.0034652403941076\u00d7ATR > 1.8\u00d7; 3 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "7_runway"
+      ],
+      "group": "Oil & Gas Exploration & Production"
+    },
+    "DVN": {
+      "grade": "B",
+      "reasons": "1 sessions before the print (< 15)",
+      "failing": [
+        "7_runway"
+      ],
+      "group": "Oil & Gas Exploration & Production"
+    },
+    "EQT": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; score 68 < 75",
+      "failing": [
+        "1_conditions",
+        "5_score"
+      ],
+      "group": "Oil & Gas Exploration & Production"
+    },
+    "FRT": {
+      "grade": "C",
+      "reasons": "close 124.09 below SMA5 125.44 \u2014 arriving from above; score 66 < 75",
+      "failing": [
+        "3_approach",
+        "5_score"
+      ],
+      "group": "Retail REITs"
+    },
+    "KIM": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 25.48 below SMA5 25.92 \u2014 arriving from above; score 58 < 75; 1 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "3_approach",
-        "4_rsi",
         "5_score",
-        "6_breaker"
+        "7_runway"
       ],
-      "group": "Cargo Ground Transportation"
+      "group": "Retail REITs"
+    },
+    "SPG": {
+      "grade": "C",
+      "reasons": "close 229.37 below SMA5 232.76 \u2014 arriving from above; score 66 < 75; 5 sessions before the print (< 15)",
+      "failing": [
+        "3_approach",
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Retail REITs"
+    },
+    "REG": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 80.29 below SMA5 81.01 \u2014 arriving from above; score 52 < 75",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "5_score"
+      ],
+      "group": "Retail REITs"
+    },
+    "O": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 63.87 below SMA5 64.79 \u2014 arriving from above; score 52 < 75; 2 sessions before the print (< 15)",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Retail REITs"
     },
     "WAB": {
       "grade": "C",
@@ -2207,31 +2317,78 @@
     },
     "PCAR": {
       "grade": "C",
-      "reasons": "close 132.68 below SMA5 134.39 \u2014 arriving from above",
+      "reasons": "close 132.68 below SMA5 134.39 \u2014 arriving from above; score 71 < 75",
       "failing": [
-        "3_approach"
+        "3_approach",
+        "5_score"
       ],
       "group": "Construction Machinery & Heavy Transportation Equipment"
     },
-    "APH": {
+    "VTRS": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; score 65 < 75",
-      "failing": [
-        "1_conditions",
-        "5_score"
-      ],
-      "group": "Electronic Components"
-    },
-    "J": {
-      "grade": "C",
-      "reasons": "close 134.93 below SMA5 135.89 \u2014 arriving from above; score 71 < 75; group breaker critical; 2 sessions before the print (< 15)",
+      "reasons": "close 17.56 below SMA5 17.73 \u2014 arriving from above; 3 sessions before the print (< 15)",
       "failing": [
         "3_approach",
-        "5_score",
-        "6_breaker",
         "7_runway"
       ],
-      "group": "Construction & Engineering"
+      "group": "Pharmaceuticals"
+    },
+    "BMY": {
+      "grade": "C",
+      "reasons": "extension 2.7003946691616174\u00d7ATR > 1.8\u00d7; RSI 71 outside [45, 70]",
+      "failing": [
+        "2_extension",
+        "4_rsi"
+      ],
+      "group": "Pharmaceuticals"
+    },
+    "LLY": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 1148.84 below SMA5 1186.40 \u2014 arriving from above; score 52 < 75; 2 sessions before the print (< 15)",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Pharmaceuticals"
+    },
+    "MRK": {
+      "grade": "C",
+      "reasons": "close 130.20 below SMA5 130.59 \u2014 arriving from above; 1 sessions before the print (< 15)",
+      "failing": [
+        "3_approach",
+        "7_runway"
+      ],
+      "group": "Pharmaceuticals"
+    },
+    "JNJ": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 256.35 below SMA5 262.08 \u2014 arriving from above; score 52 < 75",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "5_score"
+      ],
+      "group": "Pharmaceuticals"
+    },
+    "PFE": {
+      "grade": "B",
+      "reasons": "score 69 < 75; 1 sessions before the print (< 15)",
+      "failing": [
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Pharmaceuticals"
+    },
+    "ZTS": {
+      "grade": "B",
+      "reasons": "score 57 < 75; 3 sessions before the print (< 15)",
+      "failing": [
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Pharmaceuticals"
     }
   }
 }
