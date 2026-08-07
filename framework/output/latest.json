@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-07T20:01:05.697131+00:00",
+  "generated_at": "2026-08-07T20:51:42.089347+00:00",
   "schema": "regime-b-chassis",
   "framework_version": "1.0",
   "regime": {
@@ -14,22 +14,22 @@
       "regime": "Risk-on / Choppy",
       "exposure_ceiling_pct": 50.0,
       "trend_in": true,
-      "trend_pct": 9.86,
+      "trend_pct": 10.45,
       "throttles": {
         "vix": {
           "firing": false,
-          "value": 15.86,
+          "value": 15.64,
           "cut": 22.0
         },
         "hy": {
           "firing": false,
-          "pctile": 58.3,
+          "pctile": 33.3,
           "cut": 90.0,
           "basis": "fred_oas_pctile"
         },
         "breadth": {
           "firing": true,
-          "value": -0.92,
+          "value": -0.85,
           "cut": -0.5
         }
       },
@@ -41,41 +41,22 @@
         "mode": "asymmetric"
       },
       "replay": {
-        "days_used": 59,
+        "days_used": 60,
         "window": 60,
         "start": "2026-05-13",
-        "end": "2026-08-06"
+        "end": "2026-08-07"
       },
       "hy_basis": "fred_oas_pctile",
-      "hy_pctile": 58.3,
+      "hy_pctile": 33.3,
       "degraded": false,
-      "degraded_reason": null,
-      "intraday_preview": {
-        "as_of": "2026-08-07",
-        "raw_state": "In-Trend-Throttled",
-        "throttles": {
-          "vix": {
-            "firing": false,
-            "value": 15.64
-          },
-          "hy": {
-            "firing": false,
-            "pctile": 33.3
-          },
-          "breadth": {
-            "firing": true,
-            "value": -0.85
-          }
-        },
-        "note": "forming bar \u2014 display only, never steps the ladder (close-basis law, ruled 2026-07-23)"
-      }
+      "degraded_reason": null
     },
     "gauges": {
       "vix_5d_avg": {
         "value": 15.64,
         "signal": "risk_on",
         "detail": "VIX 5d avg 15.6 (spot 14.9)",
-        "spot": 14.86
+        "spot": 14.9
       },
       "hy_spread": {
         "value": 2.71,
@@ -97,21 +78,23 @@
       "open": true,
       "capped": false,
       "reason": null,
-      "value": 10.44,
-      "detail": "SPY $773.22 vs 200DMA $700.13 (+10.4%)",
-      "price": 773.22,
+      "value": 10.45,
+      "detail": "SPY $773.26 vs 200DMA $700.13 (+10.4%)",
+      "price": 773.26,
       "ma200": 700.13
     },
     "macro_inputs": {
       "yield_curve": {
-        "value": 1.501,
+        "value": 0.97,
         "signal": "risk_on",
-        "detail": "30Y-3mo spread: 150bp (5.21% - 3.71%) \u2014 positive",
-        "source": "yfinance (^TYX-^IRX)",
-        "spread_bp": 150,
-        "spread_label": "30Y-3mo",
-        "long_yield": 5.21,
-        "short_yield": 3.71,
+        "detail": "30Y-2Y spread: 97bp (5.22% - 4.25%) \u2014 positive",
+        "source": "FRED API",
+        "spread_bp": 97,
+        "spread_label": "30Y-2Y",
+        "long_yield": 5.22,
+        "short_yield": 4.25,
+        "dgs30": 5.22,
+        "dgs2": 4.25,
         "role": "macro_input"
       }
     },
@@ -473,7 +456,7 @@
     }
   ],
   "position_signals": {
-    "generated_at": "2026-08-07T20:01:05.696585+00:00",
+    "generated_at": "2026-08-07T20:51:42.088967+00:00",
     "account": "TOS",
     "schema_version": "1.0",
     "regime_state": "Risk-on / Choppy",
@@ -484,14 +467,14 @@
           "1_trigger": {
             "name": "trigger",
             "met": true,
-            "detail": "close 28.18 above SMA20 26.04"
+            "detail": "close 30.05 above SMA20 26.33"
           },
           "2_confirmation": {
             "name": "confirmation",
             "met": true,
-            "detail": "close 28.18 > SMA20 + 0.5*ATR14 (26.70)",
-            "consecutive_closes_above": 22,
-            "atr14": 1.32
+            "detail": "close 30.05 > SMA20 + 0.5*ATR14 (27.03)",
+            "consecutive_closes_above": 23,
+            "atr14": 1.4
           },
           "3_regime_gate": {
             "met": true,
@@ -502,7 +485,7 @@
           "4_slope": {
             "name": "slope",
             "met": true,
-            "detail": "SMA20 26.04 vs 5d ago 24.81 (flat/rising)"
+            "detail": "SMA20 26.33 vs 5d ago 25.08 (flat/rising)"
           },
           "5_thesis": {
             "name": "thesis",
@@ -512,35 +495,26 @@
         },
         "conditions_met": 5,
         "all_conditions_met": true,
-        "extension_pct": 8.23,
-        "extension_atr": 1.62,
-        "close": 28.18,
-        "sma5": 27.98,
-        "sma10": 27.58,
-        "sma20": 26.04,
+        "extension_pct": 14.13,
+        "extension_atr": 2.66,
+        "close": 30.05,
+        "sma5": 28.54,
+        "sma10": 28.01,
+        "sma20": 26.33,
         "assess_inputs": {
-          "close": 28.18000030517578,
-          "sma20": 26.03800001144409,
-          "sma20_5d_ago": 24.812499904632567,
-          "atr14": 1.3185717718941825,
-          "consecutive_closes_above": 22,
+          "close": 30.049999237060547,
+          "sma20": 26.329500007629395,
+          "sma20_5d_ago": 25.079499912261962,
+          "atr14": 1.4003575188773019,
+          "consecutive_closes_above": 23,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
           "kind": "holding"
         },
         "stop": {
           "type": "sma20_close",
-          "level": 26.04,
-          "detail": "exit on close below SMA20 (26.04)"
-        },
-        "intraday_preview": {
-          "as_of": "2026-08-07",
-          "would_state": "HELD",
-          "close": 30.05,
-          "sma20": 26.33,
-          "conditions_met": 5,
-          "a_plus_only": false,
-          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+          "level": 26.33,
+          "detail": "exit on close below SMA20 (26.33)"
         },
         "ticker": "HPQ",
         "kind": "holding",
@@ -557,14 +531,14 @@
           "1_trigger": {
             "name": "trigger",
             "met": true,
-            "detail": "close 85.83 above SMA20 81.25"
+            "detail": "close 87.65 above SMA20 81.81"
           },
           "2_confirmation": {
             "name": "confirmation",
             "met": true,
-            "detail": "close 85.83 > SMA20 + 0.5*ATR14 (83.57)",
-            "consecutive_closes_above": 12,
-            "atr14": 4.63
+            "detail": "close 87.65 > SMA20 + 0.5*ATR14 (84.08)",
+            "consecutive_closes_above": 13,
+            "atr14": 4.54
           },
           "3_regime_gate": {
             "met": true,
@@ -575,7 +549,7 @@
           "4_slope": {
             "name": "slope",
             "met": true,
-            "detail": "SMA20 81.25 vs 5d ago 80.96 (flat/rising)"
+            "detail": "SMA20 81.81 vs 5d ago 81.00 (flat/rising)"
           },
           "5_thesis": {
             "name": "thesis",
@@ -586,25 +560,25 @@
         },
         "conditions_met": 5,
         "all_conditions_met": true,
-        "extension_pct": 5.64,
-        "extension_atr": 0.99,
+        "extension_pct": 7.13,
+        "extension_atr": 1.28,
         "a_plus_only": true,
-        "close": 85.83,
-        "sma5": 86.6,
-        "sma10": 86.34,
-        "sma20": 81.25,
+        "close": 87.65,
+        "sma5": 87.2,
+        "sma10": 86.55,
+        "sma20": 81.81,
         "assess_inputs": {
-          "close": 85.83000183105469,
-          "sma20": 81.25025024414063,
-          "sma20_5d_ago": 80.96324996948242,
-          "atr14": 4.630714416503906,
-          "consecutive_closes_above": 12,
+          "close": 87.6500015258789,
+          "sma20": 81.81275024414063,
+          "sma20_5d_ago": 80.99625015258789,
+          "atr14": 4.543571472167969,
+          "consecutive_closes_above": 13,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
           "kind": "watching"
         },
         "grade": {
-          "grade": "C",
+          "grade": "B",
           "rows": {
             "1_conditions": {
               "met": true,
@@ -612,15 +586,15 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension 0.9889946075257379\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension 1.2847275139160574\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
-              "met": false,
-              "detail": "close 85.83 below SMA5 86.60 \u2014 arriving from above"
+              "met": true,
+              "detail": "close 87.65 > SMA5 87.20 with up-close off the low"
             },
             "4_rsi": {
               "met": true,
-              "detail": "RSI 56 in [45, 70]"
+              "detail": "RSI 58 in [45, 70]"
             },
             "5_score": {
               "met": true,
@@ -636,30 +610,20 @@
             }
           },
           "failing": [
-            "3_approach",
             "6_breaker"
           ],
-          "reasons": "close 85.83 below SMA5 86.60 \u2014 arriving from above; group breaker unknown (no group data)"
+          "reasons": "group breaker unknown (no group data)"
         },
         "grade_inputs": {
-          "sma5": 86.5980010986328,
+          "sma5": 87.19800109863282,
           "up_close_since_swing_low": true,
-          "rsi14": 55.677422521632984,
+          "rsi14": 58.36858396424935,
           "quality_score": 84,
           "score_waived": false,
           "breaker_status": null,
           "runway_sessions": null
         },
-        "grade_gate": "READY blocked \u2014 grade C under Choppy (A+ required): close 85.83 below SMA5 86.60 \u2014 arriving from above; group breaker unknown (no group data)",
-        "intraday_preview": {
-          "as_of": "2026-08-07",
-          "would_state": "RE_ENTRY_READY",
-          "close": 87.65,
-          "sma20": 81.81,
-          "conditions_met": 5,
-          "a_plus_only": true,
-          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
-        },
+        "grade_gate": "READY blocked \u2014 grade B under Choppy (A+ required): group breaker unknown (no group data)",
         "ticker": "ARWR",
         "kind": "watching",
         "theme": "Biotech",
@@ -670,19 +634,19 @@
         "days_to_earnings": null
       },
       "MRNA": {
-        "state": "WATCHING",
+        "state": "RE_ENTRY_ARMING",
         "conditions": {
           "1_trigger": {
             "name": "trigger",
-            "met": false,
-            "detail": "close 53.86 below SMA20 59.26"
+            "met": true,
+            "detail": "close 59.17 above SMA20 58.80"
           },
           "2_confirmation": {
             "name": "confirmation",
             "met": false,
-            "detail": "0/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 0,
-            "atr14": 3.35
+            "detail": "1/2 consecutive closes above SMA20",
+            "consecutive_closes_above": 1,
+            "atr14": 3.52
           },
           "3_regime_gate": {
             "met": true,
@@ -693,7 +657,7 @@
           "4_slope": {
             "name": "slope",
             "met": false,
-            "detail": "SMA20 59.26 vs 5d ago 64.99 (falling)"
+            "detail": "SMA20 58.80 vs 5d ago 63.74 (falling)"
           },
           "5_thesis": {
             "name": "thesis",
@@ -701,21 +665,20 @@
             "detail": "group 'Biotechnology' not in current universe (top-15)"
           }
         },
-        "conditions_met": 1,
+        "conditions_met": 2,
         "all_conditions_met": false,
-        "extension_pct": -9.11,
-        "extension_atr": -1.61,
-        "distance_to_sma20_pct": -9.11,
-        "close": 53.86,
-        "sma5": 55.41,
-        "sma10": 55.5,
-        "sma20": 59.26,
+        "extension_pct": 0.62,
+        "extension_atr": 0.1,
+        "close": 59.17,
+        "sma5": 56.28,
+        "sma10": 56.01,
+        "sma20": 58.8,
         "assess_inputs": {
-          "close": 53.86000061035156,
-          "sma20": 59.25950031280517,
-          "sma20_5d_ago": 64.99075031280518,
-          "atr14": 3.349642889840262,
-          "consecutive_closes_above": 0,
+          "close": 59.16999816894531,
+          "sma20": 58.80450038909912,
+          "sma20_5d_ago": 63.743750190734865,
+          "atr14": 3.523214340209961,
+          "consecutive_closes_above": 1,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": false,
           "kind": "watching"
@@ -729,15 +692,15 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension -1.6119627912667138\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension 0.10373986495082582\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
-              "met": false,
-              "detail": "close 53.86 below SMA5 55.41 \u2014 arriving from above"
+              "met": true,
+              "detail": "close 59.17 > SMA5 56.28 with up-close off the low"
             },
             "4_rsi": {
-              "met": false,
-              "detail": "RSI 40 outside [45, 70]"
+              "met": true,
+              "detail": "RSI 50 in [45, 70]"
             },
             "5_score": {
               "met": false,
@@ -754,30 +717,19 @@
           },
           "failing": [
             "1_conditions",
-            "3_approach",
-            "4_rsi",
             "5_score",
             "6_breaker"
           ],
-          "reasons": "five mechanical conditions not met; close 53.86 below SMA5 55.41 \u2014 arriving from above; RSI 40 outside [45, 70]; score 51 < 75; group breaker unknown (no group data)"
+          "reasons": "five mechanical conditions not met; score 51 < 75; group breaker unknown (no group data)"
         },
         "grade_inputs": {
-          "sma5": 55.41300048828125,
-          "up_close_since_swing_low": false,
-          "rsi14": 40.16559181237101,
+          "sma5": 56.28300018310547,
+          "up_close_since_swing_low": true,
+          "rsi14": 50.10158311562766,
           "quality_score": 51,
           "score_waived": false,
           "breaker_status": null,
           "runway_sessions": null
-        },
-        "intraday_preview": {
-          "as_of": "2026-08-07",
-          "would_state": "RE_ENTRY_ARMING",
-          "close": 59.17,
-          "sma20": 58.8,
-          "conditions_met": 2,
-          "a_plus_only": false,
-          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "MRNA",
         "kind": "watching",
@@ -789,19 +741,19 @@
         "days_to_earnings": null
       },
       "GEN": {
-        "state": "RE_ENTRY_READY",
+        "state": "EXTENDED_HOLD",
         "conditions": {
           "1_trigger": {
             "name": "trigger",
             "met": true,
-            "detail": "close 28.10 above SMA20 26.87"
+            "detail": "close 29.17 above SMA20 27.03"
           },
           "2_confirmation": {
             "name": "confirmation",
             "met": true,
-            "detail": "close 28.10 > SMA20 + 0.5*ATR14 (27.30)",
-            "consecutive_closes_above": 9,
-            "atr14": 0.86
+            "detail": "close 29.17 > SMA20 + 0.5*ATR14 (27.51)",
+            "consecutive_closes_above": 10,
+            "atr14": 0.96
           },
           "3_regime_gate": {
             "met": true,
@@ -812,7 +764,7 @@
           "4_slope": {
             "name": "slope",
             "met": true,
-            "detail": "SMA20 26.87 vs 5d ago 26.46 (flat/rising)"
+            "detail": "SMA20 27.03 vs 5d ago 26.50 (flat/rising)"
           },
           "5_thesis": {
             "name": "thesis",
@@ -822,45 +774,45 @@
         },
         "conditions_met": 5,
         "all_conditions_met": true,
-        "extension_pct": 4.6,
-        "extension_atr": 1.43,
-        "a_plus_only": true,
-        "close": 28.1,
-        "sma5": 27.99,
-        "sma10": 27.5,
-        "sma20": 26.87,
+        "extension_pct": 7.93,
+        "extension_atr": 2.22,
+        "extension_guard": "extension 2.22\u00d7ATR > 1.8\u00d7 \u2014 re-entry suppressed",
+        "close": 29.17,
+        "sma5": 28.33,
+        "sma10": 27.84,
+        "sma20": 27.03,
         "assess_inputs": {
-          "close": 28.100000381469727,
-          "sma20": 26.86500015258789,
-          "sma20_5d_ago": 26.460500049591065,
-          "atr14": 0.8642854690551758,
-          "consecutive_closes_above": 9,
+          "close": 29.170000076293945,
+          "sma20": 27.028000164031983,
+          "sma20_5d_ago": 26.49950008392334,
+          "atr14": 0.9649998801095145,
+          "consecutive_closes_above": 10,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
           "kind": "watching"
         },
         "grade": {
-          "grade": "A+",
+          "grade": "C",
           "rows": {
             "1_conditions": {
               "met": true,
               "detail": "five mechanical conditions met"
             },
             "2_extension": {
-              "met": true,
-              "detail": "extension 1.428926290097092\u00d7ATR <= 1.8\u00d7"
+              "met": false,
+              "detail": "extension 2.2196893040223733\u00d7ATR > 1.8\u00d7"
             },
             "3_approach": {
               "met": true,
-              "detail": "close 28.10 > SMA5 27.99 with up-close off the low"
+              "detail": "close 29.17 > SMA5 28.33 with up-close off the low"
             },
             "4_rsi": {
               "met": true,
-              "detail": "RSI 64 in [45, 70]"
+              "detail": "RSI 70 in [45, 70]"
             },
             "5_score": {
               "met": true,
-              "detail": "score 75 >= 75"
+              "detail": "score 80 >= 75"
             },
             "6_breaker": {
               "met": true,
@@ -871,26 +823,19 @@
               "detail": "64 sessions before the print (\u2265 15)"
             }
           },
-          "failing": [],
-          "reasons": ""
+          "failing": [
+            "2_extension"
+          ],
+          "reasons": "extension 2.2196893040223733\u00d7ATR > 1.8\u00d7"
         },
         "grade_inputs": {
-          "sma5": 27.98800048828125,
+          "sma5": 28.33200035095215,
           "up_close_since_swing_low": true,
-          "rsi14": 63.70752519000271,
-          "quality_score": 75,
+          "rsi14": 69.80216883406025,
+          "quality_score": 80,
           "score_waived": false,
           "breaker_status": "clear",
           "runway_sessions": 64
-        },
-        "intraday_preview": {
-          "as_of": "2026-08-07",
-          "would_state": "EXTENDED_HOLD",
-          "close": 29.17,
-          "sma20": 27.03,
-          "conditions_met": 5,
-          "a_plus_only": false,
-          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "GEN",
         "kind": "watching",
@@ -907,14 +852,14 @@
           "1_trigger": {
             "name": "trigger",
             "met": false,
-            "detail": "close 267.25 below SMA20 281.03"
+            "detail": "close 268.52 below SMA20 280.46"
           },
           "2_confirmation": {
             "name": "confirmation",
             "met": false,
             "detail": "0/2 consecutive closes above SMA20",
             "consecutive_closes_above": 0,
-            "atr14": 7.65
+            "atr14": 7.6
           },
           "3_regime_gate": {
             "met": true,
@@ -925,7 +870,7 @@
           "4_slope": {
             "name": "slope",
             "met": false,
-            "detail": "SMA20 281.03 vs 5d ago 283.26 (falling)"
+            "detail": "SMA20 280.46 vs 5d ago 282.56 (falling)"
           },
           "5_thesis": {
             "name": "thesis",
@@ -935,18 +880,18 @@
         },
         "conditions_met": 1,
         "all_conditions_met": false,
-        "extension_pct": -4.9,
-        "extension_atr": -1.8,
-        "distance_to_sma20_pct": -4.9,
-        "close": 267.25,
-        "sma5": 270.61,
-        "sma10": 274.53,
-        "sma20": 281.03,
+        "extension_pct": -4.26,
+        "extension_atr": -1.57,
+        "distance_to_sma20_pct": -4.26,
+        "close": 268.52,
+        "sma5": 269.96,
+        "sma10": 272.55,
+        "sma20": 280.46,
         "assess_inputs": {
-          "close": 267.25,
-          "sma20": 281.0344985961914,
-          "sma20_5d_ago": 283.2634963989258,
-          "atr14": 7.645717075892857,
+          "close": 268.5199890136719,
+          "sma20": 280.4624984741211,
+          "sma20_5d_ago": 282.5594970703125,
+          "atr14": 7.596431187220982,
           "consecutive_closes_above": 0,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": false,
@@ -961,19 +906,19 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension -1.8029046143564824\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension -1.572121061339882\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": false,
-              "detail": "close 267.25 below SMA5 270.61 \u2014 arriving from above"
+              "detail": "close 268.52 below SMA5 269.96 \u2014 arriving from above"
             },
             "4_rsi": {
               "met": false,
-              "detail": "RSI 41 outside [45, 70]"
+              "detail": "RSI 42 outside [45, 70]"
             },
             "5_score": {
               "met": false,
-              "detail": "score 37 < 75"
+              "detail": "score 42 < 75"
             },
             "6_breaker": {
               "met": false,
@@ -991,25 +936,16 @@
             "5_score",
             "6_breaker"
           ],
-          "reasons": "five mechanical conditions not met; close 267.25 below SMA5 270.61 \u2014 arriving from above; RSI 41 outside [45, 70]; score 37 < 75; group breaker unknown (no group data)"
+          "reasons": "five mechanical conditions not met; close 268.52 below SMA5 269.96 \u2014 arriving from above; RSI 42 outside [45, 70]; score 42 < 75; group breaker unknown (no group data)"
         },
         "grade_inputs": {
-          "sma5": 270.61000366210936,
+          "sma5": 269.96400146484376,
           "up_close_since_swing_low": true,
-          "rsi14": 40.66902749276472,
-          "quality_score": 37,
+          "rsi14": 41.957976366410335,
+          "quality_score": 42,
           "score_waived": false,
           "breaker_status": null,
           "runway_sessions": 48
-        },
-        "intraday_preview": {
-          "as_of": "2026-08-07",
-          "would_state": "WATCHING",
-          "close": 268.52,
-          "sma20": 280.46,
-          "conditions_met": 1,
-          "a_plus_only": false,
-          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "JBHT",
         "kind": "watching",
@@ -1026,14 +962,14 @@
           "1_trigger": {
             "name": "trigger",
             "met": true,
-            "detail": "close 72.43 above SMA20 71.66"
+            "detail": "close 72.67 above SMA20 71.80"
           },
           "2_confirmation": {
             "name": "confirmation",
             "met": true,
-            "detail": "2/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 6,
-            "atr14": 1.63
+            "detail": "close 72.67 > SMA20 + 0.5*ATR14 (72.61)",
+            "consecutive_closes_above": 7,
+            "atr14": 1.61
           },
           "3_regime_gate": {
             "met": true,
@@ -1044,7 +980,7 @@
           "4_slope": {
             "name": "slope",
             "met": true,
-            "detail": "SMA20 71.66 vs 5d ago 71.01 (flat/rising)"
+            "detail": "SMA20 71.80 vs 5d ago 71.06 (flat/rising)"
           },
           "5_thesis": {
             "name": "thesis",
@@ -1054,18 +990,18 @@
         },
         "conditions_met": 4,
         "all_conditions_met": false,
-        "extension_pct": 1.07,
-        "extension_atr": 0.47,
-        "close": 72.43,
-        "sma5": 72.81,
-        "sma10": 72.12,
-        "sma20": 71.66,
+        "extension_pct": 1.21,
+        "extension_atr": 0.54,
+        "close": 72.67,
+        "sma5": 73.02,
+        "sma10": 72.24,
+        "sma20": 71.8,
         "assess_inputs": {
-          "close": 72.43000030517578,
-          "sma20": 71.6607063293457,
-          "sma20_5d_ago": 71.0082576751709,
-          "atr14": 1.6311122619600542,
-          "consecutive_closes_above": 6,
+          "close": 72.66999816894531,
+          "sma20": 71.79989356994629,
+          "sma20_5d_ago": 71.06465110778808,
+          "atr14": 1.6122139779385967,
+          "consecutive_closes_above": 7,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": false,
           "kind": "watching"
@@ -1079,15 +1015,15 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension 0.47163766331181006\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension 0.539695481434512\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": false,
-              "detail": "close 72.43 below SMA5 72.81 \u2014 arriving from above"
+              "detail": "close 72.67 below SMA5 73.02 \u2014 arriving from above"
             },
             "4_rsi": {
               "met": true,
-              "detail": "RSI 56 in [45, 70]"
+              "detail": "RSI 57 in [45, 70]"
             },
             "5_score": {
               "met": false,
@@ -1108,25 +1044,16 @@
             "5_score",
             "6_breaker"
           ],
-          "reasons": "five mechanical conditions not met; close 72.43 below SMA5 72.81 \u2014 arriving from above; score 57 < 75; group breaker unknown (no group data)"
+          "reasons": "five mechanical conditions not met; close 72.67 below SMA5 73.02 \u2014 arriving from above; score 57 < 75; group breaker unknown (no group data)"
         },
         "grade_inputs": {
-          "sma5": 72.81199951171875,
+          "sma5": 73.01599884033203,
           "up_close_since_swing_low": true,
-          "rsi14": 56.20456592229605,
+          "rsi14": 57.09346144828932,
           "quality_score": 57,
           "score_waived": false,
           "breaker_status": null,
           "runway_sessions": 50
-        },
-        "intraday_preview": {
-          "as_of": "2026-08-07",
-          "would_state": "RE_ENTRY_ARMING",
-          "close": 72.65,
-          "sma20": 71.8,
-          "conditions_met": 4,
-          "a_plus_only": false,
-          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "CFG",
         "kind": "watching",
@@ -1143,14 +1070,14 @@
           "1_trigger": {
             "name": "trigger",
             "met": true,
-            "detail": "close 31.39 above SMA20 31.22"
+            "detail": "close 31.43 above SMA20 31.24"
           },
           "2_confirmation": {
             "name": "confirmation",
             "met": true,
             "detail": "2/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 4,
-            "atr14": 0.58
+            "consecutive_closes_above": 5,
+            "atr14": 0.56
           },
           "3_regime_gate": {
             "met": true,
@@ -1161,7 +1088,7 @@
           "4_slope": {
             "name": "slope",
             "met": true,
-            "detail": "SMA20 31.22 vs 5d ago 30.92 (flat/rising)"
+            "detail": "SMA20 31.24 vs 5d ago 30.95 (flat/rising)"
           },
           "5_thesis": {
             "name": "thesis",
@@ -1171,18 +1098,18 @@
         },
         "conditions_met": 4,
         "all_conditions_met": false,
-        "extension_pct": 0.56,
-        "extension_atr": 0.3,
-        "close": 31.39,
-        "sma5": 31.53,
-        "sma10": 31.23,
-        "sma20": 31.22,
+        "extension_pct": 0.62,
+        "extension_atr": 0.35,
+        "close": 31.43,
+        "sma5": 31.63,
+        "sma10": 31.29,
+        "sma20": 31.24,
         "assess_inputs": {
-          "close": 31.389999389648438,
-          "sma20": 31.21500015258789,
-          "sma20_5d_ago": 30.92000017166138,
-          "atr14": 0.5771428516932896,
-          "consecutive_closes_above": 4,
+          "close": 31.43000030517578,
+          "sma20": 31.235500144958497,
+          "sma20_5d_ago": 30.953500175476073,
+          "atr14": 0.5570857184273856,
+          "consecutive_closes_above": 5,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": false,
           "kind": "watching"
@@ -1196,15 +1123,15 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension 0.3032165027204504\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension 0.34913865816977846\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": false,
-              "detail": "close 31.39 below SMA5 31.53 \u2014 arriving from above"
+              "detail": "close 31.43 below SMA5 31.63 \u2014 arriving from above"
             },
             "4_rsi": {
               "met": true,
-              "detail": "RSI 56 in [45, 70]"
+              "detail": "RSI 57 in [45, 70]"
             },
             "5_score": {
               "met": false,
@@ -1225,25 +1152,16 @@
             "5_score",
             "6_breaker"
           ],
-          "reasons": "five mechanical conditions not met; close 31.39 below SMA5 31.53 \u2014 arriving from above; score 56 < 75; group breaker unknown (no group data)"
+          "reasons": "five mechanical conditions not met; close 31.43 below SMA5 31.63 \u2014 arriving from above; score 56 < 75; group breaker unknown (no group data)"
         },
         "grade_inputs": {
-          "sma5": 31.529999923706054,
+          "sma5": 31.62599983215332,
           "up_close_since_swing_low": true,
-          "rsi14": 56.397520523657924,
+          "rsi14": 56.79205789210674,
           "quality_score": 56,
           "score_waived": false,
           "breaker_status": null,
           "runway_sessions": 50
-        },
-        "intraday_preview": {
-          "as_of": "2026-08-07",
-          "would_state": "RE_ENTRY_ARMING",
-          "close": 31.43,
-          "sma20": 31.24,
-          "conditions_met": 4,
-          "a_plus_only": false,
-          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "RF",
         "kind": "watching",
@@ -1260,14 +1178,14 @@
           "1_trigger": {
             "name": "trigger",
             "met": true,
-            "detail": "close 250.14 above SMA20 248.60"
+            "detail": "close 250.45 above SMA20 249.01"
           },
           "2_confirmation": {
             "name": "confirmation",
             "met": true,
             "detail": "2/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 53,
-            "atr14": 4.31
+            "consecutive_closes_above": 54,
+            "atr14": 4.37
           },
           "3_regime_gate": {
             "met": true,
@@ -1278,7 +1196,7 @@
           "4_slope": {
             "name": "slope",
             "met": true,
-            "detail": "SMA20 248.60 vs 5d ago 245.61 (flat/rising)"
+            "detail": "SMA20 249.01 vs 5d ago 245.99 (flat/rising)"
           },
           "5_thesis": {
             "name": "thesis",
@@ -1288,18 +1206,18 @@
         },
         "conditions_met": 4,
         "all_conditions_met": false,
-        "extension_pct": 0.62,
-        "extension_atr": 0.36,
-        "close": 250.14,
-        "sma5": 250.18,
-        "sma10": 249.87,
-        "sma20": 248.6,
+        "extension_pct": 0.58,
+        "extension_atr": 0.33,
+        "close": 250.45,
+        "sma5": 251.01,
+        "sma10": 249.96,
+        "sma20": 249.01,
         "assess_inputs": {
-          "close": 250.13999938964844,
-          "sma20": 248.60400009155273,
-          "sma20_5d_ago": 245.61450119018554,
-          "atr14": 4.307141985212054,
-          "consecutive_closes_above": 53,
+          "close": 250.4499969482422,
+          "sma20": 249.0095001220703,
+          "sma20_5d_ago": 245.98500061035156,
+          "atr14": 4.372142246791294,
+          "consecutive_closes_above": 54,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": false,
           "kind": "watching"
@@ -1313,11 +1231,11 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension 0.3566168246529447\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension 0.3294716285201055\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": false,
-              "detail": "close 250.14 below SMA5 250.18 \u2014 arriving from above"
+              "detail": "close 250.45 below SMA5 251.01 \u2014 arriving from above"
             },
             "4_rsi": {
               "met": true,
@@ -1342,25 +1260,16 @@
             "5_score",
             "6_breaker"
           ],
-          "reasons": "five mechanical conditions not met; close 250.14 below SMA5 250.18 \u2014 arriving from above; score 60 < 75; group breaker unknown (no group data)"
+          "reasons": "five mechanical conditions not met; close 250.45 below SMA5 251.01 \u2014 arriving from above; score 60 < 75; group breaker unknown (no group data)"
         },
         "grade_inputs": {
-          "sma5": 250.18199768066407,
+          "sma5": 251.01399841308594,
           "up_close_since_swing_low": true,
-          "rsi14": 57.57384303282138,
+          "rsi14": 57.95865914735225,
           "quality_score": 60,
           "score_waived": false,
           "breaker_status": null,
           "runway_sessions": 50
-        },
-        "intraday_preview": {
-          "as_of": "2026-08-07",
-          "would_state": "RE_ENTRY_ARMING",
-          "close": 250.4,
-          "sma20": 249.01,
-          "conditions_met": 4,
-          "a_plus_only": false,
-          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "MTB",
         "kind": "watching",
@@ -1372,19 +1281,19 @@
         "days_to_earnings": 70
       },
       "CRWD": {
-        "state": "RE_ENTRY_READY",
+        "state": "EXTENDED_HOLD",
         "conditions": {
           "1_trigger": {
             "name": "trigger",
             "met": true,
-            "detail": "close 207.39 above SMA20 194.63"
+            "detail": "close 214.42 above SMA20 195.99"
           },
           "2_confirmation": {
             "name": "confirmation",
             "met": true,
-            "detail": "close 207.39 > SMA20 + 0.5*ATR14 (199.15)",
-            "consecutive_closes_above": 4,
-            "atr14": 9.04
+            "detail": "close 214.42 > SMA20 + 0.5*ATR14 (200.47)",
+            "consecutive_closes_above": 5,
+            "atr14": 8.95
           },
           "3_regime_gate": {
             "met": true,
@@ -1395,7 +1304,7 @@
           "4_slope": {
             "name": "slope",
             "met": true,
-            "detail": "SMA20 194.63 vs 5d ago 192.41 (flat/rising)"
+            "detail": "SMA20 195.99 vs 5d ago 192.25 (flat/rising)"
           },
           "5_thesis": {
             "name": "thesis",
@@ -1405,41 +1314,41 @@
         },
         "conditions_met": 5,
         "all_conditions_met": true,
-        "extension_pct": 6.56,
-        "extension_atr": 1.41,
-        "a_plus_only": true,
-        "close": 207.39,
-        "sma5": 204.37,
-        "sma10": 193.17,
-        "sma20": 194.63,
+        "extension_pct": 9.4,
+        "extension_atr": 2.06,
+        "extension_guard": "extension 2.06\u00d7ATR > 1.8\u00d7 \u2014 re-entry suppressed",
+        "close": 214.42,
+        "sma5": 209.09,
+        "sma10": 196.28,
+        "sma20": 195.99,
         "assess_inputs": {
-          "close": 207.38999938964844,
-          "sma20": 194.62849960327148,
-          "sma20_5d_ago": 192.40999908447264,
-          "atr14": 9.04207284109933,
-          "consecutive_closes_above": 4,
+          "close": 214.4199981689453,
+          "sma20": 195.9904998779297,
+          "sma20_5d_ago": 192.25399932861328,
+          "atr14": 8.95314461844308,
+          "consecutive_closes_above": 5,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
           "kind": "watching"
         },
         "grade": {
-          "grade": "B",
+          "grade": "C",
           "rows": {
             "1_conditions": {
               "met": true,
               "detail": "five mechanical conditions met"
             },
             "2_extension": {
-              "met": true,
-              "detail": "extension 1.4113467133743443\u00d7ATR <= 1.8\u00d7"
+              "met": false,
+              "detail": "extension 2.0584385795636173\u00d7ATR > 1.8\u00d7"
             },
             "3_approach": {
               "met": true,
-              "detail": "close 207.39 > SMA5 204.37 with up-close off the low"
+              "detail": "close 214.42 > SMA5 209.09 with up-close off the low"
             },
             "4_rsi": {
               "met": true,
-              "detail": "RSI 63 in [45, 70]"
+              "detail": "RSI 67 in [45, 70]"
             },
             "5_score": {
               "met": false,
@@ -1455,29 +1364,20 @@
             }
           },
           "failing": [
+            "2_extension",
             "5_score",
             "7_runway"
           ],
-          "reasons": "score 72 < 75; 13 sessions before the print (< 15)"
+          "reasons": "extension 2.0584385795636173\u00d7ATR > 1.8\u00d7; score 72 < 75; 13 sessions before the print (< 15)"
         },
         "grade_inputs": {
-          "sma5": 204.3739990234375,
+          "sma5": 209.08599853515625,
           "up_close_since_swing_low": true,
-          "rsi14": 62.781953493516816,
+          "rsi14": 66.55993679618018,
           "quality_score": 72,
           "score_waived": false,
           "breaker_status": "clear",
           "runway_sessions": 13
-        },
-        "grade_gate": "READY blocked \u2014 grade B under Choppy (A+ required): score 72 < 75; 13 sessions before the print (< 15)",
-        "intraday_preview": {
-          "as_of": "2026-08-07",
-          "would_state": "EXTENDED_HOLD",
-          "close": 214.42,
-          "sma20": 195.99,
-          "conditions_met": 5,
-          "a_plus_only": false,
-          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "CRWD",
         "kind": "watching",
@@ -1489,7 +1389,64 @@
         "days_to_earnings": 19
       }
     },
-    "transitions": []
+    "transitions": [
+      {
+        "timestamp": "2026-08-07T20:51:40.924514+00:00",
+        "type": "position_state_change",
+        "severity": "medium",
+        "group": "Biotechnology",
+        "ticker": "MRNA",
+        "description": "MRNA: WATCHING \u2192 RE_ENTRY_ARMING",
+        "detail": {
+          "from_state": "WATCHING",
+          "to_state": "RE_ENTRY_ARMING",
+          "close": 59.17,
+          "sma20": 58.8,
+          "extension_pct": 0.62,
+          "extension_atr": 0.1,
+          "conditions_met": "2/5",
+          "bar_date": "2026-08-07"
+        }
+      },
+      {
+        "timestamp": "2026-08-07T20:51:41.026526+00:00",
+        "type": "position_state_change",
+        "severity": "medium",
+        "group": "Systems Software",
+        "ticker": "GEN",
+        "description": "GEN: RE_ENTRY_READY \u2192 EXTENDED_HOLD",
+        "detail": {
+          "from_state": "RE_ENTRY_READY",
+          "to_state": "EXTENDED_HOLD",
+          "close": 29.17,
+          "sma20": 27.03,
+          "extension_pct": 7.93,
+          "extension_atr": 2.22,
+          "conditions_met": "5/5",
+          "extension_guard": "extension 2.22\u00d7ATR > 1.8\u00d7 \u2014 re-entry suppressed",
+          "bar_date": "2026-08-07"
+        }
+      },
+      {
+        "timestamp": "2026-08-07T20:51:42.086011+00:00",
+        "type": "position_state_change",
+        "severity": "medium",
+        "group": "Systems Software",
+        "ticker": "CRWD",
+        "description": "CRWD: RE_ENTRY_READY \u2192 EXTENDED_HOLD",
+        "detail": {
+          "from_state": "RE_ENTRY_READY",
+          "to_state": "EXTENDED_HOLD",
+          "close": 214.42,
+          "sma20": 195.99,
+          "extension_pct": 9.4,
+          "extension_atr": 2.06,
+          "conditions_met": "5/5",
+          "extension_guard": "extension 2.06\u00d7ATR > 1.8\u00d7 \u2014 re-entry suppressed",
+          "bar_date": "2026-08-07"
+        }
+      }
+    ]
   },
   "r28": {
     "status": "ok",
@@ -1499,19 +1456,19 @@
     "regime_state": "Risk-on / Choppy",
     "ceiling_state": "Risk-on / Choppy",
     "ceiling_pct": 50.0,
-    "deployed_usd": 5466.92,
-    "deployed_pct": 5.61,
-    "cash_pct": 94.39,
+    "deployed_usd": 5829.7,
+    "deployed_pct": 5.98,
+    "cash_pct": 94.02,
     "positions": [
       {
         "ticker": "HPQ",
         "shares": 194.0,
-        "price": 28.18,
-        "value_usd": 5466.92,
+        "price": 30.05,
+        "value_usd": 5829.7,
         "group": "Technology Hardware, Storage & Peripherals",
-        "pct_of_capital": 5.61,
+        "pct_of_capital": 5.98,
         "status": "compliant",
-        "message": "HPQ $5,467 = 5.6% of capital"
+        "message": "HPQ $5,830 = 6.0% of capital"
       }
     ],
     "groups": [
@@ -1520,23 +1477,23 @@
         "tickers": [
           "HPQ"
         ],
-        "value_usd": 5466.92,
+        "value_usd": 5829.7,
         "count": 1,
         "unpriced": [],
-        "pct_of_capital": 5.61,
+        "pct_of_capital": 5.98,
         "status": "compliant",
-        "message": "Technology Hardware, Storage & Peripherals: $5,467 = 5.6% across 1 position"
+        "message": "Technology Hardware, Storage & Peripherals: $5,830 = 6.0% across 1 position"
       }
     ],
     "ceiling": {
       "rule": "R17->R28 (D-008 Q4)",
       "status": "compliant",
-      "message": "deployed $5,467 = 5.6% of the Risk-on / Choppy ceiling 50% ($48,750 headroom: $43,283)"
+      "message": "deployed $5,830 = 6.0% of the Risk-on / Choppy ceiling 50% ($48,750 headroom: $42,920)"
     },
     "cash_floor": {
       "rule": "R18->R28 (informational)",
       "status": "info",
-      "message": "cash $92,033 = 94.4% vs the Risk-on / Choppy-implied floor 50% \u2014 the ceiling's complement, not a separate limit"
+      "message": "cash $91,670 = 94.0% vs the Risk-on / Choppy-implied floor 50% \u2014 the ceiling's complement, not a separate limit"
     },
     "summary": {
       "violations": 0,
@@ -1884,18 +1841,16 @@
     },
     "NTAP": {
       "grade": "C",
-      "reasons": "extension 2.772081328441124\u00d7ATR > 1.8\u00d7; RSI 70 outside [45, 70]",
+      "reasons": "extension 2.263737603126572\u00d7ATR > 1.8\u00d7",
       "failing": [
-        "2_extension",
-        "4_rsi"
+        "2_extension"
       ],
       "group": "Technology Hardware, Storage & Peripherals"
     },
     "SMCI": {
-      "grade": "C",
-      "reasons": "close 29.38 below SMA5 29.69 \u2014 arriving from above; score 45 < 75; 2 sessions before the print (< 15)",
+      "grade": "B",
+      "reasons": "score 56 < 75; 2 sessions before the print (< 15)",
       "failing": [
-        "3_approach",
         "5_score",
         "7_runway"
       ],
@@ -1911,15 +1866,16 @@
     },
     "FTNT": {
       "grade": "C",
-      "reasons": "close 160.11 below SMA5 163.54 \u2014 arriving from above",
+      "reasons": "close 159.64 below SMA5 163.08 \u2014 arriving from above; score 62 < 75",
       "failing": [
-        "3_approach"
+        "3_approach",
+        "5_score"
       ],
       "group": "Systems Software"
     },
     "MSFT": {
       "grade": "C",
-      "reasons": "extension 4.541640089196661\u00d7ATR > 1.8\u00d7; RSI 78 outside [45, 70]",
+      "reasons": "extension 4.352040796242518\u00d7ATR > 1.8\u00d7; RSI 78 outside [45, 70]",
       "failing": [
         "2_extension",
         "4_rsi"
@@ -1927,24 +1883,24 @@
       "group": "Systems Software"
     },
     "NOW": {
-      "grade": "A+",
-      "reasons": "",
-      "failing": [],
+      "grade": "C",
+      "reasons": "extension 2.302430257453475\u00d7ATR > 1.8\u00d7",
+      "failing": [
+        "2_extension"
+      ],
       "group": "Systems Software"
     },
     "CNC": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 64.20 below SMA5 64.25 \u2014 arriving from above; score 59 < 75",
+      "reasons": "five mechanical conditions not met",
       "failing": [
-        "1_conditions",
-        "3_approach",
-        "5_score"
+        "1_conditions"
       ],
       "group": "Managed Health Care"
     },
     "UNH": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 403.97 below SMA5 410.81 \u2014 arriving from above; RSI 42 outside [45, 70]; score 46 < 75",
+      "reasons": "five mechanical conditions not met; close 407.08 below SMA5 409.34 \u2014 arriving from above; RSI 44 outside [45, 70]; score 51 < 75",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -1955,7 +1911,7 @@
     },
     "VLO": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 302.99 below SMA5 306.91 \u2014 arriving from above; score 54 < 75",
+      "reasons": "five mechanical conditions not met; close 298.31 below SMA5 303.99 \u2014 arriving from above; score 58 < 75",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -1965,7 +1921,7 @@
     },
     "MPC": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 299.25 below SMA5 306.62 \u2014 arriving from above; score 58 < 75",
+      "reasons": "five mechanical conditions not met; close 298.20 below SMA5 302.97 \u2014 arriving from above; score 58 < 75",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -1975,7 +1931,7 @@
     },
     "PSX": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 205.52 below SMA5 206.37 \u2014 arriving from above; score 66 < 75",
+      "reasons": "five mechanical conditions not met; close 203.91 below SMA5 204.81 \u2014 arriving from above; score 58 < 75",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -1984,16 +1940,20 @@
       "group": "Oil & Gas Refining & Marketing"
     },
     "VSAT": {
-      "grade": "A+",
-      "reasons": "",
-      "failing": [],
+      "grade": "C",
+      "reasons": "close 80.38 below SMA5 82.17 \u2014 arriving from above",
+      "failing": [
+        "3_approach"
+      ],
       "group": "Communications Equipment"
     },
     "FFIV": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met",
+      "reasons": "five mechanical conditions not met; close 400.23 below SMA5 408.64 \u2014 arriving from above; score 46 < 75",
       "failing": [
-        "1_conditions"
+        "1_conditions",
+        "3_approach",
+        "5_score"
       ],
       "group": "Communications Equipment"
     },
@@ -2006,14 +1966,16 @@
       "group": "Communications Equipment"
     },
     "ANET": {
-      "grade": "A+",
-      "reasons": "",
-      "failing": [],
+      "grade": "C",
+      "reasons": "close 188.67 below SMA5 190.74 \u2014 arriving from above",
+      "failing": [
+        "3_approach"
+      ],
       "group": "Communications Equipment"
     },
     "MSI": {
       "grade": "C",
-      "reasons": "extension 3.535928146885792\u00d7ATR > 1.8\u00d7; RSI 75 outside [45, 70]",
+      "reasons": "extension 2.912344417271964\u00d7ATR > 1.8\u00d7; RSI 70 outside [45, 70]",
       "failing": [
         "2_extension",
         "4_rsi"
@@ -2022,7 +1984,7 @@
     },
     "DVA": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 180.67 below SMA5 214.22 \u2014 arriving from above; RSI 21 outside [45, 70]; score 61 < 75",
+      "reasons": "five mechanical conditions not met; close 183.77 below SMA5 202.96 \u2014 arriving from above; RSI 24 outside [45, 70]; score 61 < 75",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -2033,7 +1995,7 @@
     },
     "CVS": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 96.22 below SMA5 101.91 \u2014 arriving from above; RSI 33 outside [45, 70]; score 51 < 75",
+      "reasons": "five mechanical conditions not met; close 95.70 below SMA5 100.17 \u2014 arriving from above; RSI 32 outside [45, 70]; score 51 < 75",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -2044,16 +2006,17 @@
     },
     "DGX": {
       "grade": "C",
-      "reasons": "extension 2.375684612801366\u00d7ATR > 1.8\u00d7; RSI 75 outside [45, 70]",
+      "reasons": "extension 2.208788908236121\u00d7ATR > 1.8\u00d7; RSI 75 outside [45, 70]; score 73 < 75",
       "failing": [
         "2_extension",
-        "4_rsi"
+        "4_rsi",
+        "5_score"
       ],
       "group": "Health Care Services"
     },
     "LH": {
       "grade": "C",
-      "reasons": "extension 2.3497358607648606\u00d7ATR > 1.8\u00d7; RSI 70 outside [45, 70]; score 70 < 75",
+      "reasons": "extension 2.4079765724885505\u00d7ATR > 1.8\u00d7; RSI 72 outside [45, 70]; score 67 < 75",
       "failing": [
         "2_extension",
         "4_rsi",
@@ -2062,23 +2025,23 @@
       "group": "Health Care Services"
     },
     "GL": {
+      "grade": "C",
+      "reasons": "close 183.85 below SMA5 184.34 \u2014 arriving from above; score 66 < 75",
+      "failing": [
+        "3_approach",
+        "5_score"
+      ],
+      "group": "Life & Health Insurance"
+    },
+    "MET": {
       "grade": "A+",
       "reasons": "",
       "failing": [],
       "group": "Life & Health Insurance"
     },
-    "MET": {
-      "grade": "C",
-      "reasons": "extension 2.8914109466765305\u00d7ATR > 1.8\u00d7; RSI 76 outside [45, 70]",
-      "failing": [
-        "2_extension",
-        "4_rsi"
-      ],
-      "group": "Life & Health Insurance"
-    },
     "PRU": {
       "grade": "C",
-      "reasons": "close 121.50 below SMA5 122.05 \u2014 arriving from above; score 60 < 75",
+      "reasons": "close 121.28 below SMA5 121.89 \u2014 arriving from above; score 66 < 75",
       "failing": [
         "3_approach",
         "5_score"
@@ -2086,34 +2049,39 @@
       "group": "Life & Health Insurance"
     },
     "PFG": {
-      "grade": "A+",
-      "reasons": "",
-      "failing": [],
+      "grade": "C",
+      "reasons": "close 113.40 below SMA5 114.81 \u2014 arriving from above",
+      "failing": [
+        "3_approach"
+      ],
       "group": "Life & Health Insurance"
     },
     "AFL": {
-      "grade": "B",
-      "reasons": "score 60 < 75",
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 124.61 below SMA5 125.74 \u2014 arriving from above; score 52 < 75",
       "failing": [
+        "1_conditions",
+        "3_approach",
         "5_score"
       ],
       "group": "Life & Health Insurance"
     },
     "TER": {
-      "grade": "B",
-      "reasons": "group breaker warning",
+      "grade": "C",
+      "reasons": "close 379.31 below SMA5 384.59 \u2014 arriving from above; score 67 < 75; group breaker warning",
       "failing": [
+        "3_approach",
+        "5_score",
         "6_breaker"
       ],
       "group": "Semiconductor Materials & Equipment"
     },
     "DOC": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 21.10 below SMA5 21.60 \u2014 arriving from above; RSI 42 outside [45, 70]; score 58 < 75",
+      "reasons": "five mechanical conditions not met; close 21.41 below SMA5 21.51 \u2014 arriving from above; score 63 < 75",
       "failing": [
         "1_conditions",
         "3_approach",
-        "4_rsi",
         "5_score"
       ],
       "group": "Health Care REITs"
@@ -2137,25 +2105,31 @@
       "group": "Health Care REITs"
     },
     "CSX": {
-      "grade": "B",
-      "reasons": "score 66 < 75",
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 50.27 below SMA5 50.59 \u2014 arriving from above; score 58 < 75",
       "failing": [
+        "1_conditions",
+        "3_approach",
         "5_score"
       ],
       "group": "Rail Transportation"
     },
     "UNP": {
-      "grade": "B",
-      "reasons": "score 65 < 75",
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 293.13 below SMA5 294.33 \u2014 arriving from above; score 49 < 75",
       "failing": [
+        "1_conditions",
+        "3_approach",
         "5_score"
       ],
       "group": "Rail Transportation"
     },
     "NSC": {
-      "grade": "B",
-      "reasons": "score 59 < 75",
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 334.36 below SMA5 339.30 \u2014 arriving from above; score 52 < 75",
       "failing": [
+        "1_conditions",
+        "3_approach",
         "5_score"
       ],
       "group": "Rail Transportation"
@@ -2169,10 +2143,9 @@
       "group": "Oil & Gas Exploration & Production"
     },
     "OXY": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; score 71 < 75; group breaker warning",
+      "grade": "B",
+      "reasons": "score 71 < 75; group breaker warning",
       "failing": [
-        "1_conditions",
         "5_score",
         "6_breaker"
       ],
@@ -2180,10 +2153,11 @@
     },
     "EOG": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 136.20 below SMA5 141.66 \u2014 arriving from above; score 46 < 75; group breaker warning",
+      "reasons": "five mechanical conditions not met; close 134.74 below SMA5 138.87 \u2014 arriving from above; RSI 43 outside [45, 70]; score 46 < 75; group breaker warning",
       "failing": [
         "1_conditions",
         "3_approach",
+        "4_rsi",
         "5_score",
         "6_breaker"
       ],
@@ -2191,7 +2165,7 @@
     },
     "FANG": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 189.63 below SMA5 193.87 \u2014 arriving from above; score 40 < 75; group breaker warning",
+      "reasons": "five mechanical conditions not met; close 188.04 below SMA5 190.89 \u2014 arriving from above; score 40 < 75; group breaker warning",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -2201,11 +2175,9 @@
       "group": "Oil & Gas Exploration & Production"
     },
     "COP": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 116.76 below SMA5 117.88 \u2014 arriving from above; score 60 < 75; group breaker warning",
+      "grade": "B",
+      "reasons": "score 60 < 75; group breaker warning",
       "failing": [
-        "1_conditions",
-        "3_approach",
         "5_score",
         "6_breaker"
       ],
@@ -2213,7 +2185,7 @@
     },
     "DVN": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 43.11 below SMA5 43.79 \u2014 arriving from above; score 36 < 75; group breaker warning",
+      "reasons": "five mechanical conditions not met; close 42.98 below SMA5 43.36 \u2014 arriving from above; score 36 < 75; group breaker warning",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -2224,7 +2196,7 @@
     },
     "EQT": {
       "grade": "C",
-      "reasons": "close 51.60 below SMA5 52.39 \u2014 arriving from above; score 51 < 75; group breaker warning",
+      "reasons": "close 51.69 below SMA5 52.10 \u2014 arriving from above; score 51 < 75; group breaker warning",
       "failing": [
         "3_approach",
         "5_score",
@@ -2234,7 +2206,7 @@
     },
     "PWR": {
       "grade": "C",
-      "reasons": "close 667.84 below SMA5 678.28 \u2014 arriving from above; score 67 < 75",
+      "reasons": "close 671.86 below SMA5 679.18 \u2014 arriving from above; score 67 < 75",
       "failing": [
         "3_approach",
         "5_score"
@@ -2243,7 +2215,7 @@
     },
     "J": {
       "grade": "C",
-      "reasons": "extension 2.3879457044006553\u00d7ATR > 1.8\u00d7; score 70 < 75",
+      "reasons": "extension 2.3990334094431662\u00d7ATR > 1.8\u00d7; score 70 < 75",
       "failing": [
         "2_extension",
         "5_score"
@@ -2252,7 +2224,7 @@
     },
     "WAB": {
       "grade": "C",
-      "reasons": "close 295.23 below SMA5 295.59 \u2014 arriving from above",
+      "reasons": "close 291.81 below SMA5 295.78 \u2014 arriving from above",
       "failing": [
         "3_approach"
       ],
@@ -2260,7 +2232,7 @@
     },
     "PCAR": {
       "grade": "C",
-      "reasons": "close 132.06 below SMA5 133.22 \u2014 arriving from above; score 56 < 75",
+      "reasons": "close 133.11 below SMA5 133.31 \u2014 arriving from above; score 60 < 75",
       "failing": [
         "3_approach",
         "5_score"
@@ -2269,11 +2241,10 @@
     },
     "SPG": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 221.83 below SMA5 226.21 \u2014 arriving from above; RSI 44 outside [45, 70]; score 52 < 75; group breaker warning; 1 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; close 222.91 below SMA5 224.92 \u2014 arriving from above; score 52 < 75; group breaker warning; 1 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "3_approach",
-        "4_rsi",
         "5_score",
         "6_breaker",
         "7_runway"
@@ -2282,7 +2253,7 @@
     },
     "KIM": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 24.43 below SMA5 25.04 \u2014 arriving from above; RSI 36 outside [45, 70]; score 45 < 75; group breaker warning",
+      "reasons": "five mechanical conditions not met; close 24.46 below SMA5 24.84 \u2014 arriving from above; RSI 36 outside [45, 70]; score 45 < 75; group breaker warning",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -2294,7 +2265,7 @@
     },
     "FRT": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 117.91 below SMA5 122.06 \u2014 arriving from above; RSI 32 outside [45, 70]; score 45 < 75; group breaker warning",
+      "reasons": "five mechanical conditions not met; close 118.69 below SMA5 120.98 \u2014 arriving from above; RSI 35 outside [45, 70]; score 45 < 75; group breaker warning",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -2306,7 +2277,7 @@
     },
     "REG": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 76.96 below SMA5 79.21 \u2014 arriving from above; RSI 33 outside [45, 70]; score 41 < 75; group breaker warning",
+      "reasons": "five mechanical conditions not met; close 77.12 below SMA5 78.58 \u2014 arriving from above; RSI 34 outside [45, 70]; score 41 < 75; group breaker warning",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -2318,7 +2289,7 @@
     },
     "O": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 62.36 below SMA5 63.06 \u2014 arriving from above; RSI 41 outside [45, 70]; score 36 < 75; group breaker warning",
+      "reasons": "five mechanical conditions not met; close 62.51 below SMA5 62.79 \u2014 arriving from above; RSI 42 outside [45, 70]; score 48 < 75; group breaker warning",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -2338,10 +2309,9 @@
       "group": "Pharmaceuticals"
     },
     "MRK": {
-      "grade": "C",
-      "reasons": "close 128.37 below SMA5 128.53 \u2014 arriving from above; score 60 < 75",
+      "grade": "B",
+      "reasons": "score 60 < 75",
       "failing": [
-        "3_approach",
         "5_score"
       ],
       "group": "Pharmaceuticals"
@@ -2357,7 +2327,7 @@
     },
     "BMY": {
       "grade": "C",
-      "reasons": "close 64.15 below SMA5 64.89 \u2014 arriving from above",
+      "reasons": "close 64.72 below SMA5 64.77 \u2014 arriving from above",
       "failing": [
         "3_approach"
       ],
@@ -2365,7 +2335,7 @@
     },
     "VTRS": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 16.29 below SMA5 17.37 \u2014 arriving from above; RSI 40 outside [45, 70]; score 45 < 75",
+      "reasons": "five mechanical conditions not met; close 16.43 below SMA5 17.14 \u2014 arriving from above; RSI 42 outside [45, 70]; score 40 < 75",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -2376,7 +2346,7 @@
     },
     "PFE": {
       "grade": "C",
-      "reasons": "extension 2.9591600067963317\u00d7ATR > 1.8\u00d7; RSI 70 outside [45, 70]; score 71 < 75",
+      "reasons": "extension 3.6514594929739865\u00d7ATR > 1.8\u00d7; RSI 75 outside [45, 70]; score 71 < 75",
       "failing": [
         "2_extension",
         "4_rsi",
@@ -2385,9 +2355,12 @@
       "group": "Pharmaceuticals"
     },
     "ZTS": {
-      "grade": "B",
-      "reasons": "score 62 < 75",
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 72.66 below SMA5 75.49 \u2014 arriving from above; RSI 41 outside [45, 70]; score 19 < 75",
       "failing": [
+        "1_conditions",
+        "3_approach",
+        "4_rsi",
         "5_score"
       ],
       "group": "Pharmaceuticals"
