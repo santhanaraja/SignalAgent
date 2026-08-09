@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Which rule is helping? — Build 5.1 in plain terms</title>
+<style>
+  :root{
+    --bg:#0B0F14; --panel:#121820; --panel2:#0E141B; --line:#223041;
+    --ink:#E6EDF3; --muted:#8B98A5; --dim:#5C6B7A;
+    --ok:#3FB950; --warn:#D4A72C; --bad:#F85149; --info:#58A6FF; --alt:#8957E5;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6}
+  .wrap{max-width:960px;margin:0 auto;padding:40px 22px 72px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  h1{font-size:clamp(25px,4.2vw,36px);letter-spacing:-.02em;margin:.35em 0 .2em;font-weight:750}
+  .lede{font-size:15px;color:var(--muted);max-width:70ch}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px 24px 20px;margin-top:26px}
+  .panel h2{font-size:18px;margin:0 0 4px;font-weight:700;letter-spacing:-.01em}
+  .panel .sub{font-size:13.5px;color:var(--muted);margin:0 0 18px;max-width:76ch}
+  .panel p{font-size:14px;color:var(--muted);max-width:76ch}
+  .panel p b{color:var(--ink);font-weight:600}
+  svg{width:100%;height:auto;display:block}
+  .note{font-size:13.5px;color:var(--muted);margin-top:16px;border-left:2px solid var(--line);padding-left:14px}
+  .note b{color:var(--ink);font-weight:600}
+  .note.good{border-left-color:var(--ok)} .note.hot{border-left-color:var(--bad)}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
+  th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+     color:var(--dim);font-weight:600;padding:9px 10px;border-bottom:1px solid var(--line)}
+  td{padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted)}
+  td.n{color:var(--ink);font-weight:600;font-size:13.5px;white-space:nowrap}
+  tr.bad td{background:rgba(248,81,73,.06)}
+  tr.good td{background:rgba(63,185,80,.06)}
+  .verdict{font-family:var(--mono);font-size:11.5px;font-weight:700;white-space:nowrap}
+  .foot{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">SignalAgent · plain-language explainer · Build 5.1</div>
+  <h1>Which of the seven rules is actually helping?</h1>
+  <p class="lede">The A+ grade is seven rules stacked together. A stock only earns A+ if it passes all seven.
+  This study asked a simple question about each one: <b style="color:var(--ink)">is this rule keeping you out of
+  bad trades, or throwing away good ones?</b></p>
+
+  <!-- 1 · THE METHOD -->
+  <div class="panel">
+    <h2>1 · How you test a single rule</h2>
+    <p class="sub">You can't just delete a rule and compare — delete enough rules and "A+" becomes "every stock," so
+    of course the average changes. The trick is to look at the <b>near-misses</b>.</p>
+
+    <svg viewBox="0 0 920 330" role="img" aria-label="Diagram: stocks passing six of seven rules but failing the extension rule form a near-miss group, compared against the A plus group">
+      <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0 L9,4.5 L0,9 Z" fill="#5C6B7A"/></marker></defs>
+
+      <text x="30" y="26" font-size="13" font-weight="700" fill="#E6EDF3">Every stock, every day — 848,328 of them</text>
+
+      <rect x="30" y="44" width="180" height="58" rx="7" fill="#0E141B" stroke="#223041"/>
+      <text x="120" y="70" text-anchor="middle" font-size="12" fill="#8B98A5">passes rules</text>
+      <text x="120" y="89" text-anchor="middle" font-size="13" font-weight="700" font-family="monospace" fill="#E6EDF3">1 3 4 5 6 7 ✓</text>
+
+      <line x1="210" y1="73" x2="248" y2="73" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#ar)"/>
+
+      <rect x="256" y="30" width="230" height="86" rx="7" fill="#0E141B" stroke="#D4A72C" stroke-width="1.8"/>
+      <text x="371" y="56" text-anchor="middle" font-size="12.5" font-weight="700" fill="#D4A72C">now check rule 2 only</text>
+      <text x="371" y="79" text-anchor="middle" font-size="11.5" fill="#8B98A5">"not more than 1.8×ATR above</text>
+      <text x="371" y="97" text-anchor="middle" font-size="11.5" fill="#8B98A5">its 20-day average"</text>
+
+      <path d="M486 55 H 560" fill="none" stroke="#3FB950" stroke-width="1.6" marker-end="url(#ar)"/>
+      <path d="M486 95 H 560" fill="none" stroke="#F85149" stroke-width="1.6" marker-end="url(#ar)"/>
+      <text x="523" y="46" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#3FB950">passes</text>
+      <text x="523" y="118" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#F85149">fails</text>
+
+      <rect x="568" y="28" width="322" height="56" rx="7" fill="#0E141B" stroke="#3FB950" stroke-width="1.8"/>
+      <text x="729" y="52" text-anchor="middle" font-size="13" font-weight="700" fill="#3FB950">A+  —  29,777 days</text>
+      <text x="729" y="72" text-anchor="middle" font-size="11.5" fill="#8B98A5">the stocks the system actually buys</text>
+
+      <rect x="568" y="94" width="322" height="56" rx="7" fill="#0E141B" stroke="#F85149" stroke-width="1.8"/>
+      <text x="729" y="118" text-anchor="middle" font-size="13" font-weight="700" fill="#F85149">NEAR-MISSES  —  23,893 days</text>
+      <text x="729" y="138" text-anchor="middle" font-size="11.5" fill="#8B98A5">rejected for one reason only: too extended</text>
+
+      <line x1="729" y1="164" x2="729" y2="192" stroke="#5C6B7A" stroke-width="1.5" stroke-dasharray="4 4"/>
+      <text x="455" y="212" text-anchor="middle" font-size="14" font-weight="700" fill="#E6EDF3">Now compare what each group did over the next month.</text>
+
+      <rect x="180" y="232" width="270" height="66" rx="7" fill="#121820" stroke="#3FB950" stroke-width="1.5"/>
+      <text x="315" y="262" text-anchor="middle" font-size="11.5" fill="#8B98A5">near-misses did WORSE</text>
+      <text x="315" y="284" text-anchor="middle" font-size="13" font-weight="700" fill="#3FB950">→ good rule, keep it</text>
+
+      <rect x="470" y="232" width="270" height="66" rx="7" fill="#121820" stroke="#F85149" stroke-width="1.5"/>
+      <text x="605" y="262" text-anchor="middle" font-size="11.5" fill="#8B98A5">near-misses did BETTER</text>
+      <text x="605" y="284" text-anchor="middle" font-size="13" font-weight="700" fill="#F85149">→ the rule is costing you</text>
+
+      <text x="455" y="322" text-anchor="middle" font-size="11.5" fill="#5C6B7A">Repeat for all seven rules. Each rule gets its own near-miss group.</text>
+    </svg>
+  </div>
+
+  <!-- 2 · THE HEADLINE -->
+  <div class="panel">
+    <h2>2 · The headline: the "don't chase" rule is the expensive one</h2>
+    <p class="sub">Rule 2 says don't buy a stock that has already run more than 1.8×ATR above its 20-day average.
+    Sensible-sounding. Here is what the stocks it rejected went on to do.</p>
+
+    <svg viewBox="0 0 920 240" role="img" aria-label="Bar chart: A plus stocks returned 0.83 percent, the stocks rejected for being too extended returned 1.43 percent">
+      <line x1="120" y1="170" x2="880" y2="170" stroke="#223041" stroke-width="1.5"/>
+
+      <rect x="200" y="86" width="150" height="84" fill="#3FB950" rx="4"/>
+      <text x="275" y="74" text-anchor="middle" font-size="24" font-weight="700" font-family="monospace" fill="#E6EDF3">0.83%</text>
+      <text x="275" y="192" text-anchor="middle" font-size="13" font-weight="700" fill="#3FB950">A+ — what you bought</text>
+      <text x="275" y="212" text-anchor="middle" font-size="11" fill="#8B98A5">29,777 days</text>
+
+      <rect x="560" y="25" width="150" height="145" fill="#F85149" rx="4"/>
+      <text x="635" y="15" text-anchor="middle" font-size="24" font-weight="700" font-family="monospace" fill="#E6EDF3">1.43%</text>
+      <text x="635" y="192" text-anchor="middle" font-size="13" font-weight="700" fill="#F85149">rejected: "too extended"</text>
+      <text x="635" y="212" text-anchor="middle" font-size="11" fill="#8B98A5">23,893 days</text>
+
+      <text x="455" y="234" text-anchor="middle" font-size="11.5" font-family="monospace" fill="#5C6B7A">average return over the following month</text>
+    </svg>
+
+    <div class="note hot"><b>The stocks this rule threw away outperformed the stocks it let through — by nearly
+    double.</b> And the rejected group is almost as large as the accepted one (23,893 vs 29,777), so this isn't a
+    fringe effect. It also holds in both halves of the data, and it isn't driven by a few lucky names — the gain is
+    spread across 527 different stocks, with no single one contributing more than 3%.</div>
+  </div>
+
+  <!-- 3 · THE SCOREBOARD -->
+  <div class="panel">
+    <h2>3 · The scoreboard — all seven rules</h2>
+    <p class="sub">Same test applied to every rule. "Verdict" is what the pre-written decision table says, not a
+    judgement made after seeing the numbers.</p>
+
+    <table>
+      <tr><th style="width:26%">rule</th><th style="width:36%">what its near-misses did</th><th style="width:38%">verdict</th></tr>
+      <tr class="bad">
+        <td class="n">Extension<br><span style="font-weight:400;color:var(--muted);font-size:12px">≤1.8×ATR above SMA20</span></td>
+        <td>earned <b style="color:var(--ink)">1.43%</b> vs A+'s 0.83% — 23,893 days, both halves, 527 stocks</td>
+        <td><span class="verdict" style="color:var(--bad)">COSTING YOU</span><br><span style="font-size:12px">the strongest result in the study</span></td>
+      </tr>
+      <tr class="bad">
+        <td class="n">YTD penalty<br><span style="font-weight:400;color:var(--muted);font-size:12px">docks stocks up &gt;100% this year</span></td>
+        <td>earned <b style="color:var(--ink)">7.99%</b> — but only 384 days, and one stock (ERAS) is a third of it</td>
+        <td><span class="verdict" style="color:var(--warn)">SUSPICIOUS, NOT PROVEN</span><br><span style="font-size:12px">fails in the second half of the data</span></td>
+      </tr>
+      <tr class="good">
+        <td class="n">RSI band<br><span style="font-weight:400;color:var(--muted);font-size:12px">must be between 45 and 70</span></td>
+        <td>near-misses did <b style="color:var(--ink)">worse</b> than A+</td>
+        <td><span class="verdict" style="color:var(--ok)">DOING REAL WORK</span><br><span style="font-size:12px">leave it alone</span></td>
+      </tr>
+      <tr class="good">
+        <td class="n">Trend condition (c2)</td>
+        <td>near-misses did <b style="color:var(--ink)">worse</b> than A+</td>
+        <td><span class="verdict" style="color:var(--ok)">DOING REAL WORK</span></td>
+      </tr>
+      <tr>
+        <td class="n">Approach filter<br>Score ≥75<br>Earnings runway<br>Other conditions</td>
+        <td>differences too small or too unstable to call</td>
+        <td><span class="verdict" style="color:var(--dim)">INCONCLUSIVE</span><br><span style="font-size:12px">near-misses recorded; no action</span></td>
+      </tr>
+    </table>
+
+    <div class="note good"><b>Two rules were vindicated, and that matters as much as the two that weren't.</b> You
+    asked last week whether the RSI ceiling should move to 80. The answer from the data is <b>no</b> — the stocks
+    rejected on RSI went on to do worse, so that rule is earning its keep. The problem runs through the extension
+    rule, not the RSI one.</div>
+  </div>
+
+  <!-- 4 · WHAT IT MEANS -->
+  <div class="panel">
+    <h2>4 · What this actually means</h2>
+    <p><b>The A+ grade was built to avoid chasing.</b> Buy the calm pullback, not the stock that has already run.
+    That instinct is what the extension rule encodes — and it is the single most expensive rule in the set.</p>
+    <p style="margin-top:14px"><b>It fits everything else this project has measured.</b> The earlier study found A+
+    stocks returned less than C stocks. Then the distribution work found that A+'s entire profit comes from a
+    handful of big winners — strip the top 5% of days and the A+ group actually <i>loses</i> money. This study now
+    names the rule responsible for cutting those winners off.</p>
+    <p style="margin-top:14px"><b>But nothing changes yet, and that restraint is deliberate.</b> This test measures
+    signals in isolation — no stops, no position sizing, no exits. The earlier system-level test (Build 5B) found
+    that once real stops were applied, <i>no</i> entry rule was measurably better than any other. So a rule can look
+    expensive here and still make no difference to a live account.</p>
+
+    <div class="note"><b>Next step, in one line:</b> take the extension rule and the YTD penalty into a full
+    system test — with stops, sizing and exits — and see whether removing them actually makes the account
+    perform better, or just makes the spreadsheet look better.</div>
+  </div>
+
+  <div class="foot">Build 5.1 · row ablation · commit 29399ce behind pre-registration 2f98eb0 · nothing shipped to production</div>
+
+</div>
+</body>
+</html>

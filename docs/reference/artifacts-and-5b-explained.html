@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The artifact vocabulary · and Build 5B, diagrammed</title>
+<style>
+  :root{
+    --bg:#0B0F14; --panel:#121820; --panel2:#0E141B; --line:#223041;
+    --ink:#E6EDF3; --muted:#8B98A5; --dim:#5C6B7A;
+    --chat:#58A6FF; --cc:#3FB950; --reg:#D4A72C; --warn:#F85149; --alt:#8957E5;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  .wrap{max-width:980px;margin:0 auto;padding:40px 22px 72px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  h1{font-size:clamp(25px,4.2vw,36px);letter-spacing:-.02em;margin:.35em 0 .2em;font-weight:750}
+  .lede{font-size:14.5px;color:var(--muted);max-width:70ch}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 22px 18px;margin-top:28px}
+  .panel h2{font-size:17px;margin:0 0 3px;font-weight:700;letter-spacing:-.01em}
+  .panel .sub{font-size:13px;color:var(--muted);margin:0 0 16px;max-width:78ch}
+  svg{width:100%;height:auto;display:block}
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+     color:var(--dim);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted)}
+  td.n{color:var(--ink);font-weight:600;font-family:var(--mono);font-size:12px;white-space:nowrap}
+  td.y{color:var(--reg);font-weight:600;font-family:var(--mono);font-size:11px}
+  td.no{color:var(--dim);font-family:var(--mono);font-size:11px}
+  .note{font-size:13px;color:var(--muted);margin-top:14px;border-left:2px solid var(--line);padding-left:14px}
+  .note b{color:var(--ink);font-weight:600}
+  .foot{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">SignalAgent · reference</div>
+  <h1>The artifact vocabulary — and Build 5B, diagrammed.</h1>
+  <p class="lede">Two things in one page: what each kind of document in this project is for and who it binds,
+  then the last prompt broken into its four moving parts.</p>
+
+  <!-- ============ 1 · THE LIFECYCLE ============ -->
+  <div class="panel">
+    <h2>1 · How a question becomes law</h2>
+    <p class="sub">Every artifact type is one station on this loop. Colour = who writes it. Nothing skips a station:
+    a rule that never became a decision record isn't a rule, and a decision without pins isn't enforced.</p>
+
+    <svg viewBox="0 0 920 500" role="img" aria-label="Lifecycle diagram: question, brief, decision record, spec, build, hold, adjudication, push and pins, evidence, revisit trigger, looping back to question">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+          <path d="M0,0 L9,4.5 L0,9 Z" fill="#5C6B7A"/>
+        </marker>
+        <marker id="ar2" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+          <path d="M0,0 L9,4.5 L0,9 Z" fill="#8B98A5"/>
+        </marker>
+      </defs>
+
+      <!-- ROW 1 -->
+      <rect x="30"  y="40" width="190" height="68" rx="8" fill="#0E141B" stroke="#5C6B7A" stroke-width="1.5"/>
+      <text x="125" y="67" text-anchor="middle" font-size="14" font-weight="700" fill="#E6EDF3">QUESTION</text>
+      <text x="125" y="88" text-anchor="middle" font-size="10.5" fill="#8B98A5" font-family="monospace">something looks wrong</text>
+
+      <rect x="260" y="40" width="190" height="68" rx="8" fill="#0E141B" stroke="#58A6FF" stroke-width="1.5"/>
+      <text x="355" y="67" text-anchor="middle" font-size="14" font-weight="700" fill="#E6EDF3">BRIEF</text>
+      <text x="355" y="88" text-anchor="middle" font-size="10.5" fill="#8B98A5" font-family="monospace">options · not binding</text>
+
+      <rect x="490" y="40" width="190" height="68" rx="8" fill="#0E141B" stroke="#D4A72C" stroke-width="2"/>
+      <text x="585" y="67" text-anchor="middle" font-size="14" font-weight="700" fill="#E6EDF3">DECISION RECORD</text>
+      <text x="585" y="88" text-anchor="middle" font-size="10.5" fill="#D4A72C" font-family="monospace">BINDING · has triggers</text>
+
+      <rect x="720" y="40" width="190" height="68" rx="8" fill="#0E141B" stroke="#58A6FF" stroke-width="1.5"/>
+      <text x="815" y="67" text-anchor="middle" font-size="14" font-weight="700" fill="#E6EDF3">SPEC</text>
+      <text x="815" y="88" text-anchor="middle" font-size="10.5" fill="#8B98A5" font-family="monospace">the build order</text>
+
+      <!-- ROW 2 -->
+      <rect x="720" y="180" width="190" height="68" rx="8" fill="#0E141B" stroke="#3FB950" stroke-width="1.5"/>
+      <text x="815" y="207" text-anchor="middle" font-size="14" font-weight="700" fill="#E6EDF3">BUILD</text>
+      <text x="815" y="228" text-anchor="middle" font-size="10.5" fill="#8B98A5" font-family="monospace">code · pins · fan-out</text>
+
+      <rect x="490" y="180" width="190" height="68" rx="8" fill="#0E141B" stroke="#3FB950" stroke-width="1.5"/>
+      <text x="585" y="207" text-anchor="middle" font-size="14" font-weight="700" fill="#E6EDF3">HOLD</text>
+      <text x="585" y="228" text-anchor="middle" font-size="10.5" fill="#8B98A5" font-family="monospace">staged · nothing pushed</text>
+
+      <rect x="260" y="180" width="190" height="68" rx="8" fill="#0E141B" stroke="#58A6FF" stroke-width="1.5"/>
+      <text x="355" y="207" text-anchor="middle" font-size="14" font-weight="700" fill="#E6EDF3">ADJUDICATION</text>
+      <text x="355" y="228" text-anchor="middle" font-size="10.5" fill="#8B98A5" font-family="monospace">approve · amend · reject</text>
+
+      <rect x="30"  y="180" width="190" height="68" rx="8" fill="#0E141B" stroke="#3FB950" stroke-width="1.5"/>
+      <text x="125" y="203" text-anchor="middle" font-size="14" font-weight="700" fill="#E6EDF3">PUSH + PINS</text>
+      <text x="125" y="222" text-anchor="middle" font-size="10.5" fill="#8B98A5" font-family="monospace">live · guarded by tests</text>
+      <text x="125" y="238" text-anchor="middle" font-size="10.5" fill="#3FB950" font-family="monospace">forever</text>
+
+      <!-- ROW 3 -->
+      <rect x="260" y="320" width="190" height="68" rx="8" fill="#0E141B" stroke="#3FB950" stroke-width="1.5"/>
+      <text x="355" y="347" text-anchor="middle" font-size="14" font-weight="700" fill="#E6EDF3">EVIDENCE / REPORT</text>
+      <text x="355" y="368" text-anchor="middle" font-size="10.5" fill="#8B98A5" font-family="monospace">measured · rerunnable</text>
+
+      <rect x="490" y="320" width="190" height="68" rx="8" fill="#0E141B" stroke="#D4A72C" stroke-width="2"/>
+      <text x="585" y="347" text-anchor="middle" font-size="14" font-weight="700" fill="#E6EDF3">REVISIT TRIGGER</text>
+      <text x="585" y="368" text-anchor="middle" font-size="10.5" fill="#D4A72C" font-family="monospace">fires → reopens it</text>
+
+      <rect x="720" y="320" width="190" height="68" rx="8" fill="#0E141B" stroke="#8B98A5" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <text x="815" y="347" text-anchor="middle" font-size="14" font-weight="700" fill="#E6EDF3">EXPLAINER</text>
+      <text x="815" y="368" text-anchor="middle" font-size="10.5" fill="#8B98A5" font-family="monospace">teaching · not binding</text>
+
+      <!-- arrows row 1 -->
+      <line x1="220" y1="74" x2="252" y2="74" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#ar)"/>
+      <line x1="450" y1="74" x2="482" y2="74" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#ar)"/>
+      <line x1="680" y1="74" x2="712" y2="74" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#ar)"/>
+      <!-- spec down to build -->
+      <line x1="815" y1="108" x2="815" y2="172" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#ar)"/>
+      <!-- arrows row 2, right to left -->
+      <line x1="720" y1="214" x2="688" y2="214" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#ar)"/>
+      <line x1="490" y1="214" x2="458" y2="214" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#ar)"/>
+      <line x1="260" y1="214" x2="228" y2="214" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#ar)"/>
+      <!-- push down + right to evidence -->
+      <path d="M125 248 V 354 H 252" fill="none" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#ar)"/>
+      <line x1="450" y1="354" x2="482" y2="354" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#ar)"/>
+      <!-- return loop -->
+      <path d="M585 388 V 452 H 15 V 74 H 24" fill="none" stroke="#5C6B7A" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+      <text x="300" y="446" font-size="10.5" fill="#5C6B7A" font-family="monospace">the loop closes — a fired trigger is a new question, not an argument</text>
+      <!-- explainer dashed link -->
+      <path d="M716 354 H 700 V 150 H 585 V 116" fill="none" stroke="#8B98A5" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar2)"/>
+
+      <!-- legend -->
+      <rect x="622" y="404" width="12" height="12" fill="none" stroke="#58A6FF" stroke-width="2"/>
+      <text x="644" y="414" font-size="11" fill="#8B98A5" font-family="monospace">written in chat (me)</text>
+      <rect x="622" y="428" width="12" height="12" fill="none" stroke="#3FB950" stroke-width="2"/>
+      <text x="644" y="438" font-size="11" fill="#8B98A5" font-family="monospace">produced by Claude Code</text>
+      <rect x="622" y="452" width="12" height="12" fill="none" stroke="#D4A72C" stroke-width="2"/>
+      <text x="644" y="462" font-size="11" fill="#8B98A5" font-family="monospace">permanent + binding</text>
+    </svg>
+
+    <table>
+      <tr><th>artifact</th><th>written when</th><th>binding?</th><th>lives where</th></tr>
+      <tr><td class="n">Brief</td><td>before a ruling — lays out the problem, the options, the tradeoffs</td><td class="no">no · input</td><td>chat (+ keeper .md)</td></tr>
+      <tr><td class="n">Decision record</td><td>at the ruling — states what was decided, why, and what would reopen it</td><td class="y">YES</td><td>docs/decisions/ · PER-508</td></tr>
+      <tr><td class="n">Amendment</td><td>when a record is found wrong or incomplete — never a silent edit</td><td class="y">YES</td><td>appended to the record</td></tr>
+      <tr><td class="n">Explainer</td><td>after a ruling — teaches how the mechanism works to future-you</td><td class="no">no · descriptive</td><td>docs/explainers/</td></tr>
+      <tr><td class="n">Spec / build package</td><td>before a build — the instruction to Claude Code, with scope fences</td><td class="no">an order, not doctrine</td><td>chat, pasted</td></tr>
+      <tr><td class="n">Step-0 / design hold</td><td>inside a build, before code — CC asks what it can't decide alone</td><td class="no">no · a question</td><td>CC output</td></tr>
+      <tr><td class="n">Adjudication</td><td>at a hold — approve, amend, or reject; this is where you rule</td><td class="y">for that build</td><td>chat</td></tr>
+      <tr><td class="n">Pre-registration</td><td><b style="color:#E6EDF3">before evidence exists</b> — what each outcome will oblige</td><td class="y">binds the reading</td><td>docs/*-prereg.md</td></tr>
+      <tr><td class="n">Report</td><td>after measurement — the evidence, with its own caveats section</td><td class="no">no · evidence</td><td>docs/*.md + results JSON</td></tr>
+      <tr><td class="n">Pin</td><td>with every build — the test that makes a ruling mechanically true</td><td class="y">enforces</td><td>test_*.py</td></tr>
+    </table>
+
+    <div class="note"><b>The one that's new this week is pre-registration.</b> Everything else runs before or after
+    the evidence. Pre-registration is the only artifact that must be committed <i>while the answer is still unknown</i> —
+    that's its entire function, and why it gets its own commit.</div>
+  </div>
+
+  <!-- ============ 2 · THE 5B EXPERIMENT ============ -->
+  <div class="panel">
+    <h2>2 · What Build 5B actually is</h2>
+    <p class="sub">A controlled experiment. Five strategies run over the same six years with the same money, the same
+    stop, the same sizing and the same costs — <b style="color:#E6EDF3">the only difference is who is allowed in the door.</b>
+    Then everything is measured a second and third time under different door-queue rules, because the queue turned out to matter.</p>
+
+    <svg viewBox="0 0 920 516" role="img" aria-label="Build 5B design: five entry gates over identical fixed mechanics, times three selection orderings, producing R-multiple metrics">
+      <text x="30" y="18" font-size="11" font-family="monospace" fill="#5C6B7A" letter-spacing="1.4">STEP 1 — THE ONLY THING THAT VARIES: THE ENTRY GATE</text>
+
+      <rect x="30"  y="32" width="160" height="76" rx="7" fill="#0E141B" stroke="#3FB950" stroke-width="1.6"/>
+      <text x="110" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#3FB950" font-family="monospace">S1</text>
+      <text x="110" y="72" text-anchor="middle" font-size="9.5" fill="#E6EDF3">production gate</text>
+      <text x="110" y="86" text-anchor="middle" font-size="9" fill="#8B98A5">A+ hard in Choppy</text>
+      <text x="110" y="99" text-anchor="middle" font-size="9" fill="#8B98A5">advisory in Trending</text>
+
+      <rect x="205" y="32" width="160" height="76" rx="7" fill="#0E141B" stroke="#3FB950" stroke-width="1.6"/>
+      <text x="285" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#3FB950" font-family="monospace">S2</text>
+      <text x="285" y="72" text-anchor="middle" font-size="9.5" fill="#E6EDF3">A+ hard everywhere</text>
+      <text x="285" y="86" text-anchor="middle" font-size="9" fill="#8B98A5">the stricter doctrine</text>
+
+      <rect x="380" y="32" width="160" height="76" rx="7" fill="#0E141B" stroke="#D4A72C" stroke-width="1.6"/>
+      <text x="460" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#D4A72C" font-family="monospace">S3</text>
+      <text x="460" y="72" text-anchor="middle" font-size="9.5" fill="#E6EDF3">B or better</text>
+      <text x="460" y="86" text-anchor="middle" font-size="9" fill="#8B98A5">the class the gate</text>
+      <text x="460" y="99" text-anchor="middle" font-size="9" fill="#8B98A5">currently excludes</text>
+
+      <rect x="555" y="32" width="160" height="76" rx="7" fill="#0E141B" stroke="#8957E5" stroke-width="1.6"/>
+      <text x="635" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#8957E5" font-family="monospace">S4</text>
+      <text x="635" y="72" text-anchor="middle" font-size="9.5" fill="#E6EDF3">top momentum decile</text>
+      <text x="635" y="86" text-anchor="middle" font-size="9" fill="#8B98A5">no doctrine rows</text>
+      <text x="635" y="99" text-anchor="middle" font-size="9" fill="#8B98A5">at all</text>
+
+      <rect x="730" y="32" width="160" height="76" rx="7" fill="#0E141B" stroke="#5C6B7A" stroke-width="1.6"/>
+      <text x="810" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#8B98A5" font-family="monospace">S5</text>
+      <text x="810" y="72" text-anchor="middle" font-size="9.5" fill="#E6EDF3">score ≥ 50 only</text>
+      <text x="810" y="86" text-anchor="middle" font-size="9" fill="#8B98A5">the humbling baseline —</text>
+      <text x="810" y="99" text-anchor="middle" font-size="9" fill="#8B98A5">does any of it help?</text>
+
+      <text x="460" y="128" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#5C6B7A">+ benchmarks — SPY buy &amp; hold · equal-weight pool · the 200DMA chassis alone</text>
+
+      <line x1="110" y1="140" x2="110" y2="160" stroke="#5C6B7A" stroke-width="1.4" marker-end="url(#ar)"/>
+      <line x1="285" y1="140" x2="285" y2="160" stroke="#5C6B7A" stroke-width="1.4" marker-end="url(#ar)"/>
+      <line x1="460" y1="140" x2="460" y2="160" stroke="#5C6B7A" stroke-width="1.4" marker-end="url(#ar)"/>
+      <line x1="635" y1="140" x2="635" y2="160" stroke="#5C6B7A" stroke-width="1.4" marker-end="url(#ar)"/>
+      <line x1="810" y1="140" x2="810" y2="160" stroke="#5C6B7A" stroke-width="1.4" marker-end="url(#ar)"/>
+
+      <rect x="30" y="166" width="860" height="114" rx="8" fill="#121820" stroke="#223041" stroke-width="1.5"/>
+      <text x="46" y="188" font-size="11.5" font-weight="700" font-family="monospace" fill="#E6EDF3">IDENTICAL MECHANICS — production values, never swept</text>
+      <text x="46" y="218" font-size="10.5" fill="#8B98A5" font-family="monospace">· next-open fills (D-006)</text>
+      <text x="336" y="218" font-size="10.5" fill="#8B98A5" font-family="monospace">· SMA20 close-basis stop (D-018)</text>
+      <text x="626" y="218" font-size="10.5" fill="#8B98A5" font-family="monospace">· sizing 6.5% of book</text>
+      <text x="46" y="244" font-size="10.5" fill="#8B98A5" font-family="monospace">· regime ceilings 90/50/25/5%</text>
+      <text x="336" y="244" font-size="10.5" fill="#8B98A5" font-family="monospace">· per-group cap ≤20% / ≤3 names</text>
+      <text x="626" y="244" font-size="10.5" fill="#8B98A5" font-family="monospace">· $0 commission, 5 bps/side</text>
+      <text x="46" y="268" font-size="10" fill="#5C6B7A" font-family="monospace">this is the anti-overfitting rule: more knobs than Layer A means more ways to fool ourselves</text>
+
+      <text x="30" y="304" font-size="11" font-family="monospace" fill="#5C6B7A" letter-spacing="1.4">STEP 2 — × THREE QUEUE RULES, BECAUSE THE QUEUE BINDS ON 88–100% OF DAYS</text>
+
+      <rect x="30"  y="316" width="270" height="72" rx="7" fill="#0E141B" stroke="#58A6FF" stroke-width="1.5"/>
+      <text x="165" y="340" text-anchor="middle" font-size="12" font-weight="700" fill="#E6EDF3">SCORE-ORDER</text>
+      <text x="165" y="360" text-anchor="middle" font-size="10" fill="#8B98A5">the headline — what production</text>
+      <text x="165" y="374" text-anchor="middle" font-size="10" fill="#8B98A5">would most plausibly do</text>
+
+      <rect x="325" y="316" width="270" height="72" rx="7" fill="#0E141B" stroke="#F85149" stroke-width="1.5"/>
+      <text x="460" y="340" text-anchor="middle" font-size="12" font-weight="700" fill="#E6EDF3">RANDOM-K · 50 seeds</text>
+      <text x="460" y="360" text-anchor="middle" font-size="10" fill="#F85149">THE NULL — every difference</text>
+      <text x="460" y="374" text-anchor="middle" font-size="10" fill="#F85149">must clear this band to count</text>
+
+      <rect x="620" y="316" width="270" height="72" rx="7" fill="#0E141B" stroke="#8957E5" stroke-width="1.5"/>
+      <text x="755" y="340" text-anchor="middle" font-size="12" font-weight="700" fill="#E6EDF3">NATIVE ORDER</text>
+      <text x="755" y="360" text-anchor="middle" font-size="10" fill="#8B98A5">each arm at its best —</text>
+      <text x="755" y="374" text-anchor="middle" font-size="10" fill="#8B98A5">momentum rank for S4</text>
+
+      <text x="460" y="410" text-anchor="middle" font-size="11" font-family="monospace" fill="#5C6B7A">= 15 runs + 3 benchmarks</text>
+
+      <rect x="30" y="422" width="860" height="80" rx="8" fill="#121820" stroke="#223041" stroke-width="1.5"/>
+      <text x="46" y="444" font-size="11.5" font-weight="700" font-family="monospace" fill="#E6EDF3">MEASURED IN R-MULTIPLES &nbsp;·&nbsp; R = entry price − initial stop</text>
+      <text x="46" y="468" font-size="10.5" fill="#8B98A5" font-family="monospace">· expectancy per R &nbsp;&nbsp; · the full R-distribution (the LEFT tail is the real test) &nbsp;&nbsp; · max drawdown</text>
+      <text x="46" y="490" font-size="10.5" fill="#8B98A5" font-family="monospace">· CAGR (reported, not deciding) &nbsp;&nbsp; · per-regime split, Choppy especially &nbsp;&nbsp; · train / validate</text>
+    </svg>
+
+    <div class="note"><b>Why R-multiples instead of returns.</b> Layer A asked "what happened next?" and the doctrine lost.
+    But the doctrine never promised big wins — it promised <i>cheap losses</i>: an A+ entry sits within 1.8×ATR of a rising
+    SMA20, so the stop is close and being wrong is small. R normalises for that. One unit of R is one unit of money risked,
+    so a strategy that wins less but risks far less can still win on expectancy-per-R. <b>That is the doctrine's entire
+    remaining case, and this is the measurement that either grants it or ends it.</b></div>
+  </div>
+
+  <!-- ============ 3 · THE CONFOUND ============ -->
+  <div class="panel">
+    <h2>3 · The amendment that needed a diagram — why S4 needs its own queue rule</h2>
+    <p class="sub">On most days more names qualify than there are slots, so a queue rule decides who actually gets bought.
+    Using the composite score as that rule looks neutral. It isn't — the score contains the YTD penalty, which docks names
+    for extreme momentum. So score-ordering quietly demotes the highest-momentum names inside the momentum arm.</p>
+
+    <svg viewBox="0 0 920 436" role="img" aria-label="Diagram showing the two highest-momentum names falling below the slot line when reordered by composite score">
+      <text x="60"  y="26" font-size="12" font-weight="700" fill="#E6EDF3">S4 admits the top momentum decile…</text>
+      <text x="530" y="26" font-size="12" font-weight="700" fill="#E6EDF3">…then score-order decides who gets a slot</text>
+      <text x="60"  y="48" font-size="10.5" font-family="monospace" fill="#5C6B7A">ranked by MOMENTUM</text>
+      <text x="530" y="48" font-size="10.5" font-family="monospace" fill="#5C6B7A">ranked by COMPOSITE SCORE</text>
+
+      <!-- left column -->
+      <rect x="60" y="62"  width="280" height="34" rx="5" fill="#0E141B" stroke="#8957E5" stroke-width="1.5"/>
+      <text x="76" y="84" font-size="11.5" font-family="monospace" fill="#E6EDF3">M1 · strongest momentum</text>
+      <text x="330" y="84" text-anchor="end" font-size="10" font-family="monospace" fill="#F85149">YTD −7</text>
+
+      <rect x="60" y="101" width="280" height="34" rx="5" fill="#0E141B" stroke="#8957E5" stroke-width="1.5"/>
+      <text x="76" y="123" font-size="11.5" font-family="monospace" fill="#E6EDF3">M2</text>
+      <text x="330" y="123" text-anchor="end" font-size="10" font-family="monospace" fill="#F85149">YTD −7</text>
+
+      <rect x="60" y="140" width="280" height="34" rx="5" fill="#0E141B" stroke="#223041" stroke-width="1.5"/>
+      <text x="76" y="162" font-size="11.5" font-family="monospace" fill="#E6EDF3">M3</text>
+      <rect x="60" y="179" width="280" height="34" rx="5" fill="#0E141B" stroke="#223041" stroke-width="1.5"/>
+      <text x="76" y="201" font-size="11.5" font-family="monospace" fill="#E6EDF3">M4</text>
+      <rect x="60" y="218" width="280" height="34" rx="5" fill="#0E141B" stroke="#223041" stroke-width="1.5"/>
+      <text x="76" y="240" font-size="11.5" font-family="monospace" fill="#8B98A5">M5</text>
+      <rect x="60" y="257" width="280" height="34" rx="5" fill="#0E141B" stroke="#223041" stroke-width="1.5"/>
+      <text x="76" y="279" font-size="11.5" font-family="monospace" fill="#8B98A5">M6</text>
+      <rect x="60" y="296" width="280" height="34" rx="5" fill="#0E141B" stroke="#223041" stroke-width="1.5"/>
+      <text x="76" y="318" font-size="11.5" font-family="monospace" fill="#8B98A5">M7</text>
+      <rect x="60" y="335" width="280" height="34" rx="5" fill="#0E141B" stroke="#223041" stroke-width="1.5"/>
+      <text x="76" y="357" font-size="11.5" font-family="monospace" fill="#8B98A5">M8</text>
+
+      <!-- middle arrow -->
+      <line x1="368" y1="200" x2="512" y2="200" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#ar)"/>
+      <text x="440" y="190" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#8B98A5">re-ordered</text>
+      <text x="440" y="222" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#8B98A5">by score</text>
+
+      <!-- right column -->
+      <rect x="540" y="62"  width="280" height="34" rx="5" fill="#0E141B" stroke="#223041" stroke-width="1.5"/>
+      <text x="556" y="84" font-size="11.5" font-family="monospace" fill="#E6EDF3">M3</text>
+      <text x="810" y="84" text-anchor="end" font-size="10" font-family="monospace" fill="#3FB950">bought</text>
+      <rect x="540" y="101" width="280" height="34" rx="5" fill="#0E141B" stroke="#223041" stroke-width="1.5"/>
+      <text x="556" y="123" font-size="11.5" font-family="monospace" fill="#E6EDF3">M4</text>
+      <text x="810" y="123" text-anchor="end" font-size="10" font-family="monospace" fill="#3FB950">bought</text>
+      <rect x="540" y="140" width="280" height="34" rx="5" fill="#0E141B" stroke="#223041" stroke-width="1.5"/>
+      <text x="556" y="162" font-size="11.5" font-family="monospace" fill="#E6EDF3">M5</text>
+      <text x="810" y="162" text-anchor="end" font-size="10" font-family="monospace" fill="#3FB950">bought</text>
+      <rect x="540" y="179" width="280" height="34" rx="5" fill="#0E141B" stroke="#223041" stroke-width="1.5"/>
+      <text x="556" y="201" font-size="11.5" font-family="monospace" fill="#E6EDF3">M6</text>
+      <text x="810" y="201" text-anchor="end" font-size="10" font-family="monospace" fill="#3FB950">bought</text>
+
+      <line x1="540" y1="219" x2="820" y2="219" stroke="#F85149" stroke-width="1.4" stroke-dasharray="5 4"/>
+      <text x="820" y="233" text-anchor="end" font-size="9.5" font-family="monospace" fill="#F85149">slot line — 4 slots</text>
+
+      <rect x="540" y="240" width="280" height="34" rx="5" fill="#0E141B" stroke="#F85149" stroke-width="1.6"/>
+      <text x="556" y="262" font-size="11.5" font-family="monospace" fill="#F85149">M1 · strongest momentum</text>
+      <text x="810" y="262" text-anchor="end" font-size="10" font-family="monospace" fill="#F85149">EXCLUDED</text>
+      <rect x="540" y="279" width="280" height="34" rx="5" fill="#0E141B" stroke="#F85149" stroke-width="1.6"/>
+      <text x="556" y="301" font-size="11.5" font-family="monospace" fill="#F85149">M2</text>
+      <text x="810" y="301" text-anchor="end" font-size="10" font-family="monospace" fill="#F85149">EXCLUDED</text>
+      <rect x="540" y="318" width="280" height="34" rx="5" fill="#0E141B" stroke="#223041" stroke-width="1.5"/>
+      <text x="556" y="340" font-size="11.5" font-family="monospace" fill="#8B98A5">M7</text>
+      <rect x="540" y="357" width="280" height="34" rx="5" fill="#0E141B" stroke="#223041" stroke-width="1.5"/>
+      <text x="556" y="379" font-size="11.5" font-family="monospace" fill="#8B98A5">M8</text>
+
+      <text x="60" y="418" font-size="11.5" fill="#8B98A5">The momentum arm would be tested on the <tspan fill="#E6EDF3" font-weight="700">weakest members of its own class</tspan> — and would lose for a reason that has nothing to do with momentum.</text>
+    </svg>
+
+    <div class="note"><b>Same trap, caught twice.</b> Claude Code spotted this shape for S5 — without a
+    <i>close &gt; SMA20</i> requirement, the shared stop would instantly eject every S5 entry and the baseline would be a
+    strawman. It missed the identical problem one row over in S4. That's why the queue rule now runs three ways:
+    <b>score-order</b> for realism, <b>random-K</b> as the neutral null, <b>native order</b> so no arm is tested handicapped.</div>
+  </div>
+
+  <!-- ============ 4 · PRE-REGISTRATION ============ -->
+  <div class="panel">
+    <h2>4 · The pre-registration — deciding what the answer means, before it exists</h2>
+    <p class="sub">Layer A was easy to accept because it indicted us. 5B is the dangerous one: it's the doctrine's last
+    chance, so every ambiguous result will be tempting to read as vindication. This table is committed <i>first</i>, in its
+    own commit, so the ruling is a lookup rather than an argument.</p>
+
+    <svg viewBox="0 0 920 534" role="img" aria-label="Pre-registration decision tree: two qualifying filters, then six outcome-to-ruling rows">
+      <rect x="30"  y="24" width="250" height="54" rx="7" fill="#0E141B" stroke="#F85149" stroke-width="1.5"/>
+      <text x="155" y="46" text-anchor="middle" font-size="11.5" font-weight="700" fill="#E6EDF3">1 · clears the random-K band?</text>
+      <text x="155" y="65" text-anchor="middle" font-size="10" fill="#8B98A5">bigger than queue-luck</text>
+
+      <rect x="300" y="24" width="250" height="54" rx="7" fill="#0E141B" stroke="#F85149" stroke-width="1.5"/>
+      <text x="425" y="46" text-anchor="middle" font-size="11.5" font-weight="700" fill="#E6EDF3">2 · sign holds at 0 / 5 / 15 bps?</text>
+      <text x="425" y="65" text-anchor="middle" font-size="10" fill="#8B98A5">not an artifact of costs</text>
+
+      <rect x="580" y="24" width="310" height="54" rx="7" fill="#0E141B" stroke="#5C6B7A" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <text x="735" y="46" text-anchor="middle" font-size="11.5" font-weight="700" fill="#8B98A5">either NO → INCONCLUSIVE</text>
+      <text x="735" y="65" text-anchor="middle" font-size="10" fill="#5C6B7A">reported as such, never as a finding</text>
+
+      <line x1="280" y1="51" x2="294" y2="51" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#ar)"/>
+      <line x1="550" y1="51" x2="574" y2="51" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#ar)"/>
+
+      <text x="30" y="102" font-size="11" font-family="monospace" fill="#5C6B7A">BOTH PASS → READ THE OUTCOME. Primary metric: expectancy per R. Secondary: max drawdown. CAGR does not decide.</text>
+
+      <!-- row 1 -->
+      <rect x="30" y="116" width="390" height="56" rx="6" fill="#0E141B" stroke="#223041"/>
+      <text x="46" y="140" font-size="11" fill="#E6EDF3">S1/S2 beat S3 AND S4 on</text>
+      <text x="46" y="158" font-size="11" fill="#E6EDF3">expectancy-per-R and drawdown</text>
+      <line x1="420" y1="144" x2="452" y2="144" stroke="#5C6B7A" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="460" y="116" width="430" height="56" rx="6" fill="#121820" stroke="#3FB950" stroke-width="2"/>
+      <text x="476" y="140" font-size="11.5" font-weight="700" fill="#3FB950">DOCTRINE SURVIVES — as a risk filter</text>
+      <text x="476" y="158" font-size="10.5" fill="#8B98A5">hard gate stays · D-020 narrows to the YTD penalty</text>
+
+      <!-- row 2 -->
+      <rect x="30" y="182" width="390" height="56" rx="6" fill="#0E141B" stroke="#223041"/>
+      <text x="46" y="206" font-size="11" fill="#E6EDF3">S3 beats S1/S2 on both</text>
+      <text x="46" y="224" font-size="11" fill="#8B98A5">the class the gate excludes wins</text>
+      <line x1="420" y1="210" x2="452" y2="210" stroke="#5C6B7A" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="460" y="182" width="430" height="56" rx="6" fill="#121820" stroke="#D4A72C" stroke-width="2"/>
+      <text x="476" y="206" font-size="11.5" font-weight="700" fill="#D4A72C">THE HARD GATE DIES</text>
+      <text x="476" y="224" font-size="10.5" fill="#8B98A5">grades become descriptive · B permitted in every regime</text>
+
+      <!-- row 3 -->
+      <rect x="30" y="248" width="390" height="56" rx="6" fill="#0E141B" stroke="#223041"/>
+      <text x="46" y="272" font-size="11" fill="#E6EDF3">S4 dominates S1/S2/S3</text>
+      <text x="46" y="290" font-size="11" fill="#8B98A5">momentum beats the doctrine outright</text>
+      <line x1="420" y1="276" x2="452" y2="276" stroke="#5C6B7A" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="460" y="248" width="430" height="56" rx="6" fill="#121820" stroke="#F85149" stroke-width="2"/>
+      <text x="476" y="272" font-size="11.5" font-weight="700" fill="#F85149">REPLACED, NOT REPAIRED</text>
+      <text x="476" y="290" font-size="10.5" fill="#8B98A5">D-011 superseded · the replacement earns its own sweep first</text>
+
+      <!-- row 4 -->
+      <rect x="30" y="314" width="390" height="56" rx="6" fill="#0E141B" stroke="#223041"/>
+      <text x="46" y="338" font-size="11" fill="#E6EDF3">no arm beats SPY buy-and-hold</text>
+      <text x="46" y="356" font-size="11" fill="#8B98A5">risk-adjusted</text>
+      <line x1="420" y1="342" x2="452" y2="342" stroke="#5C6B7A" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="460" y="314" width="430" height="56" rx="6" fill="#121820" stroke="#8957E5" stroke-width="2"/>
+      <text x="476" y="338" font-size="11.5" font-weight="700" fill="#8957E5">ENTRY SELECTION ISN'T THE EDGE</text>
+      <text x="476" y="356" font-size="10.5" fill="#8B98A5">the chassis and the stops are · simplify toward fewer gates</text>
+
+      <!-- row 5 -->
+      <rect x="30" y="380" width="390" height="56" rx="6" fill="#0E141B" stroke="#223041"/>
+      <text x="46" y="404" font-size="11" fill="#E6EDF3">every difference sits inside</text>
+      <text x="46" y="422" font-size="11" fill="#E6EDF3">the random-K band</text>
+      <line x1="420" y1="408" x2="452" y2="408" stroke="#5C6B7A" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="460" y="380" width="430" height="56" rx="6" fill="#121820" stroke="#8B98A5" stroke-width="2"/>
+      <text x="476" y="404" font-size="11.5" font-weight="700" fill="#E6EDF3">UNFALSIFIED BUT UNSUPPORTED</text>
+      <text x="476" y="422" font-size="10.5" fill="#8B98A5">gate softens to advisory — an unproven restriction shouldn't bind</text>
+
+      <!-- row 6 -->
+      <rect x="30" y="446" width="390" height="56" rx="6" fill="#0E141B" stroke="#223041"/>
+      <text x="46" y="470" font-size="11" fill="#E6EDF3">verdict not robust across the</text>
+      <text x="46" y="488" font-size="11" fill="#E6EDF3">three queue rules</text>
+      <line x1="420" y1="474" x2="452" y2="474" stroke="#5C6B7A" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="460" y="446" width="430" height="56" rx="6" fill="#121820" stroke="#58A6FF" stroke-width="2"/>
+      <text x="476" y="470" font-size="11.5" font-weight="700" fill="#58A6FF">RULING DEFERRED</text>
+      <text x="476" y="488" font-size="10.5" fill="#8B98A5">the selection rule is then the finding, and gets its own deliberation</text>
+
+      <text x="30" y="524" font-size="10.5" font-family="monospace" fill="#5C6B7A">rows 5 and 6 are the ones nobody would write after seeing the answer — which is exactly why they're written now</text>
+    </svg>
+  </div>
+
+  <div class="foot">companion to docs/backtest-doctrine.md (Layer A, commit 9b5a450) · Build 5B spec and Step-0 adjudication live in chat · PER-508</div>
+
+</div>
+</body>
+</html>

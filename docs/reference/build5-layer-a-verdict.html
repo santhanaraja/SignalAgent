@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build 5 · Layer A — the doctrine, measured</title>
+<style>
+  :root{
+    --bg:#0B0F14; --panel:#121820; --panel2:#0E141B; --line:#223041;
+    --ink:#E6EDF3; --muted:#8B98A5; --dim:#5C6B7A;
+    --aplus:#3FB950; --b:#D4A72C; --c:#F85149; --blocked:#8957E5;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5}
+  .wrap{max-width:980px;margin:0 auto;padding:40px 22px 64px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  h1{font-size:clamp(26px,4.4vw,40px);letter-spacing:-.02em;margin:.35em 0 .15em;font-weight:750}
+  .src{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .src b{color:var(--ink);font-weight:600}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 22px 16px;margin-top:26px}
+  .panel h2{font-size:16px;margin:0 0 2px;font-weight:700;letter-spacing:-.01em}
+  .panel .sub{font-size:12.5px;color:var(--muted);margin:0 0 14px}
+  .provenance{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:10px}
+  svg{width:100%;height:auto;display:block}
+  .lab{font-family:var(--mono);font-size:11px;fill:var(--muted)}
+  .val{font-family:var(--mono);font-size:12.5px;font-weight:700;fill:var(--ink)}
+  .axis{stroke:var(--line);stroke-width:1}
+  .zero{stroke:var(--dim);stroke-width:1;stroke-dasharray:3 4}
+  .chip{font-family:var(--mono);font-size:11px;font-weight:700}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:26px}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card .k{font-family:var(--mono);font-size:20px;font-weight:700}
+  .card .l{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .tails{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+  .tail{background:var(--panel2);border:1px solid var(--line);border-left-width:3px;border-radius:8px;padding:12px 14px}
+  .tail .t{font-family:var(--mono);font-size:12.5px;font-weight:700}
+  .tail .d{font-size:12px;color:var(--muted);margin-top:4px}
+  .caveats{margin-top:30px;border-top:1px solid var(--line);padding-top:18px}
+  .caveats h3{font-size:13px;margin:0 0 8px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-family:var(--mono);font-weight:600}
+  .caveats p{font-size:13px;color:var(--muted);margin:6px 0}
+  .caveats b{color:var(--ink);font-weight:600}
+  @media (prefers-reduced-motion: no-preference){
+    .bar{transition:opacity .15s ease} .bar:hover{opacity:.82}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Build 5 · Layer A · signal quality</div>
+  <h1>The doctrine, measured — and the ordering is inverted.</h1>
+  <div class="src">529 names · <b>848,328</b> point-in-time ticker-days · 2020-01 → 2026-07 · real <b>grade_setup</b> throughout<br>
+  source: commit <b>9b5a450</b> · docs/backtest-doctrine-results.json · PER-508 comment <b>11727</b> · input_hash <b>d7df85e8ad6ba244</b></div>
+
+  <!-- PANEL 1 · THE INVERSION -->
+  <div class="panel">
+    <h2>Forward 20-day return by grade — the chips, as bars</h2>
+    <p class="sub">Mean fwd-20d (open-to-open, T+1 → T+21). The doctrine's own chip colors. Higher bar = better forward return.</p>
+    <svg viewBox="0 0 920 300" role="img" aria-label="Grouped bar chart: A+ vs B vs C forward returns across full, train, validate spans; C highest in every span">
+      <!-- y axis: 0 → 2.0%, plot area y=30..250, x=70..900 -->
+      <line class="axis" x1="70" y1="250" x2="900" y2="250"/>
+      <text class="lab" x="58" y="254" text-anchor="end">0%</text>
+      <line class="axis" x1="70" y1="140" x2="900" y2="140" opacity=".35"/>
+      <text class="lab" x="58" y="144" text-anchor="end">1%</text>
+      <line class="axis" x1="70" y1="30" x2="900" y2="30" opacity=".35"/>
+      <text class="lab" x="58" y="34" text-anchor="end">2%</text>
+      <!-- FULL: A+ .83 → h=91.3 ; B 1.15 → 126.5 ; C 1.63 → 179.3 -->
+      <g>
+        <rect class="bar" x="110" y="158.7" width="52" height="91.3" fill="var(--aplus)" rx="3"/>
+        <rect class="bar" x="172" y="123.5" width="52" height="126.5" fill="var(--b)" rx="3"/>
+        <rect class="bar" x="234" y="70.7"  width="52" height="179.3" fill="var(--c)" rx="3"/>
+        <text class="val" x="136" y="150" text-anchor="middle">0.83</text>
+        <text class="val" x="198" y="115" text-anchor="middle">1.15</text>
+        <text class="val" x="260" y="62"  text-anchor="middle">1.63</text>
+        <text class="chip" x="136" y="268" text-anchor="middle" fill="var(--aplus)">A+</text>
+        <text class="chip" x="198" y="268" text-anchor="middle" fill="var(--b)">B</text>
+        <text class="chip" x="260" y="268" text-anchor="middle" fill="var(--c)">C</text>
+        <text class="lab" x="198" y="288" text-anchor="middle">FULL 2020–26 · A+ n=29,777</text>
+      </g>
+      <!-- TRAIN: A+ .73 → 80.3 ; B .67 → 73.7 ; C 1.47 → 161.7 -->
+      <g>
+        <rect class="bar" x="400" y="169.7" width="52" height="80.3" fill="var(--aplus)" rx="3"/>
+        <rect class="bar" x="462" y="176.3" width="52" height="73.7" fill="var(--b)" rx="3"/>
+        <rect class="bar" x="524" y="88.3"  width="52" height="161.7" fill="var(--c)" rx="3"/>
+        <text class="val" x="426" y="161" text-anchor="middle">0.73</text>
+        <text class="val" x="488" y="168" text-anchor="middle">0.67</text>
+        <text class="val" x="550" y="80"  text-anchor="middle">1.47</text>
+        <text class="chip" x="426" y="268" text-anchor="middle" fill="var(--aplus)">A+</text>
+        <text class="chip" x="488" y="268" text-anchor="middle" fill="var(--b)">B</text>
+        <text class="chip" x="550" y="268" text-anchor="middle" fill="var(--c)">C</text>
+        <text class="lab" x="488" y="288" text-anchor="middle">TRAIN 2020–23</text>
+      </g>
+      <!-- VALIDATE: A+ .97 → 106.7 ; B 1.76 → 193.6 ; C 1.89 → 207.9 -->
+      <g>
+        <rect class="bar" x="690" y="143.3" width="52" height="106.7" fill="var(--aplus)" rx="3"/>
+        <rect class="bar" x="752" y="56.4"  width="52" height="193.6" fill="var(--b)" rx="3"/>
+        <rect class="bar" x="814" y="42.1"  width="52" height="207.9" fill="var(--c)" rx="3"/>
+        <text class="val" x="716" y="135" text-anchor="middle">0.97</text>
+        <text class="val" x="778" y="48"  text-anchor="middle">1.76</text>
+        <text class="val" x="840" y="34"  text-anchor="middle">1.89</text>
+        <text class="chip" x="716" y="268" text-anchor="middle" fill="var(--aplus)">A+</text>
+        <text class="chip" x="778" y="268" text-anchor="middle" fill="var(--b)">B</text>
+        <text class="chip" x="840" y="268" text-anchor="middle" fill="var(--c)">C</text>
+        <text class="lab" x="778" y="288" text-anchor="middle">VALIDATE 2024–26 · trigger 1 fired</text>
+      </g>
+    </svg>
+    <div class="provenance">per_grade tables · full / train / validate · D-006 split honored · the C bucket is decomposed in the report (fat both-way tails), not leaned on raw</div>
+  </div>
+
+  <!-- PANEL 2 · THE SPREAD & CI -->
+  <div class="panel">
+    <h2>The A+ − C spread, with bootstrap confidence</h2>
+    <p class="sub">2,000 resamples. The claim isn't "slightly negative" — the entire interval sits below zero in both published spans. p(spread ≤ 0) = 1.0.</p>
+    <svg viewBox="0 0 920 190" role="img" aria-label="Dot and whisker chart of A+ minus C spread; confidence intervals entirely below the zero line">
+      <!-- y: 0 at 40, -1.4 at 170 → 92.86 px per 1.0 -->
+      <line class="zero" x1="60" y1="40" x2="900" y2="40"/>
+      <text class="lab" x="52" y="44" text-anchor="end">0</text>
+      <text class="lab" x="52" y="137" text-anchor="end">−1.0</text>
+      <line class="axis" x1="60" y1="133" x2="900" y2="133" opacity=".25"/>
+      <!-- FULL: −0.793 → y=113.6 ; CI [−1.122,−0.455] → y 144.2 .. 82.2 -->
+      <line x1="240" y1="82.2" x2="240" y2="144.2" stroke="var(--c)" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="240" cy="113.6" r="6.5" fill="var(--c)"/>
+      <text class="val" x="240" y="168" text-anchor="middle">−0.79</text>
+      <text class="lab" x="240" y="184" text-anchor="middle">FULL · CI [−1.12, −0.46]</text>
+      <!-- TRAIN: −0.73 → y=107.8 (point only; CI not published) -->
+      <circle cx="480" cy="107.8" r="6.5" fill="var(--c)" opacity=".75"/>
+      <text class="val" x="480" y="168" text-anchor="middle">−0.73</text>
+      <text class="lab" x="480" y="184" text-anchor="middle">TRAIN · point (CI not published)</text>
+      <!-- VALIDATE: −0.921 → y=125.5 ; CI [−1.268,−0.598] → y 157.7 .. 95.5 -->
+      <line x1="720" y1="95.5" x2="720" y2="157.7" stroke="var(--c)" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="720" cy="125.5" r="6.5" fill="var(--c)"/>
+      <text class="val" x="720" y="176" text-anchor="middle">−0.92</text>
+      <text class="lab" x="720" y="190" text-anchor="middle">VALIDATE · CI [−1.27, −0.60]</text>
+    </svg>
+    <div class="provenance">bootstrap block · results JSON lines 353–368 · robust to medians and both survivorship controls (2024+ only; full-history names only)</div>
+  </div>
+
+  <!-- PANEL 3 · CHOPPY -->
+  <div class="panel">
+    <h2>Where the hard gate rules: Choppy (In-Trend-Throttled)</h2>
+    <p class="sub">The regime where D-011 Q4 forces A+-only entries — measured against the class it excludes, and against the names blocked as too extended.</p>
+    <svg viewBox="0 0 920 210" role="img" aria-label="Bar chart: in Choppy regime, A+ 0.81 percent versus extension-blocked 1.32 percent versus B 1.39 percent">
+      <!-- scale 0→1.6%, plot y=20..160 → 87.5px per 1% -->
+      <line class="axis" x1="70" y1="160" x2="900" y2="160"/>
+      <text class="lab" x="58" y="164" text-anchor="end">0%</text>
+      <!-- A+ 0.810 → h=70.9 ; blocked 1.32 → 115.5 ; B 1.392 → 121.8 -->
+      <rect class="bar" x="150" y="89.1" width="120" height="70.9" fill="var(--aplus)" rx="3"/>
+      <rect class="bar" x="400" y="44.5" width="120" height="115.5" fill="var(--blocked)" rx="3"/>
+      <rect class="bar" x="650" y="38.2" width="120" height="121.8" fill="var(--b)" rx="3"/>
+      <text class="val" x="210" y="81" text-anchor="middle">0.81</text>
+      <text class="val" x="460" y="36" text-anchor="middle">1.32</text>
+      <text class="val" x="710" y="30" text-anchor="middle">1.39</text>
+      <text class="chip" x="210" y="180" text-anchor="middle" fill="var(--aplus)">A+ · the only class permitted</text>
+      <text class="chip" x="460" y="180" text-anchor="middle" fill="var(--blocked)">blocked as too extended</text>
+      <text class="chip" x="710" y="180" text-anchor="middle" fill="var(--b)">B · hard-gated out</text>
+      <text class="lab" x="485" y="202" text-anchor="middle">B − A+ = +0.58% per 20d — the restriction excluded the better-performing permitted class</text>
+    </svg>
+    <div class="provenance">regime_conditioned → In-Trend-Throttled · results JSON line 370</div>
+  </div>
+
+  <!-- PANEL 4 · MOMENTUM -->
+  <div class="panel">
+    <h2>The momentum module — the same finding from the other side</h2>
+    <p class="sub">The score's YTD&gt;100% mean-reversion penalty, measured on the days it actually fired. 83% of penalized days sit in the top momentum decile — penalty-backwards and top-decile-wins are one phenomenon.</p>
+    <svg viewBox="0 0 920 220" role="img" aria-label="Bar chart: penalized days returned 6.95 percent forward versus 1.51 percent for non-penalized days">
+      <!-- scale 0→7.5%, plot y=24..170 → 19.47px per 1% -->
+      <line class="axis" x1="70" y1="170" x2="900" y2="170"/>
+      <text class="lab" x="58" y="174" text-anchor="end">0%</text>
+      <!-- non-pen 1.51 → 29.4 ; pen 6.95 → 135.3 -->
+      <rect class="bar" x="200" y="140.6" width="160" height="29.4" fill="var(--dim)" rx="3"/>
+      <rect class="bar" x="560" y="34.7" width="160" height="135.3" fill="var(--c)" rx="3"/>
+      <text class="val" x="280" y="132" text-anchor="middle">+1.51</text>
+      <text class="val" x="640" y="26" text-anchor="middle">+6.95</text>
+      <text class="chip" x="280" y="190" text-anchor="middle" fill="var(--muted)">all other days</text>
+      <text class="chip" x="640" y="190" text-anchor="middle" fill="var(--c)">days the penalty fired</text>
+      <text class="lab" x="485" y="212" text-anchor="middle">fwd-20d on penalized vs non-penalized days · the score docked exactly the names that went on to win</text>
+    </svg>
+    <div class="provenance">d10 − d1 positive in all 3 momentum definitions × all 3 cuts · 6m/above-50DMA decile curve is a smile with a violent right edge (d10 +3.17%/20d — see committed JSON for the full curve) · lookback knob {10,20,40}: zero grade changes</div>
+  </div>
+
+  <!-- STAT BAND -->
+  <div class="cards">
+    <div class="card"><div class="k">848,328</div><div class="l">point-in-time ticker-days</div></div>
+    <div class="card"><div class="k">1 day</div><div class="l">median A+ spell — the flicker is the norm</div></div>
+    <div class="card"><div class="k">129 / 130</div><div class="l">production honesty bridge · sole miss = the ruled row-6 deletion</div></div>
+    <div class="card"><div class="k">1e-9</div><div class="l">feature parity vs production grade_setup</div></div>
+    <div class="card"><div class="k">516 / 516</div><div class="l">recorded production grades reproduced exactly</div></div>
+  </div>
+
+  <!-- TAILS -->
+  <div class="panel">
+    <h2>The tails, by name — chart-checkable</h2>
+    <p class="sub">Seed-42 instances from the committed frame. Remember the convention: fwd-20d is open-to-open (T+1 → T+21), so a close-anchored chart eyeball will differ slightly — that's the D-006 fill discipline.</p>
+    <div class="tails">
+      <div class="tail" style="border-left-color:var(--aplus)"><div class="t">UBER · 2020-02-19 · A+ → −61%</div><div class="d">The A+ worst-five are all Feb-2020 — graded perfect days before COVID. Breakers wouldn't have fired yet; the live defense is regime + stops — the strategy layer, which Layer A doesn't model.</div></div>
+      <div class="tail" style="border-left-color:var(--aplus)"><div class="t">PRAX · Sep–Oct 2025 · A+ → +266%</div><div class="d">The A+ right tail exists — it's just thin.</div></div>
+      <div class="tail" style="border-left-color:var(--c)"><div class="t">ARQQ, MXL · C → ~+400%</div><div class="d">The C bucket's right tail: micro-cap moonshots the doctrine's guards exclude.</div></div>
+      <div class="tail" style="border-left-color:var(--c)"><div class="t">APA · 2020 · C → −85%</div><div class="d">And its left tail: the oil/cruise collapses. Fat both ways — why the report decomposes C rather than leaning on the raw spread.</div></div>
+    </div>
+  </div>
+
+  <!-- CAVEATS -->
+  <div class="caveats">
+    <h3>What this does not prove — held with equal grip</h3>
+    <p><b>Layer A measures the signal, not the system.</b> No stops, no sizing, no exits. An A+ entry carries a structurally tight stop (≤1.8×ATR from a rising SMA20); extended leaders don't. Expectancy per unit of risk is the tradable metric — that is Build 5B's question, and the doctrine's remaining case lives entirely there.</p>
+    <p><b>One macro era.</b> 2020–2026 is momentum-rewarding — though the inversion holds in both D-006 spans, including the 2022 bear.</p>
+    <p><b>Grade-lite.</b> Rows c5 and 6 are ruled deletions (unreconstructable honestly); their measured cost on the production bridge: exactly 1 of 130.</p>
+    <p><b>Nothing changed in production.</b> No doctrine, gate, or logic was modified in this push. Re-ruling happens by deliberation: the D-011 revisit + D-020, sequenced by the open Path A/B choice.</p>
+  </div>
+
+</div>
+</body>
+</html>

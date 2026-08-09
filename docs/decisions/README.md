@@ -64,6 +64,33 @@ flowchart TD
 | [D-019](D-019-breaker-coverage.md) | Breaker coverage, not outcome — an outage never impersonates safety; three flavours of incomplete; trigger still wins | 2026-07-25 | Ruled | — |
 | [D-020a](D-020a-ytd-anchor-cap.md) | One honest YTD — real prior-year-close anchor on both paths; YTD component capped flat at the curve's peak above it; scorer versioned (v1 frozen with three pinned anchors) | 2026-08-09 | Ruled | — |
 
+Also in this directory: [CHAT-RULINGS](CHAT-RULINGS.md) — the living
+registry of operator rulings issued in session (scope calls,
+interpretive-step approvals, standing caveats) that bind the work but
+have not earned a full D-record; entries promote to D-records when
+they grow one.
+
+## SHA re-anchoring (2026-08-09 rebase over cron)
+
+Pushing the 2026-08-08/09 build stack required a rebase over 69 cron
+commits, which rewrote the commit SHAs that the study pins and the
+frozen pre-registration records cite. The frozen records keep their
+original text by design — a content-pinned record is never rewritten
+post-hoc — so anyone grepping for an old SHA lands here:
+
+| Cited (pre-rebase) | On main as | What it is |
+|---|---|---|
+| `2f98eb0` | `7ea58bc` | Build 5.1 pre-registration |
+| `29399ce` | `2610481` | Build 5.1 row ablation |
+| `d184ced` | `6b504ba` | Build 6A pre-registration |
+| `6bbca06` | `e223204` | Build 6A implementation declarations |
+| `a319b45` | `ecd3e0e` | Build 6A profit-target sweep |
+| `4dd5929` | `5771878` | D-020a scorer change |
+
+The re-anchoring commit is `75a19ef`; the immutability pins compare
+against the post-rebase SHAs, and the pinned CONTENT is identical
+across the mapping.
+
 Status meanings: **Proposed** (deliberation open or parked with its
 retest recipe) · **Ruled** (in force) · **Superseded-by-D-xxx** (kept for
 the record; the successor governs) · **Retired** (no successor needed —

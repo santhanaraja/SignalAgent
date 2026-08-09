@@ -1,5 +1,23 @@
 # Row Ablation — Build 5.1: which grade rows are expensive?
 
+> **AMENDMENT (2026-08-09, D-020a) — read before the verdict.** This
+> study's "YTD-penalty flip" suspect measured a **ROLLING-SIX-MONTH
+> >100% penalty, not a calendar-YTD one.** The grading path's 6mo
+> frame no longer contained January after early July, so the penalty's
+> input (Layer A's as-lived, frame-anchored YTD — replicated here
+> faithfully) was a rolling window wearing a YTD label for roughly
+> half of each measured year. Every number below stands as measured;
+> the CONSTRUCT they describe is the rolling form. A future carry
+> replay or threshold study must carry the construct as measured — the
+> rolling form — or re-derive the flip set under real calendar YTD
+> (D-020a's `compute_ytd_return_v2`) and say which. Note also: ERAS,
+> which carries 31.5% of this flip set's sum, is the largest YTD
+> divergence in the pool — **394.89% real calendar YTD vs 53.29% on
+> the 6mo reading** (D-020a impact table). See
+> [D-020a](decisions/D-020a-ytd-anchor-cap.md), which removed the
+> penalty from production on design-coherence grounds ahead of the
+> carry replay, with that shipment recorded explicitly.
+
 **Build 5.1 · 2026-08-08.** Script: `scripts/backtest_ablation.py` ·
 Results: [backtest-ablation-results.json](backtest-ablation-results.json)
 (`results_hash d6dc21745af93826`, recomputable from the committed file) ·
@@ -32,7 +50,8 @@ Every excluded-set statistic below rests on validated flags.
 >    outperformance is broad-based, not moonshot-carried. This is
 >    Layer A's D-004 counterfactual (extension-blocked C days at
 >    1.32%), now passing the full pre-registered test.
-> 2. **The YTD>100% penalty construct — PRIMARY SUSPECT, with two
+> 2. **The YTD>100% penalty construct [per the 2026-08-09 amendment:
+>    a rolling-six-month >100% construct] — PRIMARY SUSPECT, with two
 >    disclosures the bar reading depends on.** The 384 days whose grade
 >    flips to A+ when the penalty is removed are the richest set in the
 >    campaign: mean **7.99%/20d**, median 2.46, full-window ex-top-5%

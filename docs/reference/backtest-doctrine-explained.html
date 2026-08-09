@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The doctrine backtest, explained</title>
+<style>
+  :root{
+    --bg:#0B0F14; --panel:#121820; --panel2:#0E141B; --line:#223041;
+    --ink:#E6EDF3; --muted:#8B98A5; --dim:#5C6B7A;
+    --aplus:#3FB950; --b:#D4A72C; --c:#F85149; --alt:#8957E5; --chat:#58A6FF;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  .wrap{max-width:980px;margin:0 auto;padding:40px 22px 72px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  h1{font-size:clamp(25px,4.2vw,36px);letter-spacing:-.02em;margin:.35em 0 .2em;font-weight:750}
+  .lede{font-size:14.5px;color:var(--muted);max-width:72ch}
+  .src{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-top:10px}
+  .src b{color:var(--muted);font-weight:600}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 22px 18px;margin-top:28px}
+  .panel h2{font-size:17px;margin:0 0 3px;font-weight:700;letter-spacing:-.01em}
+  .panel .sub{font-size:13px;color:var(--muted);margin:0 0 16px;max-width:80ch}
+  svg{width:100%;height:auto;display:block}
+  .note{font-size:13px;color:var(--muted);margin-top:15px;border-left:2px solid var(--line);padding-left:14px}
+  .note b{color:var(--ink);font-weight:600}
+  .note.hot{border-left-color:var(--c)}
+  pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+      overflow-x:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink);margin:12px 0 0}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+     color:var(--dim);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted)}
+  td.n{color:var(--ink);font-weight:600;font-family:var(--mono);font-size:12px;white-space:nowrap}
+  .caveats{margin-top:30px;border-top:1px solid var(--line);padding-top:18px}
+  .caveats h3{font-size:12.5px;margin:0 0 10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+              font-family:var(--mono);font-weight:600}
+  .caveats p{font-size:13px;color:var(--muted);margin:7px 0}
+  .caveats b{color:var(--ink);font-weight:600}
+  .foot{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">SignalAgent · reference · Build 5 Layer A</div>
+  <h1>The doctrine backtest, explained.</h1>
+  <p class="lede">Not the verdict — the machinery behind it. How 848,328 rows were built, what stops the study from
+  cheating, which parts of the grade had to be dropped and what that cost, and how to rerun the whole thing yourself.</p>
+  <div class="src">commit <b>9b5a450</b> · script <b>scripts/backtest_doctrine.py</b> · results <b>docs/backtest-doctrine-results.json</b>
+  · pins <b>test_backtest_doctrine.py</b> · PER-508 comment <b>11727</b></div>
+
+  <!-- 1 · THE ROW -->
+  <div class="panel">
+    <h2>1 · What one row is — and the wall that keeps it honest</h2>
+    <p class="sub">The study's atom is a <b style="color:#E6EDF3">ticker-day</b>: one stock, one trading day, graded using
+    only what was knowable at that day's close, then joined to what happened afterwards. Everything hangs on the two halves
+    never touching.</p>
+
+    <svg viewBox="0 0 920 400" role="img" aria-label="Timeline diagram: inputs computed up to the close of day D, a point-in-time wall, then the forward return measured from the next open to the open twenty-one days later">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+          <path d="M0,0 L9,4.5 L0,9 Z" fill="#5C6B7A"/>
+        </marker>
+      </defs>
+
+      <!-- input region -->
+      <rect x="40" y="70" width="420" height="150" rx="8" fill="#0E141B" stroke="#3FB950" stroke-width="1.4"/>
+      <text x="58" y="94" font-size="11" font-family="monospace" fill="#3FB950" letter-spacing="1.2">INPUTS — KNOWABLE AT THE CLOSE OF DAY D</text>
+      <text x="58" y="120" font-size="10.5" font-family="monospace" fill="#8B98A5">· SMA5 / SMA20 / SMA50 / SMA200, ATR, 20-bar swing low</text>
+      <text x="58" y="140" font-size="10.5" font-family="monospace" fill="#8B98A5">· RSI (Wilder, ~126-bar window), MACD</text>
+      <text x="58" y="160" font-size="10.5" font-family="monospace" fill="#8B98A5">· composite score — rsi / macd / ma / ytd / volume</text>
+      <text x="58" y="180" font-size="10.5" font-family="monospace" fill="#8B98A5">· regime, replayed from the committed chassis series</text>
+      <text x="58" y="200" font-size="10.5" font-family="monospace" fill="#8B98A5">· sessions until the next earnings print</text>
+
+      <!-- the wall -->
+      <line x1="480" y1="50" x2="480" y2="300" stroke="#F85149" stroke-width="2" stroke-dasharray="6 5"/>
+      <text x="480" y="42" text-anchor="middle" font-size="11.5" font-weight="700" fill="#F85149" font-family="monospace">THE POINT-IN-TIME WALL</text>
+
+      <!-- outcome region -->
+      <rect x="500" y="70" width="380" height="150" rx="8" fill="#0E141B" stroke="#5C6B7A" stroke-width="1.4"/>
+      <text x="518" y="94" font-size="11" font-family="monospace" fill="#8B98A5" letter-spacing="1.2">OUTCOME — NEVER SEEN BY THE GRADE</text>
+      <text x="518" y="124" font-size="10.5" font-family="monospace" fill="#8B98A5">fwd_5d · fwd_10d · fwd_20d · fwd_40d</text>
+      <text x="518" y="152" font-size="10.5" font-family="monospace" fill="#E6EDF3">measured OPEN to OPEN —</text>
+      <text x="518" y="172" font-size="10.5" font-family="monospace" fill="#E6EDF3">you cannot fill on the close</text>
+      <text x="518" y="192" font-size="10.5" font-family="monospace" fill="#E6EDF3">that produced the signal</text>
+
+      <!-- timeline -->
+      <line x1="40" y1="252" x2="880" y2="252" stroke="#223041" stroke-width="1.5"/>
+      <line x1="480" y1="246" x2="480" y2="258" stroke="#F85149" stroke-width="2"/>
+      <line x1="530" y1="246" x2="530" y2="258" stroke="#8B98A5" stroke-width="1.5"/>
+      <line x1="840" y1="246" x2="840" y2="258" stroke="#8B98A5" stroke-width="1.5"/>
+
+      <text x="480" y="276" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#F85149">close of day D</text>
+      <text x="480" y="292" text-anchor="middle" font-size="10" font-family="monospace" fill="#5C6B7A">the grade is struck here</text>
+      <text x="530" y="276" text-anchor="start" font-size="10.5" font-family="monospace" fill="#E6EDF3">open of D+1</text>
+      <text x="530" y="292" text-anchor="start" font-size="10" font-family="monospace" fill="#5C6B7A">the fill</text>
+      <text x="840" y="276" text-anchor="end" font-size="10.5" font-family="monospace" fill="#E6EDF3">open of D+21</text>
+      <text x="840" y="292" text-anchor="end" font-size="10" font-family="monospace" fill="#5C6B7A">the measurement</text>
+
+      <path d="M530 312 H 840" fill="none" stroke="#8B98A5" stroke-width="1.4" marker-end="url(#ar)"/>
+      <text x="685" y="330" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#8B98A5">fwd_20d — 20 trading days of holding</text>
+
+      <text x="40" y="366" font-size="12" fill="#8B98A5">One row = <tspan font-family="monospace" fill="#E6EDF3">(ticker, day D, grade, fwd_5/10/20/40d)</tspan>. Repeated <tspan font-weight="700" fill="#E6EDF3">848,328</tspan> times across 529 names and ~1,600 trading days.</text>
+      <text x="40" y="388" font-size="11.5" fill="#5C6B7A">Names enter the study only as their own price history allows — 126 bars of warmup plus a YTD anchor.</text>
+    </svg>
+
+    <div class="note"><b>This is why a chart eyeball won't match the printed number.</b> The grade is struck on day D's
+    close, but the return starts at the <i>next open</i> — because that is the earliest moment you could actually have
+    bought. That's the D-006 fill discipline. Measuring from D's close would credit the study with a fill nobody could
+    have gotten, and would flatter every bucket by roughly one overnight gap.</div>
+  </div>
+
+  <!-- 2 · GRADE-LITE -->
+  <div class="panel">
+    <h2>2 · What was graded — and the two rows that had to go</h2>
+    <p class="sub">The production grade has seven rows. Five replay perfectly from price history. Two depend on artifacts
+    that simply don't exist before July 2026, so they were <b style="color:#E6EDF3">deleted rather than guessed</b> — and
+    the deletion's cost was then measured instead of assumed.</p>
+
+    <svg viewBox="0 0 920 460" role="img" aria-label="The seven grade rows, five kept, c5 and row six deleted, with reasons">
+      <!-- row 1 -->
+      <rect x="30" y="20" width="860" height="52" rx="6" fill="#0E141B" stroke="#223041"/>
+      <text x="48" y="42" font-size="11.5" font-family="monospace" fill="#3FB950" font-weight="700">1</text>
+      <text x="76" y="42" font-size="12" fill="#E6EDF3" font-weight="600">The five conditions — trend, extension, approach, RSI, group-in-universe</text>
+      <text x="76" y="61" font-size="10.5" fill="#8B98A5">c1/c2/c4 are pure price · c3 replays from the committed regime series · <tspan fill="#F85149">c5 dropped</tspan></text>
+      <text x="872" y="48" text-anchor="end" font-size="10.5" font-family="monospace" fill="#D4A72C">KEPT − c5</text>
+
+      <rect x="30" y="78" width="860" height="52" rx="6" fill="#0E141B" stroke="#223041"/>
+      <text x="48" y="100" font-size="11.5" font-family="monospace" fill="#3FB950" font-weight="700">2</text>
+      <text x="76" y="100" font-size="12" fill="#E6EDF3" font-weight="600">Extension ≤ 1.8 × ATR above SMA20</text>
+      <text x="76" y="119" font-size="10.5" fill="#8B98A5">pure price, 21 bars</text>
+      <text x="872" y="106" text-anchor="end" font-size="10.5" font-family="monospace" fill="#3FB950">KEPT</text>
+
+      <rect x="30" y="136" width="860" height="52" rx="6" fill="#0E141B" stroke="#223041"/>
+      <text x="48" y="158" font-size="11.5" font-family="monospace" fill="#3FB950" font-weight="700">3</text>
+      <text x="76" y="158" font-size="12" fill="#E6EDF3" font-weight="600">Approach filter — close &gt; SMA5 and an up-close off the 20-bar swing low</text>
+      <text x="76" y="177" font-size="10.5" fill="#8B98A5">pure price · its lookback knob {10, 20, 40} turned out to change nothing at all</text>
+      <text x="872" y="164" text-anchor="end" font-size="10.5" font-family="monospace" fill="#3FB950">KEPT</text>
+
+      <rect x="30" y="194" width="860" height="52" rx="6" fill="#0E141B" stroke="#223041"/>
+      <text x="48" y="216" font-size="11.5" font-family="monospace" fill="#3FB950" font-weight="700">4</text>
+      <text x="76" y="216" font-size="12" fill="#E6EDF3" font-weight="600">RSI between 45 and 70</text>
+      <text x="76" y="235" font-size="10.5" fill="#8B98A5">pure price · graded on ~126-bar windows to match production's Wilder recursion exactly</text>
+      <text x="872" y="222" text-anchor="end" font-size="10.5" font-family="monospace" fill="#3FB950">KEPT</text>
+
+      <rect x="30" y="252" width="860" height="52" rx="6" fill="#0E141B" stroke="#223041"/>
+      <text x="48" y="274" font-size="11.5" font-family="monospace" fill="#3FB950" font-weight="700">5</text>
+      <text x="76" y="274" font-size="12" fill="#E6EDF3" font-weight="600">Composite score ≥ 75</text>
+      <text x="76" y="293" font-size="10.5" fill="#8B98A5">better than hoped — all five components are pure price/volume, zero analyst or news content</text>
+      <text x="872" y="280" text-anchor="end" font-size="10.5" font-family="monospace" fill="#3FB950">KEPT</text>
+
+      <rect x="30" y="310" width="860" height="52" rx="6" fill="#0E141B" stroke="#F85149" stroke-width="1.6"/>
+      <text x="48" y="332" font-size="11.5" font-family="monospace" fill="#F85149" font-weight="700">6</text>
+      <text x="76" y="332" font-size="12" fill="#F85149" font-weight="600">Group breaker clear</text>
+      <text x="76" y="351" font-size="10.5" fill="#8B98A5">group membership only exists from 2026-07 — and production's own recorded "clear" was itself unproven</text>
+      <text x="872" y="338" text-anchor="end" font-size="10.5" font-family="monospace" fill="#F85149">DELETED</text>
+
+      <rect x="30" y="368" width="860" height="52" rx="6" fill="#0E141B" stroke="#223041"/>
+      <text x="48" y="390" font-size="11.5" font-family="monospace" fill="#3FB950" font-weight="700">7</text>
+      <text x="76" y="390" font-size="12" fill="#E6EDF3" font-weight="600">≥ 15 sessions clear of the next earnings print</text>
+      <text x="76" y="409" font-size="10.5" fill="#8B98A5">coverage 81% (2018) rising to 98% (2024-25) · a missing date is <tspan fill="#E6EDF3">never</tspan> allowed to pass as clear</text>
+      <text x="872" y="396" text-anchor="end" font-size="10.5" font-family="monospace" fill="#D4A72C">KEPT + split</text>
+
+      <text x="30" y="446" font-size="11.5" fill="#5C6B7A">Rows 1–5 and 7, minus c5 and row 6, is what the report calls <tspan font-family="monospace" fill="#8B98A5">grade-lite</tspan>.</text>
+    </svg>
+
+    <div class="note hot"><b>The None-split is the detail that stops this study from repeating a production bug.</b>
+    Production auto-passes an unknown earnings runway — a missing date reads as "clear." In the backtest that would have
+    let every coverage-gap name silently ace row 7 and inflate the A+ bucket. So <b>None was split in two</b>: a company
+    with genuinely no scheduled print passes; a company whose date simply couldn't be fetched can never be A+. Same
+    disease as the fabricated breaker, caught before it reached the evidence.</div>
+  </div>
+
+  <!-- 3 · HOW RARE -->
+  <div class="panel">
+    <h2>3 · How rare is A+, really</h2>
+    <p class="sub">Before asking whether the grade works, it's worth seeing how much of the world it admits.</p>
+
+    <svg viewBox="0 0 920 190" role="img" aria-label="Stacked bar showing A+ at 3.5 percent, B at 9 percent, C at 87.5 percent of all ticker-days">
+      <rect x="30"    y="40" width="30.2"  height="46" fill="#3FB950"/>
+      <rect x="60.2"  y="40" width="77.6"  height="46" fill="#D4A72C"/>
+      <rect x="137.8" y="40" width="752.2" height="46" fill="#F85149" opacity=".85"/>
+
+      <line x1="45" y1="36" x2="45" y2="18" stroke="#3FB950" stroke-width="1.2"/>
+      <text x="45" y="12" text-anchor="middle" font-size="11" font-family="monospace" font-weight="700" fill="#3FB950">A+</text>
+      <line x1="99" y1="90" x2="99" y2="108" stroke="#D4A72C" stroke-width="1.2"/>
+      <text x="99" y="122" text-anchor="middle" font-size="11" font-family="monospace" font-weight="700" fill="#D4A72C">B</text>
+      <text x="513" y="70" text-anchor="middle" font-size="12" font-family="monospace" font-weight="700" fill="#0B0F14">C</text>
+
+      <text x="45"  y="146" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#8B98A5">29,777</text>
+      <text x="45"  y="162" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#5C6B7A">3.5%</text>
+      <text x="115" y="146" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#8B98A5">76,568</text>
+      <text x="115" y="162" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#5C6B7A">9.0%</text>
+      <text x="513" y="146" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#8B98A5">741,983 ticker-days graded C</text>
+      <text x="513" y="162" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#5C6B7A">87.5%</text>
+
+      <text x="30" y="184" font-size="11.5" fill="#5C6B7A">The doctrine is genuinely selective — and the median A+ spell lasts <tspan fill="#E6EDF3" font-weight="700">one day</tspan>, so it is a flicker, not a state.</text>
+    </svg>
+  </div>
+
+  <!-- 4 · WHY TRUST IT -->
+  <div class="panel">
+    <h2>4 · Why the grader can be trusted</h2>
+    <p class="sub">A backtest that reimplements the system proves nothing about the system. Four links, each independently
+    checkable, tie this study to the code that actually runs at 4:15pm.</p>
+
+    <svg viewBox="0 0 920 250" role="img" aria-label="Four evidence links: production grades reproduced, feature parity, honesty bridge, determinism hash">
+      <rect x="30" y="40" width="200" height="106" rx="8" fill="#0E141B" stroke="#3FB950" stroke-width="1.5"/>
+      <text x="130" y="72" text-anchor="middle" font-size="17" font-weight="700" font-family="monospace" fill="#3FB950">516 / 516</text>
+      <text x="130" y="98" text-anchor="middle" font-size="10.5" fill="#E6EDF3">recorded production</text>
+      <text x="130" y="114" text-anchor="middle" font-size="10.5" fill="#E6EDF3">grades reproduced</text>
+      <text x="130" y="132" text-anchor="middle" font-size="10" fill="#8B98A5">exactly, not approximately</text>
+
+      <rect x="250" y="40" width="200" height="106" rx="8" fill="#0E141B" stroke="#3FB950" stroke-width="1.5"/>
+      <text x="350" y="72" text-anchor="middle" font-size="17" font-weight="700" font-family="monospace" fill="#3FB950">1e-9</text>
+      <text x="350" y="98" text-anchor="middle" font-size="10.5" fill="#E6EDF3">feature parity against</text>
+      <text x="350" y="114" text-anchor="middle" font-size="10.5" fill="#E6EDF3">production grade_setup</text>
+      <text x="350" y="132" text-anchor="middle" font-size="10" fill="#8B98A5">same function, not a copy</text>
+
+      <rect x="470" y="40" width="200" height="106" rx="8" fill="#0E141B" stroke="#D4A72C" stroke-width="1.5"/>
+      <text x="570" y="72" text-anchor="middle" font-size="17" font-weight="700" font-family="monospace" fill="#D4A72C">129 / 130</text>
+      <text x="570" y="98" text-anchor="middle" font-size="10.5" fill="#E6EDF3">grade-lite agrees with</text>
+      <text x="570" y="114" text-anchor="middle" font-size="10.5" fill="#E6EDF3">the full production grade</text>
+      <text x="570" y="132" text-anchor="middle" font-size="10" fill="#8B98A5">the miss IS the row-6 deletion</text>
+
+      <rect x="690" y="40" width="200" height="106" rx="8" fill="#0E141B" stroke="#58A6FF" stroke-width="1.5"/>
+      <text x="790" y="70" text-anchor="middle" font-size="13" font-weight="700" font-family="monospace" fill="#58A6FF">d7df85e8ad6ba244</text>
+      <text x="790" y="98" text-anchor="middle" font-size="10.5" fill="#E6EDF3">deterministic — same</text>
+      <text x="790" y="114" text-anchor="middle" font-size="10.5" fill="#E6EDF3">caches, same hash</text>
+      <text x="790" y="132" text-anchor="middle" font-size="10" fill="#8B98A5">rerun it and diff</text>
+
+      <text x="30" y="180" font-size="12" fill="#8B98A5">Together these say: <tspan fill="#E6EDF3" font-weight="700">the thing being judged is the thing that runs</tspan> — and the cost of every honest deletion is a measured number, not an apology.</text>
+      <text x="30" y="212" font-size="11.5" fill="#5C6B7A">The adversarial fan-out confirmed 20 findings and refuted none. One changed the numbers: an off-by-one in the</text>
+      <text x="30" y="230" font-size="11.5" fill="#5C6B7A">confirmation counter, which forced a full rerun. Every directional claim survived, and the bridge improved to 129/130.</text>
+    </svg>
+  </div>
+
+  <!-- 5 · THE RESULT -->
+  <div class="panel">
+    <h2>5 · What it found, and how to read it</h2>
+    <p class="sub">Mean forward 20-day return by grade. The headline is the full span; the two insets are the D-006
+    out-of-sample halves, and the point of showing them is that the shape does not depend on which half you look at.</p>
+
+    <svg viewBox="0 0 920 350" role="img" aria-label="Bar chart of forward returns by grade, full span with train and validate insets, all showing C highest">
+      <line x1="70" y1="262" x2="880" y2="262" stroke="#223041" stroke-width="1.5"/>
+      <text x="58" y="266" text-anchor="end" font-size="10.5" font-family="monospace" fill="#5C6B7A">0%</text>
+      <line x1="70" y1="162" x2="440" y2="162" stroke="#223041" stroke-width="1" opacity=".5"/>
+      <text x="58" y="166" text-anchor="end" font-size="10.5" font-family="monospace" fill="#5C6B7A">1%</text>
+      <line x1="70" y1="62" x2="440" y2="62" stroke="#223041" stroke-width="1" opacity=".5"/>
+      <text x="58" y="66" text-anchor="end" font-size="10.5" font-family="monospace" fill="#5C6B7A">2%</text>
+
+      <rect x="110" y="179" width="80" height="83"  fill="#3FB950" rx="3"/>
+      <rect x="210" y="147" width="80" height="115" fill="#D4A72C" rx="3"/>
+      <rect x="310" y="99"  width="80" height="163" fill="#F85149" rx="3"/>
+      <text x="150" y="170" text-anchor="middle" font-size="13" font-weight="700" font-family="monospace" fill="#E6EDF3">0.83</text>
+      <text x="250" y="138" text-anchor="middle" font-size="13" font-weight="700" font-family="monospace" fill="#E6EDF3">1.15</text>
+      <text x="350" y="90"  text-anchor="middle" font-size="13" font-weight="700" font-family="monospace" fill="#E6EDF3">1.63</text>
+      <text x="150" y="282" text-anchor="middle" font-size="11.5" font-weight="700" font-family="monospace" fill="#3FB950">A+</text>
+      <text x="250" y="282" text-anchor="middle" font-size="11.5" font-weight="700" font-family="monospace" fill="#D4A72C">B</text>
+      <text x="350" y="282" text-anchor="middle" font-size="11.5" font-weight="700" font-family="monospace" fill="#F85149">C</text>
+      <text x="250" y="302" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#5C6B7A">FULL SPAN 2020–26</text>
+
+      <text x="150" y="322" text-anchor="middle" font-size="10" fill="#8B98A5">the grade it calls perfect</text>
+      <text x="350" y="322" text-anchor="middle" font-size="10" fill="#8B98A5">the grade it refuses to buy</text>
+
+      <!-- insets -->
+      <rect x="500" y="70" width="170" height="200" rx="8" fill="#0E141B" stroke="#223041"/>
+      <text x="585" y="92" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#8B98A5">TRAIN 2020–23</text>
+      <line x1="520" y1="240" x2="650" y2="240" stroke="#223041" stroke-width="1.2"/>
+      <rect x="530" y="203.5" width="26" height="36.5" fill="#3FB950" rx="2"/>
+      <rect x="570" y="206.5" width="26" height="33.5" fill="#D4A72C" rx="2"/>
+      <rect x="610" y="166.5" width="26" height="73.5" fill="#F85149" rx="2"/>
+      <text x="543" y="196" text-anchor="middle" font-size="9.5" font-family="monospace" fill="#8B98A5">.73</text>
+      <text x="583" y="199" text-anchor="middle" font-size="9.5" font-family="monospace" fill="#8B98A5">.67</text>
+      <text x="623" y="159" text-anchor="middle" font-size="9.5" font-family="monospace" fill="#8B98A5">1.47</text>
+      <text x="585" y="258" text-anchor="middle" font-size="9.5" fill="#5C6B7A">A+ edges B here — C still wins</text>
+
+      <rect x="700" y="70" width="180" height="200" rx="8" fill="#0E141B" stroke="#223041"/>
+      <text x="790" y="92" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#8B98A5">VALIDATE 2024–26</text>
+      <line x1="720" y1="240" x2="860" y2="240" stroke="#223041" stroke-width="1.2"/>
+      <rect x="734" y="191.5" width="26" height="48.5" fill="#3FB950" rx="2"/>
+      <rect x="776" y="152"   width="26" height="88"   fill="#D4A72C" rx="2"/>
+      <rect x="818" y="145.5" width="26" height="94.5" fill="#F85149" rx="2"/>
+      <text x="747" y="184" text-anchor="middle" font-size="9.5" font-family="monospace" fill="#8B98A5">.97</text>
+      <text x="789" y="145" text-anchor="middle" font-size="9.5" font-family="monospace" fill="#8B98A5">1.76</text>
+      <text x="831" y="138" text-anchor="middle" font-size="9.5" font-family="monospace" fill="#8B98A5">1.89</text>
+      <text x="790" y="258" text-anchor="middle" font-size="9.5" fill="#5C6B7A">cleanly inverted, top to bottom</text>
+    </svg>
+
+    <table>
+      <tr><th>finding</th><th>number</th><th>what it means</th></tr>
+      <tr><td class="n">A+ − C spread</td><td class="n">−0.79</td><td>full span; CI [−1.12, −0.46] from 2,000 resamples, entirely below zero. Validate: −0.92, CI [−1.27, −0.60]. p(spread ≤ 0) = 1.0</td></tr>
+      <tr><td class="n">Choppy regime</td><td class="n">B − A+ = +0.58</td><td>the regime where the grade is a <b>hard gate</b>. The only permitted class returned least. Even names blocked as too extended (1.32) beat A+ (0.81)</td></tr>
+      <tr><td class="n">YTD penalty</td><td class="n">+6.95 vs +1.51</td><td>days the mean-reversion penalty fired returned 4.6× the rest — and 83% of them sit in the top momentum decile</td></tr>
+      <tr><td class="n">Lookback knob</td><td class="n">0 changes</td><td>{10, 20, 40} on the approach filter altered no grades whatsoever. Not a knob — which retires the question and redirects Build 5.1</td></tr>
+      <tr><td class="n">Median A+ spell</td><td class="n">1 day</td><td>the grade is a transient. "Entering on A+" means acting on a one-day flicker more often than not</td></tr>
+    </table>
+
+    <div class="note"><b>Read the spread, not the levels.</b> The population is today's pool, so absolute returns carry
+    survivorship bias — but that bias inflates every bucket alike. The comparison between buckets is what survives it,
+    and the comparison is what the doctrine actually claims.</div>
+  </div>
+
+  <!-- 6 · REPRODUCE -->
+  <div class="panel">
+    <h2>6 · Reproduce it yourself</h2>
+    <p class="sub">The strongest form of evidence this project offers isn't the report — it's that you can regenerate
+    all 848,328 rows and diff the output against what's committed.</p>
+<pre>cd /Users/raja/Projects/SignalAgent/live-pipeline
+python3 scripts/backtest_doctrine.py        # ~25 min, rewrites the results JSON
+git diff docs/backtest-doctrine-results.json # should be empty
+python3 test_backtest_doctrine.py           # the 12 pins
+
+# rebuilding the inputs, if ever needed:
+python3 scripts/fetch_doctrine_cache.py     # network, resumable
+python3 scripts/build_regime_series.py      # needs the local OAS splice</pre>
+    <div class="note">Same caches produce <b>input_hash d7df85e8ad6ba244</b>, pinned. The committed regime-by-day series
+    rebuilds bit-identically from the splice — which also makes it the substrate D-016's extreme-fear study will need
+    when that gate opens.</div>
+  </div>
+
+  <!-- CAVEATS -->
+  <div class="caveats">
+    <h3>What this study does not prove</h3>
+    <p><b>It measures the signal, not the system.</b> No stops, no sizing, no exits, no profit targets. An A+ entry sits
+    within 1.8×ATR of a rising SMA20, so its stop is close and being wrong is cheap; an extended leader's isn't. Return
+    per unit of risk is the tradable metric, and that is Build 5B's question — the doctrine's remaining case lives
+    entirely there.</p>
+    <p><b>The Feb-2020 instances sharpen that, rather than softening it.</b> All five worst A+ days fall days before the
+    COVID crash. Row 6 was deleted — but no breaker was firing on 19 February either; breakers fire <i>on</i> stress. What
+    would have defended those entries is the regime chassis downgrading and the stops firing, both of which are strategy-layer
+    machinery this study deliberately doesn't model.</p>
+    <p><b>One macro era.</b> 2020–2026 rewarded momentum. The force of this caveat is limited by the inversion holding in
+    both halves — including the 2022 bear — but it is not eliminated.</p>
+    <p><b>Grade-lite.</b> c5 and row 6 are honest deletions, and their combined cost against the real production grade is
+    exactly 1 disagreement in 130.</p>
+    <p><b>Nothing changed in production.</b> No doctrine, gate, or logic was modified by this work. Any re-ruling happens
+    by deliberation, on the record, after Build 5B.</p>
+  </div>
+
+  <div class="foot">companion to the Layer A verdict page · docs/backtest-doctrine.md · PER-508 comment 11727 · commit 9b5a450</div>
+
+</div>
+</body>
+</html>

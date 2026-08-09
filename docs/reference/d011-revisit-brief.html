@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D-011 revisit — brief</title>
+<style>
+  :root{
+    --bg:#0B0F14; --panel:#121820; --panel2:#0E141B; --line:#223041;
+    --ink:#E6EDF3; --muted:#8B98A5; --dim:#5C6B7A;
+    --ok:#3FB950; --warn:#D4A72C; --bad:#F85149; --alt:#8957E5; --info:#58A6FF;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  .wrap{max-width:980px;margin:0 auto;padding:40px 22px 72px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  h1{font-size:clamp(25px,4.2vw,36px);letter-spacing:-.02em;margin:.35em 0 .2em;font-weight:750}
+  .lede{font-size:14.5px;color:var(--muted);max-width:74ch}
+  .src{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-top:10px}
+  .src b{color:var(--muted);font-weight:600}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 22px 18px;margin-top:28px}
+  .panel h2{font-size:17px;margin:0 0 3px;font-weight:700;letter-spacing:-.01em}
+  .panel .sub{font-size:13px;color:var(--muted);margin:0 0 16px;max-width:82ch}
+  svg{width:100%;height:auto;display:block}
+  .note{font-size:13px;color:var(--muted);margin-top:15px;border-left:2px solid var(--line);padding-left:14px}
+  .note b{color:var(--ink);font-weight:600}
+  .note.hot{border-left-color:var(--bad)}
+  .note.rec{border-left-color:var(--ok)}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12.5px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+     color:var(--dim);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+  td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted)}
+  td.n{color:var(--ink);font-weight:600;font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+  tr.pick td{background:rgba(63,185,80,.06)}
+  tr.pick td.n{color:var(--ok)}
+  .caveats{margin-top:30px;border-top:1px solid var(--line);padding-top:18px}
+  .caveats h3{font-size:12.5px;margin:0 0 10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+              font-family:var(--mono);font-weight:600}
+  .caveats p{font-size:13px;color:var(--muted);margin:7px 0}
+  .caveats b{color:var(--ink);font-weight:600}
+  .foot{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:14px}
+  ol{font-size:13.5px;color:var(--muted);padding-left:20px}
+  ol li{margin:9px 0}
+  ol b{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">SignalAgent · deliberation brief · D-011 revisit</div>
+  <h1>The doctrine has been measured. Now what.</h1>
+  <p class="lede">D-011's revisit trigger fired on 25 July. This is the brief for the ruling: what the three studies
+  found, what the evidence can and cannot settle, five available positions with what each changes on Monday morning,
+  and a recommendation.</p>
+  <div class="src">evidence: Layer A <b>9b5a450</b> · 5B <b>bba16f9</b> behind prereg <b>68d620c</b> · addendum <b>e801e30</b>
+  · PER-508 comments <b>11727</b>, <b>11760</b></div>
+
+  <!-- 1 · THE THREE QUESTIONS -->
+  <div class="panel">
+    <h2>1 · Three questions were asked. Three answers came back.</h2>
+    <p class="sub">Each study narrowed the claim the doctrine could still make. Read them in order — the last one is the
+    one nobody expected to have to write.</p>
+
+    <svg viewBox="0 0 920 392" role="img" aria-label="Three questions and answers, narrowing from the grade predicting returns, to risk shaping, to the whole selection layer, plus what did show up">
+      <rect x="30" y="16" width="860" height="70" rx="8" fill="#0E141B" stroke="#F85149" stroke-width="1.6"/>
+      <text x="50" y="42" font-size="12.5" font-weight="700" fill="#E6EDF3">Layer A — does the A+ grade predict better forward returns?</text>
+      <text x="50" y="66" font-size="12" fill="#F85149" font-family="monospace">NO — the ordering is INVERTED. A+ 0.83 &lt; B 1.15 &lt; C 1.63 per 20 days, in both spans, CI below zero.</text>
+
+      <line x1="460" y1="86" x2="460" y2="108" stroke="#5C6B7A" stroke-width="1.5"/>
+
+      <rect x="30" y="112" width="860" height="70" rx="8" fill="#0E141B" stroke="#D4A72C" stroke-width="1.6"/>
+      <text x="50" y="138" font-size="12.5" font-weight="700" fill="#E6EDF3">5B — with real stops and sizing, does it shape risk better than the alternatives?</text>
+      <text x="50" y="162" font-size="12" fill="#D4A72C" font-family="monospace">NOT MEASURABLY — all ten arm-vs-arm differences sit inside their own selection-noise bands.</text>
+
+      <line x1="460" y1="182" x2="460" y2="204" stroke="#5C6B7A" stroke-width="1.5"/>
+
+      <rect x="30" y="208" width="860" height="70" rx="8" fill="#0E141B" stroke="#D4A72C" stroke-width="1.6"/>
+      <text x="50" y="234" font-size="12.5" font-weight="700" fill="#E6EDF3">Addendum — does the stock-selection layer beat the machinery running alone?</text>
+      <text x="50" y="258" font-size="12" fill="#D4A72C" font-family="monospace">NOT MEASURABLY — SPY, the equal-weight pool, and the bare chassis all sit inside every arm's band.</text>
+
+      <line x1="460" y1="278" x2="460" y2="300" stroke="#5C6B7A" stroke-width="1.5"/>
+
+      <rect x="30" y="304" width="860" height="72" rx="8" fill="#0E141B" stroke="#58A6FF" stroke-width="1.8"/>
+      <text x="50" y="330" font-size="12.5" font-weight="700" fill="#E6EDF3">And the one thing that did show up, unasked:</text>
+      <text x="50" y="354" font-size="12" fill="#58A6FF" font-family="monospace">ORDERING. Which admitted name you actually buy moved outcomes more than any gate choice measured.</text>
+      <text x="50" y="370" font-size="10.5" fill="#5C6B7A" font-family="monospace">— and it is the single decision the system never specified.</text>
+    </svg>
+  </div>
+
+  <!-- 2 · THE MONEY DIAGRAM -->
+  <div class="panel">
+    <h2>2 · Why nothing separates — the picture that carries the ruling</h2>
+    <p class="sub">Each bar is one arm's Sharpe under 50 random selections from its own admitted set — the range you'd
+    get by picking differently. The dot is where the system actually landed using score-order. The shaded column is where
+    all three benchmarks sit.</p>
+
+    <svg viewBox="0 0 920 400" role="img" aria-label="Horizontal band chart of each arm's Sharpe under random selection, with the benchmark zone falling inside every band">
+      <!-- benchmark zone -->
+      <rect x="504" y="52" width="46" height="240" fill="#8B98A5" opacity=".14"/>
+      <text x="527" y="44" text-anchor="middle" font-size="10" font-family="monospace" fill="#8B98A5">benchmarks</text>
+
+      <!-- bands -->
+      <rect x="197" y="70" width="457" height="20" rx="4" fill="#223041"/>
+      <line x1="457" y1="68" x2="457" y2="92" stroke="#5C6B7A" stroke-width="1.4"/>
+      <circle cx="626" cy="80" r="6" fill="#3FB950"/>
+      <text x="92" y="84" text-anchor="end" font-size="11.5" font-family="monospace" font-weight="700" fill="#E6EDF3">S1 production</text>
+      <text x="672" y="84" font-size="10.5" font-family="monospace" fill="#8B98A5">.912</text>
+
+      <rect x="285" y="118" width="393" height="20" rx="4" fill="#223041"/>
+      <line x1="469" y1="116" x2="469" y2="140" stroke="#5C6B7A" stroke-width="1.4"/>
+      <circle cx="635" cy="128" r="6" fill="#3FB950"/>
+      <text x="92" y="132" text-anchor="end" font-size="11.5" font-family="monospace" font-weight="700" fill="#E6EDF3">S2 A+ everywhere</text>
+      <text x="681" y="132" font-size="10.5" font-family="monospace" fill="#8B98A5">.929</text>
+
+      <rect x="136" y="166" width="533" height="20" rx="4" fill="#223041"/>
+      <line x1="451" y1="164" x2="451" y2="188" stroke="#5C6B7A" stroke-width="1.4"/>
+      <circle cx="527" cy="176" r="6" fill="#D4A72C"/>
+      <text x="92" y="180" text-anchor="end" font-size="11.5" font-family="monospace" font-weight="700" fill="#E6EDF3">S3 B-or-better</text>
+      <text x="672" y="180" font-size="10.5" font-family="monospace" fill="#8B98A5">.721</text>
+
+      <rect x="484" y="214" width="250" height="20" rx="4" fill="#223041"/>
+      <line x1="632" y1="212" x2="632" y2="236" stroke="#5C6B7A" stroke-width="1.4"/>
+      <circle cx="572" cy="224" r="6" fill="#D4A72C"/>
+      <circle cx="856" cy="224" r="7" fill="#8957E5"/>
+      <text x="92" y="228" text-anchor="end" font-size="11.5" font-family="monospace" font-weight="700" fill="#E6EDF3">S4 momentum</text>
+      <text x="737" y="228" font-size="10.5" font-family="monospace" fill="#8B98A5">.808</text>
+      <text x="856" y="250" text-anchor="middle" font-size="9.5" font-family="monospace" fill="#8957E5">native</text>
+      <text x="856" y="262" text-anchor="middle" font-size="9.5" font-family="monospace" fill="#8957E5">1.354</text>
+
+      <rect x="139" y="262" width="581" height="20" rx="4" fill="#223041"/>
+      <line x1="366" y1="260" x2="366" y2="284" stroke="#5C6B7A" stroke-width="1.4"/>
+      <circle cx="593" cy="272" r="6" fill="#3FB950"/>
+      <text x="92" y="276" text-anchor="end" font-size="11.5" font-family="monospace" font-weight="700" fill="#E6EDF3">S5 score ≥ 50 only</text>
+      <text x="723" y="276" font-size="10.5" font-family="monospace" fill="#8B98A5">.849</text>
+
+      <!-- axis -->
+      <line x1="100" y1="300" x2="880" y2="300" stroke="#223041" stroke-width="1.4"/>
+      <line x1="152" y1="300" x2="152" y2="306" stroke="#5C6B7A"/><text x="152" y="320" text-anchor="middle" font-size="10" font-family="monospace" fill="#5C6B7A">0</text>
+      <line x1="412" y1="300" x2="412" y2="306" stroke="#5C6B7A"/><text x="412" y="320" text-anchor="middle" font-size="10" font-family="monospace" fill="#5C6B7A">0.5</text>
+      <line x1="672" y1="300" x2="672" y2="306" stroke="#5C6B7A"/><text x="672" y="320" text-anchor="middle" font-size="10" font-family="monospace" fill="#5C6B7A">1.0</text>
+      <text x="880" y="320" text-anchor="end" font-size="10" font-family="monospace" fill="#5C6B7A">Sharpe →</text>
+
+      <!-- legend -->
+      <rect x="100" y="338" width="26" height="10" rx="3" fill="#223041"/>
+      <text x="134" y="347" font-size="10.5" font-family="monospace" fill="#8B98A5">random-selection band (2.5–97.5%)</text>
+      <line x1="392" y1="336" x2="392" y2="350" stroke="#5C6B7A" stroke-width="1.4"/>
+      <text x="402" y="347" font-size="10.5" font-family="monospace" fill="#8B98A5">random median</text>
+      <circle cx="540" cy="343" r="5" fill="#3FB950"/>
+      <text x="552" y="347" font-size="10.5" font-family="monospace" fill="#8B98A5">score-order — how the system actually picks</text>
+
+      <text x="100" y="374" font-size="11.5" fill="#8B98A5">Every band swallows the benchmark column, and every band overlaps every other — that is Branch 5 and Branch 4's substance in one picture.</text>
+      <text x="100" y="392" font-size="11.5" fill="#8B98A5">But note where the green dots sit: <tspan fill="#E6EDF3" font-weight="700">right of the benchmarks, high in every band.</tspan> The picking, not the gate, is doing that.</text>
+    </svg>
+
+    <div class="note hot"><b>The bands are wide because selection is powerful, not because the system is futile.</b> S1's
+    range runs from 0.09 to 0.97 — a spread produced entirely by changing <i>which</i> admitted name you buy, with the
+    gate held fixed. An instrument with that much variance cannot resolve gate-sized differences. "Inside the band" is
+    therefore a statement about the experiment's resolution at least as much as about the doctrine.</div>
+  </div>
+
+  <!-- 3 · WHERE THE EDGE IS -->
+  <div class="panel">
+    <h2>3 · Where the edge actually lives</h2>
+    <p class="sub">Four layers make entry decisions. The evidence grades them very differently, and the two that survive
+    are not the two that got argued about.</p>
+
+    <svg viewBox="0 0 920 340" role="img" aria-label="Four system layers graded: chassis robust, stop robust, gate not measurable, ordering suggestive">
+      <rect x="30" y="20" width="860" height="66" rx="8" fill="#0E141B" stroke="#3FB950" stroke-width="1.6"/>
+      <text x="50" y="46" font-size="13" font-weight="700" fill="#E6EDF3">REGIME CHASSIS + CAPITAL CEILING</text>
+      <text x="50" y="68" font-size="11" fill="#8B98A5">arm drawdown bands [−25.2, −9.5] never overlap SPY's −33.7 under any seed</text>
+      <text x="872" y="56" text-anchor="end" font-size="11.5" font-family="monospace" font-weight="700" fill="#3FB950">ROBUST</text>
+
+      <rect x="30" y="96" width="860" height="66" rx="8" fill="#0E141B" stroke="#3FB950" stroke-width="1.6"/>
+      <text x="50" y="122" font-size="13" font-weight="700" fill="#E6EDF3">THE SMA20 CLOSE-BASIS STOP</text>
+      <text x="50" y="144" font-size="11" fill="#8B98A5">median trade ≈ −0.6R with long right tails — the same shape in every single arm</text>
+      <text x="872" y="132" text-anchor="end" font-size="11.5" font-family="monospace" font-weight="700" fill="#3FB950">ROBUST</text>
+
+      <rect x="30" y="172" width="860" height="66" rx="8" fill="#0E141B" stroke="#F85149" stroke-width="1.6"/>
+      <text x="50" y="198" font-size="13" font-weight="700" fill="#F85149">THE A+ GATE — the thing we argued about</text>
+      <text x="50" y="220" font-size="11" fill="#8B98A5">ten pairwise comparisons, zero separations · a single score threshold ties all seven rows</text>
+      <text x="872" y="208" text-anchor="end" font-size="11.5" font-family="monospace" font-weight="700" fill="#F85149">NOT MEASURABLE</text>
+
+      <rect x="30" y="248" width="860" height="66" rx="8" fill="#0E141B" stroke="#58A6FF" stroke-width="1.8"/>
+      <text x="50" y="274" font-size="13" font-weight="700" fill="#58A6FF">THE ORDERING — the thing we never specified</text>
+      <text x="50" y="296" font-size="11" fill="#8B98A5">9 of 10 arm-metric cells at or above the random median · effects larger than every gate effect</text>
+      <text x="872" y="284" text-anchor="end" font-size="11.5" font-family="monospace" font-weight="700" fill="#58A6FF">SUGGESTIVE</text>
+
+      <text x="30" y="332" font-size="11.5" fill="#5C6B7A">The doctrine's last defence — "tight stops make being wrong cheap" — turned out to be true, and to belong to the stop.</text>
+    </svg>
+  </div>
+
+  <!-- 4 · OPTIONS -->
+  <div class="panel">
+    <h2>4 · Five available positions</h2>
+    <p class="sub">Each is defensible on this evidence. What separates them is what you're willing to change on
+    non-evidence, and in which direction.</p>
+
+    <table>
+      <tr><th style="width:19%">position</th><th style="width:27%">the case for it</th><th style="width:27%">what changes Monday</th><th style="width:27%">the objection</th></tr>
+      <tr>
+        <td class="n">A · Adopt Branch 5<br>soften gate → advisory</td>
+        <td>The pre-registered default. An unproven restriction should not bind capital.</td>
+        <td>B names become enterable in Choppy and Caution. More candidates, more decisions per day.</td>
+        <td>S3 — the closest thing to a loosened world — was nominally <b>worst</b> on both metrics. And it enlarges the surface where the unsettled ordering rule operates.</td>
+      </tr>
+      <tr class="pick">
+        <td class="n">B · Hold the mechanism,<br>correct the meaning</td>
+        <td>Evidence supports neither loosening nor tightening; changing on noise is what the registry exists to prevent. Fix the bigger lever first.</td>
+        <td>Nothing mechanical. The A+ chip stops being described as a return predictor and is documented as what it is.</td>
+        <td>Leaves an unproven restriction binding — which offends the principle the pre-registration encoded. Must be time-boxed, not permanent by default.</td>
+      </tr>
+      <tr>
+        <td class="n">C · Tighten to S2<br>A+ hard everywhere</td>
+        <td>S2 was nominally first on expectancy, Sharpe <i>and</i> drawdown — three of four metrics — and it is simpler: one rule, no regime conditioning.</td>
+        <td>Trending stops being advisory. Fewer entries, more cash.</td>
+        <td>Every one of those leads is inside the band. This is acting on noise in the opposite direction, and it costs participation.</td>
+      </tr>
+      <tr>
+        <td class="n">D · Replace seven rows<br>with the score gate</td>
+        <td>S5 ties the full apparatus (0.413 vs 0.417) using one threshold. Occam's razor, applied honestly.</td>
+        <td>Massive simplification. Grades become descriptive labels only.</td>
+        <td>S5's Sharpe (.849) trails S1/S2 nominally, and discarding six rows on a tie is a large irreversible act on thin evidence.</td>
+      </tr>
+      <tr>
+        <td class="n">E · Drop stock selection<br>run the chassis on SPY</td>
+        <td>Branch 4's substance, taken literally. The bare chassis sits inside every arm's band at a fraction of the complexity.</td>
+        <td>The entire scanner becomes optional. One instrument, one rule.</td>
+        <td>The arms add real CAGR in validate (23–29% vs 17.4%). And point estimates for S1/S2 sit well above the chassis — unresolved is not disproven.</td>
+      </tr>
+    </table>
+
+    <div class="note rec"><b>Recommendation: B, explicitly interim.</b> Three reasons. (1) The evidence genuinely
+    supports no direction — every option above except B requires acting on a difference the study could not resolve.
+    (2) Sequencing: ordering is the larger measured lever, and loosening the gate <i>enlarges</i> the surface where an
+    unspecified ordering rule operates. Settle the bigger lever first. (3) The real hazard isn't the gate — it's
+    believing the chip. Layer A says an A+ chip does not mean "this will do well." Correcting that belief costs nothing
+    and removes the actual danger.<br><br>
+    <b>What B ships:</b> no code change to the gate; the doctrine record amended to state that the grade has no
+    demonstrated forward-return edge and functions as a risk-shape filter; the close report and hover text reworded to
+    match; the standing rule kept that <b>any A+ appearing before the selection ruling comes to deliberation rather than
+    being entered on the chip alone</b>; and an explicit expiry — B lapses when the selection rule is ruled, at which
+    point A and C are reconsidered on the new evidence.</div>
+  </div>
+
+  <!-- 5 · NEXT -->
+  <div class="panel">
+    <h2>5 · The next step</h2>
+    <p class="sub">In order, smallest first. Only the first item touches production.</p>
+    <ol>
+      <li><b>The runway-None micro-fix.</b> Production auto-passes an unknown earnings runway — a fabricated-clear
+      sibling still live in row 7. The spec already exists: the backtest's None-split. Small, and it shouldn't wait on
+      research.</li>
+      <li><b>Rule D-011 — option B or otherwise.</b> Costs nothing, changes nothing mechanically, and closes a fired
+      trigger that is currently open on the record.</li>
+      <li><b>The selection-rule deliberation.</b> This is the real successor. It should pre-register its hypotheses
+      before any run — the leading one being <b>coherence</b>: that a gate and a ranking which agree outperform a pair
+      that disagrees. S4-native is the exhibit, and its 100th-percentile result is a hypothesis, not a finding, precisely
+      because it wasn't pre-registered.</li>
+      <li><b>Then the study</b>, with the power design the addendum already named: block-split subperiods for
+      independence in time, disjoint pool halves for independence in cross-section, and a decision table fixing the
+      primary metric <i>before</i> looking — because expectancy and Sharpe now disagree, and whichever is named first
+      determines the answer.</li>
+      <li><b>D-020 folds into that deliberation</b> rather than standing alone — the momentum question and the ordering
+      question are the same question seen from two sides.</li>
+    </ol>
+  </div>
+
+  <!-- CAVEATS -->
+  <div class="caveats">
+    <h3>What this brief does not settle</h3>
+    <p><b>Unresolved is not disproven.</b> The study could not distinguish the arms; that is a limit of an instrument
+    with enormous selection variance over one window, not a demonstration that the gate is worthless.</p>
+    <p><b>The pooled ordering evidence is weaker than its p-values.</b> The five arms share days and heavily overlapping
+    candidate sets — five dependent looks at one window, not five trials. Direction consistent, magnitude large, joint
+    significance not honestly quantifiable from this design.</p>
+    <p><b>The ordering prescription is metric-dependent.</b> Native beats score 4/4 on expectancy and 1/4 on Sharpe;
+    low-extension picking earns expectancy while degrading the curve. "Which ordering is best" has no single answer in
+    this sample.</p>
+    <p><b>One macro era, one window.</b> 2020–2026 rewarded momentum. The inversion held in both halves including the
+    2022 bear, which limits but does not eliminate the caveat.</p>
+    <p><b>A separate live finding, not part of this ruling:</b> roughly 32–37% of stop exits filled below the entry stop.
+    Realized risk exceeds 1R about a third of the time, which is a position-sizing input and deserves its own item.</p>
+  </div>
+
+  <div class="foot">deliberation brief · not a ruling · D-011 revisit · PER-508</div>
+
+</div>
+</body>
+</html>
