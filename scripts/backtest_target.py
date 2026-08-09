@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 Build 6A — profit-target sweep (pre-registered:
-docs/backtest-target-prereg.md, committed d184ced BEFORE any results;
+docs/backtest-target-prereg.md, committed 6b504ba BEFORE any results;
 implementation declarations: docs/backtest-target-declarations.md,
-committed 6bbca06, also before results).
+committed e223204, also before results).
 
 Six arms over ONE fixed trade population — T0's (the 5B S1 arm, score
 ordering; production gate, production stop, production sizing). Only

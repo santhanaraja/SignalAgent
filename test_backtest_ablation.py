@@ -254,16 +254,16 @@ def test_prereg_content_immutable():
     p = os.path.join(REPO, "docs", "backtest-ablation-prereg.md")
     h = hashlib.sha256(open(p, "rb").read()).hexdigest()[:16]
     committed = subprocess.run(
-        ["git", "show", "2f98eb0:docs/backtest-ablation-prereg.md"],
+        ["git", "show", "7ea58bc:docs/backtest-ablation-prereg.md"],
         capture_output=True, cwd=REPO)
-    assert committed.returncode == 0, "prereg commit 2f98eb0 unreachable"
+    assert committed.returncode == 0, "prereg commit 7ea58bc unreachable"
     hc = hashlib.sha256(committed.stdout).hexdigest()[:16]
     assert h == hc, (
-        "the working-tree prereg differs from the committed 2f98eb0 "
+        "the working-tree prereg differs from the committed 7ea58bc "
         "version — a decision table amended after results is not a "
         "pre-registration")
     print(f"  (10) prereg content immutable: working tree == commit "
-          f"2f98eb0 ({h}): OK")
+          f"7ea58bc ({h}): OK")
 
 
 if __name__ == "__main__":

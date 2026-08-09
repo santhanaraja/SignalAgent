@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Build 5.1 — row ablation (pre-registered: docs/backtest-ablation-prereg.md,
-committed 2f98eb0 BEFORE any results existed).
+committed 7ea58bc BEFORE any results existed).
 
 For each grade row R, the EXCLUDED SET is the ticker-days that pass
 every other row but fail R. The primary question, per row: did the days
@@ -239,7 +239,7 @@ def run(out_path=None):
              "validate": lambda d: d[d.date > TRAIN_END]}
 
     results = {"schema": "backtest-ablation-1",
-               "prereg": "docs/backtest-ablation-prereg.md (2f98eb0)",
+               "prereg": "docs/backtest-ablation-prereg.md (7ea58bc)",
                "aplus_reference": {}, "rows": {}, "construct": {},
                "notes": {
                    "c1": "excluded set structurally EMPTY: c2's "

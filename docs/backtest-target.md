@@ -5,9 +5,9 @@ Results: [backtest-target-results.json](backtest-target-results.json)
 (`results_hash 847d6306f4355fb9`, recomputable from the committed file)
 · Pins: `test_backtest_target.py` (13) · Pre-registration:
 [backtest-target-prereg.md](backtest-target-prereg.md), committed
-(`d184ced`) **before any results existed** · Implementation
+(`6b504ba`) **before any results existed** · Implementation
 declarations: [backtest-target-declarations.md](backtest-target-declarations.md)
-(`6bbca06`), also before results.
+(`e223204`), also before results.
 
 **Integrity gate first, two-sided:** (a) the 5B engine reproduces the
 committed `backtest-systems-results.json` S1/score block exactly;

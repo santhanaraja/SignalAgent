@@ -5,7 +5,7 @@ Results: [backtest-ablation-results.json](backtest-ablation-results.json)
 (`results_hash d6dc21745af93826`, recomputable from the committed file) ·
 Pins: `test_backtest_ablation.py` (10) · Pre-registration:
 [backtest-ablation-prereg.md](backtest-ablation-prereg.md), committed
-(`2f98eb0`) **before any results existed**.
+(`7ea58bc`) **before any results existed**.
 
 **Integrity gate first:** the recomputed row flags, ANDed, reproduce the
 committed Layer A frame's A+ set — all 29,777 days, **exactly** —

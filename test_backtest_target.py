@@ -342,11 +342,11 @@ def test_prereg_and_declarations_discipline():
     """Both records committed, content-immutable against their SHAs,
     and strictly preceding any results commit."""
     for path, sha, phrases in (
-            ("docs/backtest-target-prereg.md", "d184ced",
+            ("docs/backtest-target-prereg.md", "6b504ba",
              ("ADOPT", "EXCHANGE RATE", "REJECT",
               "psychological argument ALONE", "FRAGILE",
               "No threshold beyond", "NOT redeployed")),
-            ("docs/backtest-target-declarations.md", "6bbca06",
+            ("docs/backtest-target-declarations.md", "e223204",
              ("to the cent", "R-multiples", "21-day block",
               "FORCED entries", "max(SMA20, entry fill)"))):
         committed = subprocess.run(
@@ -374,7 +374,7 @@ def test_prereg_and_declarations_discipline():
                 cwd=REPO).returncode
             assert order == 0, f"{path} does not precede the results"
     print("  (11) prereg + declarations: committed, immutable vs "
-          "d184ced/6bbca06, precede any results commit: OK")
+          "6b504ba/e223204, precede any results commit: OK")
 
 
 def test_touch_recount_independent():
