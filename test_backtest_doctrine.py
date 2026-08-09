@@ -29,9 +29,12 @@ import backtest_doctrine as bd
 from framework.position_signals import (grade_setup, atr_mean,
                                         up_close_off_swing_low,
                                         runway_sessions_before)
+# D-020a: the ladder-parity pin drives the FROZEN v1 scorer explicitly —
+# the committed Layer A frame was built on the v1 ladder and must keep
+# reproducing after the production scorer moved to v2
 from signal_engine import (compute_rsi, compute_macd, score_rsi_points,
                            score_macd_points, score_ma_points,
-                           score_ytd_points, score_vol_points,
+                           score_ytd_points_v1, score_vol_points,
                            compose_score)
 
 PRICES = bd.PRICES
@@ -133,7 +136,7 @@ def test_score_ladder_parity():
                                 "rsi": score_rsi_points(R[k]),
                                 "macd": score_macd_points(bull, conf),
                                 "ma": score_ma_points(a20, a50, gt),
-                                "ytd": score_ytd_points(Y[k]),
+                                "ytd": score_ytd_points_v1(Y[k]),
                                 "vol": score_vol_points(V[k]),
                             }
                             assert s[k] == compose_score(comp), (

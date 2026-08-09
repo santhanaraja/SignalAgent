@@ -420,6 +420,9 @@ def run_framework(force_fetch: bool = False) -> dict:
     # --- Assemble output ---
     output = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        # D-020a: scorer era stamp — artifacts without this key were
+        # baked by the v1 scorer and are never retro-relabelled
+        "scorer_version": "score_stock_v2",
         # Serve-layer shape sentinel (mirrored in ticker_api): derived from
         # the configured regime engine so a flag flip (chassis <-> parliament)
         # forces the committed artifact to regenerate rather than serving the

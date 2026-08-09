@@ -175,6 +175,13 @@ def detect_coverage_events(previous, current):
     prev_stocks = _stocks(prev_groups)
     curr_stocks = _stocks(curr_groups)
 
+    # D-020a: trade-signal poles and the >=50 gate both derive from the
+    # score — on a scorer-cutover comparison they are suppressed (the
+    # basis moved, not the stock); breaker events above still flow.
+    from signal_engine import scorer_era
+    if previous and scorer_era(previous) != scorer_era(current):
+        return events
+
     for ticker in curr_stocks.keys() & prev_stocks.keys():
         prev_s, _, _ = prev_stocks[ticker]
         curr_s, curr_g, group_name = curr_stocks[ticker]
@@ -298,6 +305,31 @@ def detect_changes(previous, current):
     changes = []
     timestamp = current.get("timestamp", datetime.datetime.now().isoformat())
 
+    # D-020a: a scorer cutover must not narrate itself as market
+    # movement. When the two artifacts were baked by different scorer
+    # eras, per-name score-derived events (signal/score/gate/trade-pole)
+    # are suppressed for THIS comparison and replaced by one explicit
+    # cutover event; structural events (groups, tickers, breakers,
+    # regime) still flow. Deferred import — this module stays light.
+    from signal_engine import scorer_era
+    cross_era = bool(previous) and \
+        scorer_era(previous) != scorer_era(current)
+    if cross_era:
+        changes.append({
+            "timestamp": timestamp,
+            "type": "scorer_cutover",
+            "severity": "high",
+            "group": None,
+            "ticker": None,
+            "description": (
+                f"Scorer era changed: {scorer_era(previous)} → "
+                f"{scorer_era(current)} — per-name score/signal/gate "
+                "events suppressed for this comparison (the score BASIS "
+                "changed, not the market; D-020a)"),
+            "detail": {"from_era": scorer_era(previous),
+                       "to_era": scorer_era(current)}
+        })
+
     # Build lookup maps
     prev_groups = {}
     prev_stocks = {}
@@ -353,8 +385,10 @@ def detect_changes(previous, current):
             }
         })
 
-    # Group signal changes
-    for name in curr_group_names & prev_group_names:
+    # Group signal changes (avg-score-derived: suppressed on a scorer
+    # cutover — the basis moved, not the group)
+    for name in (set() if cross_era
+                 else curr_group_names & prev_group_names):
         curr_g = curr_groups[name]
         prev_g = prev_groups[name]
         if curr_g["group_signal"] != prev_g["group_signal"]:
@@ -427,7 +461,8 @@ def detect_changes(previous, current):
         })
 
     # Stock signal changes
-    for key in curr_stock_keys & prev_stock_keys:
+    for key in (set() if cross_era
+                else curr_stock_keys & prev_stock_keys):
         curr_s = curr_stocks[key]
         prev_s = prev_stocks[key]
 

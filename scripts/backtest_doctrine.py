@@ -47,9 +47,12 @@ import pandas as pd
 from numpy.lib.stride_tricks import sliding_window_view
 
 from framework.position_signals import grade_setup, runway_sessions_before
+# D-020a: this study is FROZEN to the v1 ladder — the committed frame
+# (input_hash d7df85e8ad6ba244) was built on it, and it must keep
+# reproducing after production moved to score_stock_v2
 from signal_engine import (score_rsi_points, score_macd_points,
-                           score_ma_points, score_ytd_points,
-                           score_vol_points, SCORE_BASE)
+                           score_ma_points, score_vol_points, SCORE_BASE,
+                           score_ytd_points_v1 as score_ytd_points)
 
 CACHE = os.path.join(REPO, "data", "doctrine_cache")
 PRICES = os.path.join(CACHE, "prices")

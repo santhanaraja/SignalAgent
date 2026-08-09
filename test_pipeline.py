@@ -22,7 +22,7 @@ class NumpyEncoder(json.JSONEncoder):
 
 # Add parent dir to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from signal_engine import compute_rsi, compute_macd, compute_moving_averages, score_stock, compute_ytd_return, DATA_DIR, PUBLIC_DIR
+from signal_engine import compute_rsi, compute_macd, compute_moving_averages, score_stock_v2, compute_ytd_return_v2, DATA_DIR, PUBLIC_DIR
 from history_manager import detect_changes, save_snapshot, run_history_manager
 
 def _sandbox():
@@ -115,7 +115,7 @@ def test_indicators():
     print("  ✓ Moving averages computed")
 
     # YTD Return
-    ytd = compute_ytd_return(df)
+    ytd = compute_ytd_return_v2(df)
     print(f"  YTD Return: {ytd:.2f}%")
     print("  ✓ YTD return computed")
 
@@ -137,7 +137,7 @@ def test_scoring():
 
     for name, trend, vol in scenarios:
         df = generate_synthetic_price_data(name, trend=trend, volatility=vol, days=130)
-        score, signal, details = score_stock(df, {})
+        score, signal, details = score_stock_v2(df, {})
         print(f"\n  {name}: Score={score}, Signal={signal.upper()}")
         print(f"    RSI={details['rsi']:.1f}, MACD_Hist={details['macd_histogram']:.3f}, YTD={details['ytd_return']:.1f}%")
         assert 0 <= score <= 100, f"Score out of range for {name}"
@@ -189,7 +189,7 @@ def test_full_pipeline():
 
         for ticker, trend in group_info["tickers"].items():
             df = generate_synthetic_price_data(ticker, trend=trend, days=130)
-            score, signal, details = score_stock(df, group_info)
+            score, signal, details = score_stock_v2(df, group_info)
             stocks.append({
                 "ticker": ticker,
                 "score": score,

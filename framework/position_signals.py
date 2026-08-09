@@ -737,17 +737,43 @@ class PositionSignalEngine:
                 # signal_engine is heavy; same pattern as sanitize_for_json)
                 rsi_v = None
                 score_v = None
+                _det = None
                 try:
                     import sys
                     _parent = os.path.join(os.path.dirname(__file__), "..")
                     if _parent not in sys.path:
                         sys.path.insert(0, _parent)
-                    from signal_engine import compute_rsi, score_stock
+                    from signal_engine import (compute_rsi,
+                                               compute_ytd_return_v2,
+                                               score_stock_v2)
                     r = compute_rsi(close).iloc[-1]
                     rsi_v = float(r) if np.isfinite(r) else None
-                    score_v, _sig, _det = score_stock(df)
-                except Exception:
-                    pass
+                    # D-020a: real-YTD quality score. The wider frame
+                    # feeds ONLY the YTD anchor (close-basis, same
+                    # splitter as the graded df); a failed fetch
+                    # degrades to the visible fallback basis recorded
+                    # in the score details, never silently.
+                    ytd_v = ytd_b = None
+                    if self.fetcher is not None:
+                        try:
+                            ydf = self._strip_synthetic_last_bar(
+                                self.fetcher(entry.get("ticker"),
+                                             period="1y"))
+                            ydf, _yf = confirmed_close_frame(ydf)
+                            if ydf is not None and len(ydf):
+                                ytd_v, ytd_b = compute_ytd_return_v2(
+                                    ydf, with_basis=True)
+                        except Exception as e:
+                            print(f"[framework] {entry.get('ticker')}: "
+                                  f"YTD frame fetch failed ({e}) — 6mo "
+                                  "fallback anchor, recorded")
+                    score_v, _sig, _det = score_stock_v2(
+                        df, ytd_return=ytd_v, ytd_basis=ytd_b)
+                except Exception as e:
+                    # D-019 spirit: a dead scorer import must not be
+                    # byte-identical to a healthy low score
+                    print(f"[framework] {entry.get('ticker')}: quality "
+                          f"score unavailable ({e})")
                 runway = runway_sessions_before(
                     grade_ctx.get("next_earnings_date"),
                     grade_ctx.get("today"))
@@ -776,6 +802,10 @@ class PositionSignalEngine:
                     "up_close_since_swing_low": up_close,
                     "rsi14": rsi_v,
                     "quality_score": score_v,
+                    # D-020a: which anchor produced the quality score's
+                    # YTD — the fallback must be visible IN THE ARTIFACT,
+                    # not only on stdout (review finding)
+                    "ytd_basis": (_det or {}).get("ytd_basis"),
                     "score_waived": bool(grade_ctx.get("score_waived")),
                     "breaker_status": grade_ctx.get("breaker_status"),
                     "runway_sessions": runway,

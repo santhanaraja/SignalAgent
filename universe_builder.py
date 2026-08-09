@@ -440,9 +440,11 @@ def _ticker_metrics(ticker, df, sp500_ytd=None):
     if len(df[df.index.year == current_year]) < 2:
         return None
 
-    ytd = se.compute_ytd_return(df)
+    # D-020a: real calendar YTD — the 1y frame reaches the prior-year
+    # close, so the selection anchor and the score share one honest number
+    ytd = se.compute_ytd_return_v2(df)
     momentum = se.compute_momentum_metrics(df)
-    score, signal, _details = se.score_stock(df)
+    score, signal, _details = se.score_stock_v2(df)
     span_days = (df.index[-1] - df.index[0]).days
     avg_volume = float(df["Volume"].iloc[-63:].mean())
     if math.isnan(avg_volume):  # Yahoo returns null volumes for some listings
@@ -744,6 +746,9 @@ def build_active_universe(write=True, verbose=True):
     week_key = rotation_week_key()
     active = {
         "built_at": _now_utc().isoformat(),
+        # D-020a: scorer era stamp — artifacts without this key were
+        # baked by the v1 scorer and are never retro-relabelled
+        "scorer_version": "score_stock_v2",
         "week_key": week_key,
         "effective_week_of": effective_week_of(week_key),
         "rotation_config": rot,
@@ -770,6 +775,7 @@ def build_ranking_payload(active):
     the COMPLETE group ranking with per-ticker audit statuses."""
     return {
         "generated_at": active["built_at"],
+        "scorer_version": active.get("scorer_version"),
         "week_key": active["week_key"],
         "rotation_config": active["rotation_config"],
         "candidates_total": active["candidates_total"],

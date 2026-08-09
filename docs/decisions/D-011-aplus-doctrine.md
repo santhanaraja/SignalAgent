@@ -196,4 +196,4 @@ python3 test_position_lab.py
 
 - Jira: PER-508 comment 11716 (the rulings, verbatim source) · 11710 (item 20, the sibling guard)
 - Brief: [docs/briefs/aplus-doctrine-brief.md](../briefs/aplus-doctrine-brief.md) · diagram: docs/briefs/knife-vs-landing.mermaid
-- Related: [D-003](D-003-1b-position-engine.md) (the machine extended) · [D-004](D-004-extension-guard.md) (too-far-above) · [D-007](D-007-theme-layer-retirement.md) (phase order) · [D-008](D-008-gauge-b-architecture.md) (Q4 throttle) · [D-010](D-010-lab-pattern-laws.md) (lab laws)
+- Related: [D-003](D-003-1b-position-engine.md) (the machine extended) · [D-004](D-004-extension-guard.md) (too-far-above) · [D-007](D-007-theme-layer-retirement.md) (phase order) · [D-008](D-008-gauge-b-architecture.md) (Q4 throttle) · [D-010](D-010-lab-pattern-laws.md) (lab laws) · [D-020a](D-020a-ytd-anchor-cap.md) (row 5's quality score re-anchored: real calendar YTD, capped component, scorer versioned — v1 frozen for the studies)

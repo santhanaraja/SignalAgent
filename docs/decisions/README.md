@@ -61,6 +61,8 @@ flowchart TD
 | [D-016](D-016-extreme-fear-overlay.md) | Extreme-fear contrarian entry overlay — backtest-gated hypothesis (ruled exception to D-011 ONLY if it survives the full 11yr sample) | 2026-07-13 | **Proposed** — parked (gated on machinery free + F&G reconstruction appetite) | — |
 | [D-017](D-017-candidates-tier.md) | Candidates tier — auto-grade every signals.json name (grade without a state); chip-only display; copy-the-prompt +watch; close-report line | 2026-07-18 | Ruled | — |
 | [D-018](D-018-close-basis-position-ladder.md) | The close-basis law extends to the position ladder — transitions only on confirmed closes; intraday previews, never transitions; gap-proof catch-up replay | 2026-07-23 | Ruled | — |
+| [D-019](D-019-breaker-coverage.md) | Breaker coverage, not outcome — an outage never impersonates safety; three flavours of incomplete; trigger still wins | 2026-07-25 | Ruled | — |
+| [D-020a](D-020a-ytd-anchor-cap.md) | One honest YTD — real prior-year-close anchor on both paths; YTD component capped flat at the curve's peak above it; scorer versioned (v1 frozen with three pinned anchors) | 2026-08-09 | Ruled | — |
 
 Status meanings: **Proposed** (deliberation open or parked with its
 retest recipe) · **Ruled** (in force) · **Superseded-by-D-xxx** (kept for

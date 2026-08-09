@@ -29,19 +29,29 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from signal_engine import (MACD_STATES, compute_macd, compute_moving_averages,
                            compute_rsi, compute_volume_trend,
-                           compute_ytd_return, score_stock, simulate_score)
+                           compute_ytd_return_v2, score_stock_v2,
+                           simulate_score)
 
 REPO = os.path.dirname(os.path.abspath(__file__))
 
 
 def test_acceptance_1_prototype_drift_case():
+    """The anti-drift case: the lab must mirror PRODUCTION at an
+    overextension input, never a hand-mirrored formula. Historically
+    this pinned v1's >150%% penalty (76, not the drifted 81). Under
+    D-020a production scores with the CAPPED v2 ladder: YTD 209%% takes
+    the plateau's 12, not -7 — and the lab must follow production."""
     score, band, comps = simulate_score(
         rsi=52.8, macd_state="bullish_rising", above_ma20=True,
         above_ma50=True, ma20_gt_ma50=True, ytd_pct=209, vol_ratio=2.33)
-    assert score == 76, f"got {score} — the >150%% overextension branch must fire"
-    assert comps == {"rsi": 3, "macd": 13, "ma": 14, "ytd": -7, "vol": 3}, comps
+    assert score == 95, f"got {score} — the D-020a cap (plateau 12) must apply"
+    assert comps == {"rsi": 3, "macd": 13, "ma": 14, "ytd": 12, "vol": 3}, comps
     assert band == "strong-buy"
-    print("  acceptance 1: drifted-prototype inputs -> 76 (not 81), ytd -7: OK")
+    # and the frozen v1 ladder still produces the historical case
+    from signal_engine import score_ytd_points_v1
+    assert score_ytd_points_v1(209) == -7
+    print("  acceptance 1: v2 cap at YTD 209 -> 95 (ytd +12); frozen v1 "
+          "still says -7: OK")
 
 
 def _seed_inputs(stock):
@@ -63,21 +73,28 @@ def _seed_inputs(stock):
 
 def test_acceptance_2_live_payload_parity():
     """Every stock in the production signals.json, seeded exactly as the
-    page seeds, must reproduce its dashboard score and components."""
+    page seeds, must reproduce its dashboard score and components —
+    THROUGH THE ARTIFACT'S OWN SCORER ERA (D-020a): a v1-era payload
+    (no scorer_version key) replays via the frozen v1 simulator and is
+    never retro-scored under v2."""
+    from signal_engine import scorer_era, simulate_score_v1
     signals = json.load(open(os.path.join(REPO, "data", "signals.json")))
+    sim = simulate_score if scorer_era(signals) == "score_stock_v2" \
+        else simulate_score_v1
     checked = 0
     for group in signals["groups"]:
         for stock in group["stocks"]:
             if not stock.get("score_components"):
                 continue
-            score, _, comps = simulate_score(**_seed_inputs(stock))
+            score, _, comps = sim(**_seed_inputs(stock))
             assert score == stock["score"], \
                 f"{stock['ticker']}: simulate {score} != dashboard {stock['score']}"
             assert comps == stock["score_components"], \
                 f"{stock['ticker']}: components diverge: {comps}"
             checked += 1
     assert checked >= 40, f"only {checked} stocks checked — payload missing components?"
-    print(f"  acceptance 2: {checked} live dashboard scores reproduced exactly: OK")
+    print(f"  acceptance 2: {checked} live dashboard scores reproduced "
+          f"exactly via {sim.__name__} ({scorer_era(signals)}): OK")
 
 
 def test_acceptance_3_band_and_gate_boundaries():
@@ -132,14 +149,14 @@ def _extract_inputs(df):
     return dict(rsi=rsi, macd_state=state,
                 above_ma20=price > ma20_v, above_ma50=price > ma50_v,
                 ma20_gt_ma50=ma20_v > ma50_v,
-                ytd_pct=compute_ytd_return(df),
+                ytd_pct=compute_ytd_return_v2(df),
                 vol_ratio=compute_volume_trend(df))
 
 
 def test_acceptance_4_fuzz_200_combos():
     for seed in range(200):
         df = _synthetic_df(seed)
-        score, band, details = score_stock(df)
+        score, band, details = score_stock_v2(df)
         sim_score, sim_band, sim_comps = simulate_score(**_extract_inputs(df))
         assert sim_score == score, \
             f"seed {seed}: simulate {sim_score} != score_stock {score}"
@@ -163,10 +180,12 @@ def test_endpoint_contract():
         "vol_ratio": 2.33})
     d = ok.get_json()
     assert ok.status_code == 200 and d["status"] == "success"
-    assert d["score"] == 76 and d["band"] == "strong-buy"
-    assert d["gate_distance"] == 26
+    # D-020a: the served simulator is v2 — the cap's plateau (12), not
+    # v1's -7 penalty, at YTD 209
+    assert d["score"] == 95 and d["band"] == "strong-buy"
+    assert d["gate_distance"] == 45
     assert d["score_components"] == {"rsi": 3, "macd": 13, "ma": 14,
-                                     "ytd": -7, "vol": 3}
+                                     "ytd": 12, "vol": 3}
     for bad, why in (
         ({}, "missing everything"),
         ({"rsi": 300, "macd_state": "bullish", "above_ma20": True,

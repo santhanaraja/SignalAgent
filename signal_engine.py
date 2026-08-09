@@ -362,7 +362,7 @@ def generate_dynamic_thesis_breaker(group_name, group_info, group_stocks, macro_
         # USD strength check
         uup_data = macro_data.get("UUP")
         if uup_data is not None and len(uup_data) > 20:
-            uup_ytd = compute_ytd_return(uup_data)
+            uup_ytd = compute_ytd_return_v1(uup_data)
             uup_price = float(uup_data["Close"].iloc[-1])
             if uup_ytd > 2:
                 risks.append(f"USD already strengthening ({uup_ytd:+.1f}% YTD at ${uup_price:.2f}) — critical above +5% YTD")
@@ -389,7 +389,7 @@ def generate_dynamic_thesis_breaker(group_name, group_info, group_stocks, macro_
     if sector_type == "chemicals":
         xle_data = macro_data.get("XLE")
         if xle_data is not None and len(xle_data) > 20:
-            xle_ytd = compute_ytd_return(xle_data)
+            xle_ytd = compute_ytd_return_v1(xle_data)
             xle_price = float(xle_data["Close"].iloc[-1])
             risks.append(f"Energy cost spike — XLE at ${xle_price:.2f} ({xle_ytd:+.1f}% YTD), margins squeezed if >+15% YTD")
 
@@ -666,7 +666,7 @@ def generate_dynamic_breaker_checks(group_name, group_info, group_stocks, macro_
     if "usd_strength" in sensitivities:
         uup_data = macro_data.get("UUP")
         if uup_data is not None and len(uup_data) > 20:
-            uup_ytd = compute_ytd_return(uup_data)
+            uup_ytd = compute_ytd_return_v1(uup_data)
             checks["usd_strength"] = f"DXY proxy (UUP) rises >5% YTD — currently {uup_ytd:+.1f}% YTD"
 
     if "oil_collapse" in sensitivities:
@@ -690,7 +690,7 @@ def generate_dynamic_breaker_checks(group_name, group_info, group_stocks, macro_
     if "energy_spike" in sensitivities:
         xle_data = macro_data.get("XLE")
         if xle_data is not None and len(xle_data) > 20:
-            xle_ytd = compute_ytd_return(xle_data)
+            xle_ytd = compute_ytd_return_v1(xle_data)
             xle_price = float(xle_data["Close"].iloc[-1])
             checks["energy_spike"] = f"Energy (XLE) surges >15% YTD — currently ${xle_price:.2f} ({xle_ytd:+.1f}% YTD)"
 
@@ -832,8 +832,17 @@ def compute_moving_averages(series):
     return ma20, ma50, ma200
 
 
-def compute_ytd_return(df):
-    """Compute YTD return from the first VALID close of the current year.
+def compute_ytd_return_v1(df):
+    """FROZEN (D-020a). The pre-D-020a YTD: anchored on the first VALID
+    close of the CURRENT year present in the frame — NOT the prior
+    year's last close. On a frame that does not reach back to January
+    (production's 6mo fetch after early July) the anchor silently
+    becomes the oldest bar in the window, i.e. a rolling return wearing
+    a YTD label. Kept verbatim so committed studies keep reproducing;
+    production calls compute_ytd_return_v2. The only remaining
+    production callers are the UUP/XLE macro breaker inputs, scoped out
+    of D-020a by name (their thresholds were calibrated on this
+    construct — re-anchoring them is its own deliberation).
 
     Yahoo intermittently returns phantom bars with NaN Close (e.g. a Jan-2
     row on some tickers); without dropna the NaN baseline propagates through
@@ -848,6 +857,34 @@ def compute_ytd_return(df):
     if not first_close:
         return 0.0
     return round(((last_close - first_close) / first_close) * 100, 2)
+
+
+def compute_ytd_return_v2(df, with_basis=False):
+    """Real calendar year-to-date (D-020a): anchored on the LAST CLOSE
+    OF THE PRIOR CALENDAR YEAR. Needs a frame reaching into the prior
+    year (production fetches period="1y" wherever this feeds).
+
+    Fallback, recorded not hidden: a frame with no prior-year bar (a
+    listing younger than the year, or a caller that could not fetch the
+    wider frame) anchors on the first current-year close — v1's anchor
+    — and reports basis "first_close_of_year" so the degradation is
+    visible in the artifact instead of impersonating a real YTD.
+    """
+    current_year = datetime.datetime.now().year
+    closes = df["Close"].dropna()
+    cur = closes[closes.index.year == current_year]
+    if len(cur) == 0:
+        return (0.0, "no_current_year_bars") if with_basis else 0.0
+    prior = closes[closes.index.year == current_year - 1]
+    last_close = cur.iloc[-1]
+    if len(prior) and prior.iloc[-1]:
+        anchor, basis = prior.iloc[-1], "prior_year_close"
+    elif len(cur) >= 2 and cur.iloc[0]:
+        anchor, basis = cur.iloc[0], "first_close_of_year"
+    else:
+        return (0.0, "insufficient") if with_basis else 0.0
+    ytd = round(((last_close - anchor) / anchor) * 100, 2)
+    return (ytd, basis) if with_basis else ytd
 
 
 def compute_volume_trend(df, lookback=20):
@@ -1030,7 +1067,7 @@ def check_thesis_breakers(group_name, group_info, group_stocks, macro_data,
     if "usd_strength" in checks:
         uup_data = macro_data.get("UUP")
         if uup_data is not None and len(uup_data) > 20:
-            uup_ytd = compute_ytd_return(uup_data)
+            uup_ytd = compute_ytd_return_v1(uup_data)
             if uup_ytd > 5:
                 alerts.append({
                     "check": "usd_strength",
@@ -1076,7 +1113,7 @@ def check_thesis_breakers(group_name, group_info, group_stocks, macro_data,
     if "energy_spike" in checks:
         xle_data = macro_data.get("XLE")
         if xle_data is not None and len(xle_data) > 20:
-            xle_ytd = compute_ytd_return(xle_data)
+            xle_ytd = compute_ytd_return_v1(xle_data)
             if xle_ytd > 15:
                 alerts.append({
                     "check": "energy_spike",
@@ -1109,7 +1146,7 @@ def check_thesis_breakers(group_name, group_info, group_stocks, macro_data,
 # ---------------------------------------------------------------------------
 # Score component functions (PER-508 item 19)
 #
-# The ONLY implementation of the scoring formula. score_stock() computes
+# The ONLY implementation of the scoring formula. score_stock_v2() computes
 # indicators from price data and delegates every point decision here;
 # /api/score/simulate (Score Lab) feeds user inputs through the same
 # functions. The user's hand-built calculator prototype drifted from
@@ -1157,7 +1194,11 @@ def score_ma_points(above_ma20, above_ma50, ma20_gt_ma50):
         + (4 if ma20_gt_ma50 else -4)
 
 
-def score_ytd_points(ytd_return):
+def score_ytd_points_v1(ytd_return):
+    """FROZEN (D-020a). The pre-D-020a ladder: peaks at 12 on (20,50],
+    tapers to 8 on (50,100], then the overextension penalties (-10
+    above 100, -15 above 150). Kept verbatim for the committed studies'
+    parity pins; production scores with score_ytd_points_v2."""
     if ytd_return > 50:
         pts = 8
     elif ytd_return > 20:
@@ -1178,6 +1219,26 @@ def score_ytd_points(ytd_return):
     elif ytd_return > 100:
         pts -= 10
     return pts
+
+
+def score_ytd_points_v2(ytd_return):
+    """D-020a cap: rises exactly as v1 up to the ladder's PEAK (12 on
+    entering >20), then holds FLAT — no taper at >50, no penalties at
+    >100/>150. The prereg's plateau rule: the v1 curve was ALREADY
+    declining before the 100% boundary (12 -> 8 at >50), so the plateau
+    sits at the curve's PEAK value (12), not at 8, which is a point
+    already on the way down. Never reverses, never resumes rising, and
+    no value anywhere exceeds v1's maximum. Downside ladder unchanged.
+    """
+    if ytd_return > 20:
+        return 12
+    if ytd_return > 5:
+        return 6
+    if ytd_return > 0:
+        return 2
+    if ytd_return > -10:
+        return -4
+    return -10
 
 
 def score_vol_points(vol_ratio):
@@ -1217,22 +1278,45 @@ def simulate_score(rsi, macd_state, above_ma20, above_ma50, ma20_gt_ma50,
         "rsi": score_rsi_points(rsi),
         "macd": score_macd_points(bullish, confirms),
         "ma": score_ma_points(above_ma20, above_ma50, ma20_gt_ma50),
-        "ytd": score_ytd_points(ytd_pct),
+        "ytd": score_ytd_points_v2(ytd_pct),
         "vol": score_vol_points(vol_ratio),
     }
     score = compose_score(components)
     return score, score_signal_band(score), components
 
 
-def score_stock(df, group_info=None):
-    """
-    Compute a composite score (0-100) and signal for a stock.
+def simulate_score_v1(rsi, macd_state, above_ma20, above_ma50, ma20_gt_ma50,
+                   ytd_pct, vol_ratio):
+    """FROZEN (D-020a): replays v1-era payloads — artifacts baked before the scorer was versioned reproduce through THIS, never through the v2 simulator.
 
-    Additive from a base of 50 across five components; per-component points
-    are returned in details["score_components"] ({rsi, macd, ma, ytd, vol})
-    for the dashboard's score-breakdown tooltip. See docs/scoring.md.
-    All point decisions live in the score_*_points functions above — shared
-    with /api/score/simulate, never duplicated.
+    Score Lab entry point: user inputs -> the real scoring functions.
+
+    Returns (score, band, components) exactly as score_stock would produce
+    for a stock exhibiting these indicator values.
+    """
+    bullish, confirms = MACD_STATES[macd_state]
+    components = {
+        "rsi": score_rsi_points(rsi),
+        "macd": score_macd_points(bullish, confirms),
+        "ma": score_ma_points(above_ma20, above_ma50, ma20_gt_ma50),
+        "ytd": score_ytd_points_v1(ytd_pct),
+        "vol": score_vol_points(vol_ratio),
+    }
+    score = compose_score(components)
+    return score, score_signal_band(score), components
+
+
+def score_stock_v1(df, group_info=None):
+    """
+    FROZEN (D-020a). The pre-D-020a scorer, verbatim: YTD anchored by
+    compute_ytd_return_v1 on whatever frame it is handed (production
+    fed it a 6mo frame) and pointed by the score_ytd_points_v1 ladder
+    with its >100/>150 penalties. Exists SOLELY so the committed
+    studies keep reproducing — Layer A's ladder-parity pin and the
+    frozen-anchor pins drive it. Never called by production; production
+    calls score_stock_v2. The duplication with v2 below is deliberate:
+    a shared body would let future edits mutate the frozen scorer
+    silently.
     """
     close = df["Close"]
     details = {}
@@ -1280,10 +1364,10 @@ def score_stock(df, group_info=None):
                                        current_price > ma50_val,
                                        ma20_val > ma50_val)
 
-    # --- YTD Momentum ---
-    ytd_return = compute_ytd_return(df)
+    # --- YTD Momentum (FROZEN v1: frame-anchored, penalty ladder) ---
+    ytd_return = compute_ytd_return_v1(df)
     details["ytd_return"] = ytd_return
-    components["ytd"] = score_ytd_points(ytd_return)
+    components["ytd"] = score_ytd_points_v1(ytd_return)
 
     # --- Volume ---
     vol_ratio = compute_volume_trend(df)
@@ -1314,12 +1398,128 @@ def score_stock(df, group_info=None):
         "vol_ratio": vol_ratio,
     }
 
+    details["scorer_version"] = "score_stock_v1"
     signal = score_signal_band(score)
     details["signal"] = signal
     return score, signal, details
 
 
-def compute_grade_inputs(df):
+def score_stock_v2(df, group_info=None, ytd_return=None, ytd_basis=None):
+    """
+    Compute a composite score (0-100) and signal for a stock (D-020a).
+
+    Additive from a base of 50 across five components; per-component points
+    are returned in details["score_components"] ({rsi, macd, ma, ytd, vol})
+    for the dashboard's score-breakdown tooltip. See docs/scoring.md.
+    All point decisions live in the score_*_points functions above — shared
+    with /api/score/simulate, never duplicated.
+
+    D-020a: the YTD component is REAL calendar year-to-date (prior-year
+    last close anchor) pointed by the capped v2 ladder. Callers whose df
+    is an indicator frame too short to reach the prior year (production's
+    6mo fetch) pass ytd_return/ytd_basis computed from a wider frame via
+    compute_ytd_return_v2; every other indicator still reads the df it
+    always read — the indicator windows are untouched by D-020a. When no
+    override is given, the YTD is computed from df itself (correct for
+    the universe builder's 1y frames) and the basis is recorded either
+    way in details["ytd_basis"].
+    """
+    close = df["Close"]
+    details = {}
+    components = {}
+
+    # --- RSI ---
+    rsi = compute_rsi(close)
+    current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
+    details["rsi"] = round(current_rsi, 1)
+    components["rsi"] = score_rsi_points(current_rsi)
+
+    # --- MACD ---
+    macd_line, signal_line, histogram = compute_macd(close)
+    current_macd = macd_line.iloc[-1] if not pd.isna(macd_line.iloc[-1]) else 0
+    current_signal = signal_line.iloc[-1] if not pd.isna(signal_line.iloc[-1]) else 0
+    current_hist = histogram.iloc[-1] if not pd.isna(histogram.iloc[-1]) else 0
+    prev_hist = histogram.iloc[-2] if len(histogram) > 1 and not pd.isna(histogram.iloc[-2]) else 0
+
+    details["macd"] = round(current_macd, 3)
+    details["macd_signal"] = round(current_signal, 3)
+    details["macd_histogram"] = round(current_hist, 3)
+
+    bullish = current_macd > current_signal
+    confirms = (current_hist > prev_hist) if bullish else (current_hist < prev_hist)
+    macd_state = next(k for k, v in MACD_STATES.items() if v == (bullish, confirms))
+    components["macd"] = score_macd_points(bullish, confirms)
+
+    # --- Moving Averages ---
+    # NOTE (known bias, kept as-is): when MA20/MA50 are NaN (fewer than
+    # 20/50 bars), they default to current_price, so all three comparisons
+    # below fail and a young listing takes the full -14. In practice the
+    # universe's 90-day history gate keeps such names out.
+    ma20, ma50, ma200 = compute_moving_averages(close)
+    current_price = close.iloc[-1]
+    ma20_val = ma20.iloc[-1] if not pd.isna(ma20.iloc[-1]) else current_price
+    ma50_val = ma50.iloc[-1] if not pd.isna(ma50.iloc[-1]) else current_price
+    ma200_val = ma200.iloc[-1] if not pd.isna(ma200.iloc[-1]) else None
+
+    details["price"] = round(current_price, 2)
+    details["ma20"] = round(ma20_val, 2)
+    details["ma50"] = round(ma50_val, 2)
+    details["ma200"] = round(ma200_val, 2) if ma200_val else None
+
+    components["ma"] = score_ma_points(current_price > ma20_val,
+                                       current_price > ma50_val,
+                                       ma20_val > ma50_val)
+
+    # --- YTD Momentum (D-020a: real calendar YTD, capped ladder) ---
+    if ytd_return is None:
+        ytd_return, ytd_basis = compute_ytd_return_v2(df, with_basis=True)
+    details["ytd_return"] = ytd_return
+    details["ytd_basis"] = ytd_basis
+    components["ytd"] = score_ytd_points_v2(ytd_return)
+
+    # --- Volume ---
+    vol_ratio = compute_volume_trend(df)
+    details["volume_ratio"] = vol_ratio
+    components["vol"] = score_vol_points(vol_ratio)
+
+    # --- Momentum Metrics ---
+    momentum = compute_momentum_metrics(df)
+    details.update(momentum)
+
+    score = compose_score(components)
+    details["composite_score"] = score
+    details["score_components"] = components
+
+    # The EXACT simulate_score inputs this run scored — Score Lab seeds from
+    # these verbatim, so a pre-seeded ticker reproduces its score by
+    # construction. The display fields above are rounded AFTER scoring
+    # (rsi 1dp, price/MAs 2dp) and can flip a branch at a boundary; these
+    # cannot. ytd/vol are rounded inside their compute functions pre-scoring,
+    # so they are already exact.
+    details["score_inputs"] = {
+        "rsi": float(current_rsi),
+        "macd_state": macd_state,
+        "above_ma20": bool(current_price > ma20_val),
+        "above_ma50": bool(current_price > ma50_val),
+        "ma20_gt_ma50": bool(ma20_val > ma50_val),
+        "ytd_pct": ytd_return,
+        "vol_ratio": vol_ratio,
+    }
+
+    details["scorer_version"] = "score_stock_v2"
+    signal = score_signal_band(score)
+    details["signal"] = signal
+    return score, signal, details
+
+
+def scorer_era(artifact):
+    """Era label for a baked artifact (D-020a): artifacts written before
+    the scorer was versioned carry no stamp and are v1-era BY OMISSION —
+    they are never retro-relabelled as v2."""
+    return artifact.get("scorer_version") or "score_stock_v1-era"
+
+
+def compute_grade_inputs(df, ytd_df=None):
     """
     D-017 emission: the per-row scalars the framework runner feeds to the
     D-011 grade (grade_setup) for un-tracked candidates.
@@ -1350,8 +1550,20 @@ def compute_grade_inputs(df):
         return None
     r = compute_rsi(sdf["Close"]).iloc[-1]
     gi["rsi14"] = float(r) if np.isfinite(r) else None
-    s, _sig, _det = score_stock(sdf)
+    # D-020a: the graded quality_score uses REAL YTD, and — per D-018 —
+    # on CONFIRMED closes: the wider ytd frame goes through the same
+    # synthetic-strip + confirmed-close splitter as the graded df. With
+    # no wider frame the v2 fallback anchors on sdf and says so in the
+    # recorded basis rather than silently keeping the rolling label.
+    ytd_v = ytd_b = None
+    if ytd_df is not None and len(ytd_df):
+        sydf = strip_synthetic_last_bar(ytd_df)
+        sydf, _yf = confirmed_close_frame(sydf)
+        if sydf is not None and len(sydf):
+            ytd_v, ytd_b = compute_ytd_return_v2(sydf, with_basis=True)
+    s, _sig, _det = score_stock_v2(sdf, ytd_return=ytd_v, ytd_basis=ytd_b)
     gi["quality_score"] = None if s is None else float(s)
+    gi["ytd_basis"] = _det.get("ytd_basis")
     return gi
 
 
@@ -2123,9 +2335,12 @@ def get_index_data():
     indexes = {}
     for ticker, name in INDEX_TICKERS.items():
         print(f"  {name} ({ticker})...", end=" ")
-        df = fetch_data(ticker, period="6mo")
+        # D-020a: 1y frame so the YTD anchor reaches the prior-year
+        # close; level/day-change/avg_5d read the last bars and are
+        # frame-invariant
+        df = fetch_data(ticker, period="1y")
         if df is not None and len(df) > 5:
-            ytd = compute_ytd_return(df)
+            ytd = compute_ytd_return_v2(df)
             level = round(float(df["Close"].iloc[-1]), 2)
             prev_close = round(float(df["Close"].iloc[-2]), 2) if len(df) > 1 else level
             day_change = round(level - prev_close, 2)
@@ -2148,9 +2363,11 @@ def get_index_data():
 
 def get_sp500_ytd():
     print("Fetching S&P 500 benchmark...")
-    df = fetch_data("^GSPC", period="6mo")
+    # D-020a: 1y frame -> real prior-year-close anchor; beating_sp500
+    # compares stock YTD (v2) against this, so the anchors must match
+    df = fetch_data("^GSPC", period="1y")
     if df is not None:
-        return compute_ytd_return(df)
+        return compute_ytd_return_v2(df)
     return 0.0
 
 
@@ -2220,12 +2437,23 @@ def run_engine():
     ticker_data = {}
     ticker_signals = {}
 
+    ytd_frames = {}
     for ticker in sorted(all_tickers):
         print(f"  Fetching {ticker}...", end=" ")
         df = fetch_data(ticker, period="6mo")
         if df is not None and len(df) > 20:
             ticker_data[ticker] = df
-            print(f"OK ({len(df)} days)")
+            # D-020a: a SEPARATE 1y frame feeds ONLY the YTD anchor —
+            # the 6mo indicator frame above is untouched. A failed 1y
+            # fetch degrades visibly (ytd_basis in the artifact), never
+            # silently.
+            ydf = fetch_data(ticker, period="1y")
+            if ydf is not None and len(ydf):
+                ytd_frames[ticker] = ydf
+                print(f"OK ({len(df)} days, ytd frame {len(ydf)})")
+            else:
+                print(f"OK ({len(df)} days, YTD FRAME MISSING — "
+                      "falling back to the 6mo anchor, recorded)")
         else:
             print("SKIP (insufficient data)")
 
@@ -2245,7 +2473,13 @@ def run_engine():
         groups_for_ticker = [g for g, info in industry_groups.items() if ticker in info["tickers"]]
         group_info = industry_groups.get(groups_for_ticker[0], {}) if groups_for_ticker else {}
 
-        score, signal, details = score_stock(df, group_info)
+        _ydf = ytd_frames.get(ticker)
+        _ytd_v = _ytd_b = None
+        if _ydf is not None:
+            _ytd_v, _ytd_b = compute_ytd_return_v2(_ydf, with_basis=True)
+        score, signal, details = score_stock_v2(df, group_info,
+                                                ytd_return=_ytd_v,
+                                                ytd_basis=_ytd_b)
         details["beating_sp500"] = bool(details.get("ytd_return", 0) > sp500_ytd)
 
         # Merge fundamentals
@@ -2276,7 +2510,8 @@ def run_engine():
         # scalars). Failure only costs this row its candidate grade
         # (unavailable-data rule) — it can never block the signal run.
         try:
-            details["grade_inputs"] = compute_grade_inputs(df)
+            details["grade_inputs"] = compute_grade_inputs(
+                df, ytd_df=ytd_frames.get(ticker))
         except Exception as e:
             details["grade_inputs"] = None
             print(f"  {ticker}: grade-input emission failed ({e})")
@@ -2317,6 +2552,9 @@ def run_engine():
                     "grade_inputs": d.get("grade_inputs"),
                     "signal": sig["signal"],
                     "ytd_return": d.get("ytd_return", 0),
+                    # D-020a: the anchor that produced ytd_return — a
+                    # failed 1y fetch degrades VISIBLY in the row itself
+                    "ytd_basis": d.get("ytd_basis"),
                     "price": d.get("price", 0),
                     "rsi": d.get("rsi", 50),
                     "macd": d.get("macd", 0),
@@ -2442,6 +2680,9 @@ def run_engine():
 
     output = {
         "timestamp": timestamp,
+        # D-020a: scorer era stamp — artifacts without this key were
+        # baked by the v1 scorer and are never retro-relabelled
+        "scorer_version": "score_stock_v2",
         "sp500_ytd": sp500_ytd,
         # per-ticker macro fetch outcomes for this run (D-019) — the
         # run-level companion to each group's coverage record

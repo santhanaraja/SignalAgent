@@ -17,7 +17,8 @@ from flask_cors import CORS
 from signal_engine import (
     fetch_data,
     fetch_fundamentals_yfinance,
-    score_stock,
+    score_stock_v2,
+    compute_ytd_return_v2,
     simulate_score,
     MACD_STATES,
     QUALIFIER_GATE,
@@ -241,8 +242,14 @@ def _analyze_ticker(symbol):
     if df is None or len(df) < 20:
         return None
 
-    # Score + signals
-    score, signal, details = score_stock(df)
+    # Score + signals — D-020a: the 1y frame feeds ONLY the YTD anchor
+    # (real prior-year close); the 6mo indicator frame is untouched
+    ydf = fetch_data(symbol, period="1y")
+    ytd_v = ytd_b = None
+    if ydf is not None and len(ydf):
+        ytd_v, ytd_b = compute_ytd_return_v2(ydf, with_basis=True)
+    score, signal, details = score_stock_v2(df, ytd_return=ytd_v,
+                                            ytd_basis=ytd_b)
 
     # Fundamentals
     fundamentals = fetch_fundamentals_yfinance(symbol)
