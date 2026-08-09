@@ -73,6 +73,32 @@ the peak rule, stated plainly: names in (50,100] gain +4 (8→12) —
 freezing the plateau at 8 would have anchored it to a value already
 on the penalty's downslope, which the instruction forbids.
 
+### The plateau ruling, explicit (amended 2026-08-09, pre-push, by the operator)
+
+- The v1 ladder was **already declining before 100%** — peak +12 on
+  (20,50], tapering to +8 on (50,100], then −2 above. The taper
+  started at 50%, not at the threshold. **This was not previously
+  known** before the curve report above surfaced it.
+- Two plateau options existed: **12** (the curve's peak) or **8**
+  (the value at the 100% boundary). Plateau-12 additionally lifts
+  every name in (50,100] by +4; plateau-8 would have touched only
+  names above 100%.
+- **Plateau-12 was chosen deliberately by the operator, after the
+  trade-off was put to him.** Rationale: a monotone non-decreasing
+  curve, and the same mean-reversion logic removed consistently
+  rather than halfway.
+- **Recorded against it**: the (50,100] band has NO evidence against
+  it. Build 5.1 measured only the >100% flip set, and the
+  design-coherence argument that justifies removing the >100%
+  penalty — its threshold was calibrated on an input being replaced —
+  does NOT extend to the 50–100 band, which the anchor change leaves
+  untouched. The chat recommendation was plateau-8; it was overruled
+  with the reasoning above.
+- The (50,100] taper is logged as a **newly visible, never measured
+  construct** — available as a pre-specifiable hypothesis for the
+  carry replay or a 5.1 follow-up. **This ruling is marked
+  REVISITABLE.**
+
 **Why removing the penalty is the conservative move, not the
 aggressive one**: the >100% threshold was calibrated against the
 frame-anchored input, which no longer exists. Under real YTD, 23 of
