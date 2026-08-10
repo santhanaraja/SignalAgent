@@ -81,6 +81,23 @@ explicitly, and an unreachable anchor **raises** rather than printing a
 green line — a pin that silently does not run is worse than one that
 fails, because the suite still reads all-clear.
 
+**The SLIDING-WINDOW pin — same family, slower fuse.** A pin whose
+anchor MOVES relative to its data will eventually stop testing what it
+was written to test. `test_backtest_doctrine`'s honesty bridge anchored
+on the *newest 20 commits* of `public/framework.json` and then filtered
+to days the doctrine price cache covers. Green for weeks — until daily
+bakes accumulated and the window slid entirely past the cache's
+coverage: on 2026-08-10 the pin failed on clean `HEAD` with zero
+replayable days, through no defect in anything it guards. The
+HEAD-anchored trap dies the moment the fix lands; the sliding window
+dies slowly, on a schedule set by how fast the sequence grows — and it
+can fail EITHER way: red on healthy code (this instance), or worse,
+quietly testing an ever-thinner slice until it tests nothing. The
+lesson: **anchor a pin to a fixed commit or a content hash, never to a
+position in a growing sequence.** Select the data that satisfies the
+pin's intent first (here: cache-covered days), then cap for runtime —
+never cap first and hope the intent survives the cap.
+
 Corollaries:
 
 - Prefer injection to mocking: kill the input, don't stub the answer.
