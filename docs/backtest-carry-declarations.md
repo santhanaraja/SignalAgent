@@ -88,6 +88,39 @@ visible. (6A precedent.)
     `sum(PnL)/sum(R_usd)` (the tiny-R degeneracy ruling), with the
     per-trade mean and median beside it.
 
+## Amendment 1 — the cash constraint (declared 2026-08-10, BEFORE any
+performance result was computed)
+
+Discovered at implementation: under the prereg's formula a
+risk-parity arm can want more capital than it holds. Tight-stop names
+(entry close to the SMA20) pull `risk_budget/(fill−stop)` far above
+the cap, so the cap binds at 12% per position, and concurrent
+positions at 12% exhaust cash long before the 90% regime ceiling
+would. The smoke replay hit exactly this and stopped on the declared
+cash assertion. **No arm's CAGR, drawdown or expectancy had been
+computed when this was written** — only the integrity gates, the trade
+counts and the derived risk budget.
+
+Resolution, chosen for fidelity to the prereg's STATISTICAL
+requirement:
+
+16. `shares = min(risk_budget×equity/(fill−stop), cap×equity/fill,
+    affordable)` where `affordable = cash/(fill×(1+slip))`. The trade
+    stays in the population, so the pairing the prereg demands
+    ("identical trades, different share counts") survives intact; the
+    alternative — denying the entry, as 5B's own admission does — would
+    diverge the population and destroy the paired comparison the prereg
+    calls the higher-powered half of the study.
+17. **CASH-BIND is reported as a first-class validity number** beside
+    cap-bind, per arm. A high cash-bind rate means the arm is not
+    really being sized by risk parity either — it is being sized by its
+    own funding limit — and the report says so in those words. If
+    cash-bind is material the same reasoning as the prereg's cap-bind
+    clause applies and is stated explicitly for the ruling.
+18. Declared NOT tested here: a denial variant (skip the entry when
+    cash is short, as the live system would). That is a different
+    population and therefore a different study.
+
 ## Scope
 
 14. Scorer **v1** throughout (prereg). The frozen v1 stack is what the
