@@ -8,11 +8,34 @@ venv/
 # Local Netlify folder
 .netlify
 
-# Universe source layer — local build caches + redundant local copies.
-# public/universe_candidates.json and public/universe_ranking.json are the
-# committed artifacts the API serves; data/universe_active.json is the
-# committed weekly rotation cache consumed by signal_engine.
-data/universe_cache/
+# Universe source layer.
+#
+# COMMITTED: public/universe_candidates.json and public/universe_ranking.json
+# are the artifacts the API serves; data/universe_active.json is the weekly
+# rotation cache signal_engine consumes; data/pool/ holds the hand-maintained
+# pool inputs (Nasdaq-100 membership, inclusions).
+#
+# COMMITTED as of 2026-08-10: data/universe_cache/etf_*.json. These are the
+# only record of WHICH holdings produced a given pool. Without them, "SPY put
+# NVDA in the pool" is an inference from whatever Yahoo returns today, not
+# evidence about the build that actually ran. The rotation workflow commits
+# them back on every rotation, so the committed copy is always the snapshot
+# the build used — committing them without that step would have been worse
+# than not committing them, since a permanently stale file reads as evidence.
+#
+# IGNORED, and never authoritative: the data/ copies of the ranking and
+# candidates artifacts. They are local build byproducts of a local rotation
+# run. Rotations normally run in Actions, which commits only the public/
+# copies, so a data/ copy on a developer machine is frozen at whenever that
+# machine last built and must not be read as current. Nothing in production
+# reads them; nothing committed should either.
+# NOTE: the first pattern must exclude the directory's CONTENTS (trailing
+# /*), not the directory itself — git will not descend into an excluded
+# directory, and the negation below would then never be reached. For the same
+# reason the negation only works while the caches stay FLAT: an
+# etf_*.json nested under a subdirectory here would be ignored again.
+data/universe_cache/*
+!data/universe_cache/etf_*.json
 data/universe_candidates.json
 data/universe_ranking.json
 

@@ -3,10 +3,15 @@
 Universe Source Layer
 =====================
 Assembles a *candidate* ticker universe from multiple feeds:
+
+    pool = ETF top-holdings  ∪  S&P 500  ∪  Nasdaq-100  ∪  inclusions
+           −  exclusions
+
   1. Top holdings of major sector + thematic ETFs (yfinance funds_data)
   2. S&P 500 constituents (datahub CSV primary; Wikipedia fallback)
-  3. Manual additions
-  4. Manual exclusions
+  3. Nasdaq-100 constituents — READ FROM A COMMITTED FILE, never fetched
+  4. Inclusions — committed, hand-maintained, for listings the indices lag
+  5. Exclusions — applied LAST, to the union, so exclusion always wins
 
 Then (via GICSClassifier) classifies each candidate by GICS sub-industry and
 writes an inspectable snapshot to data/ + public/universe_candidates.json.
@@ -15,12 +20,31 @@ This is the candidate SOURCE layer. universe_builder.py consumes it weekly
 (Friday-evening rotation) to build the active universe that signal_engine
 serves via get_industry_groups(); this module touches nothing downstream.
 
+WHY NASDAQ-100 IS A FILE AND NOT A FETCH
+----------------------------------------
+Index membership changes a handful of times a year, on announced dates. A
+live scrape would hand a third party the ability to change what the system
+can trade, silently, between two rotations — and would do it through a
+parser that has no way to tell a reconstitution from an outage. The list is
+committed with a dated provenance header and moved deliberately by
+scripts/refresh_nasdaq100.py, whose diff a human reads before committing.
+The S&P 500 feed predates this rule and is still fetched (with a TTL cache
+and a stale-cache fallback); the Nasdaq-100 path must not copy it.
+
+POOL VERSIONING
+---------------
+POOL_VERSION names the pool DEFINITION; pool_definition_hash() fingerprints
+its actual contents. Both are stamped into every pool-derived artifact, so a
+stored ranking can always be read against the pool that produced it — and a
+list edited without a version bump still moves the hash.
+
 Run directly to build + print the universe:
     python universe_source.py
 """
 
 import csv
 import datetime
+import hashlib
 import json
 import os
 from io import StringIO
@@ -29,13 +53,68 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CACHE_DIR = os.path.join(BASE_DIR, "data", "universe_cache")
 CONFIG_PATH = os.path.join(BASE_DIR, "framework", "config.yaml")
 
+# Committed pool inputs — read, never fetched.
+POOL_DIR = os.path.join(BASE_DIR, "data", "pool")
+NASDAQ100_PATH = os.path.join(POOL_DIR, "nasdaq100.json")
+INCLUSIONS_PATH = os.path.join(POOL_DIR, "inclusions.json")
+
+# The pool DEFINITION version. Bump when the set of sources, the membership
+# of a committed list, or the exclusion/inclusion lists change.
+#   v1  (through 2026-08-09)  ETF holdings ∪ S&P 500 ∪ manual_additions
+#                             − manual_exclusions
+#   v2  (2026-08-10)          + Nasdaq-100 (committed list), + inclusions
+#                             list, exclusion precedence made explicit
+POOL_VERSION = "v2-2026-08-10"
+
 _HEADERS = {"User-Agent": "Mozilla/5.0 SignalAgent/1.0 (universe-source)"}
 SP500_CSV_URL = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
 SP500_WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 
 
+class UniverseSourceError(RuntimeError):
+    """A committed pool input is missing or unusable.
+
+    Raised rather than degraded-to-empty on purpose: a source that silently
+    contributes nothing shrinks what the system can trade without anyone
+    seeing it happen. The rotation fails, and the previous universe — which
+    is committed and known-good — stays authoritative.
+    """
+
+
 def _now_utc():
     return datetime.datetime.now(datetime.timezone.utc)
+
+
+def _rel(path):
+    return os.path.relpath(path, BASE_DIR)
+
+
+def _read_committed_json(path, label, required=True):
+    """Read a committed pool input. Never fetches; raises if unusable.
+
+    `required=False` tolerates ABSENCE (returning None) while still raising on
+    a file that exists and is broken. Used for the inclusion list: an empty
+    inclusion list is the normal state and contributes nothing, so letting a
+    missing file abort the weekly rotation would buy a new single point of
+    failure for no benefit. Absence is reported in the artifact instead —
+    recorded, not fatal.
+    """
+    if not os.path.exists(path):
+        if not required:
+            return None
+        raise UniverseSourceError(
+            f"{label} missing at {_rel(path)}. This file is committed and is "
+            "the only source for it — there is no fetch fallback by design.")
+    try:
+        with open(path) as f:
+            obj = json.load(f)
+    except Exception as e:
+        raise UniverseSourceError(
+            f"{label} at {_rel(path)} is unreadable: {e}") from e
+    if not isinstance(obj, dict):
+        raise UniverseSourceError(
+            f"{label} at {_rel(path)} is not a JSON object")
+    return obj
 
 
 def _norm(sym):
@@ -69,8 +148,21 @@ class UniverseSource:
         src = config["source"]
         self.etf_holdings_tickers = src["etf_holdings"]
         self.include_sp500 = src["include_sp500"]
+        self.include_nasdaq100 = src.get("include_nasdaq100", False)
         self.manual_additions = src.get("manual_additions", []) or []
         self.manual_exclusions = src.get("manual_exclusions", []) or []
+
+        # Provenance of the committed Nasdaq-100 list, captured at load so the
+        # candidates artifact can PRINT where the list came from and its as-of
+        # date rather than asserting that a list exists.
+        self.nasdaq100_provenance = {}
+        # Whether the inclusion file was found. Absence is tolerated (an empty
+        # list is the normal state) but must be visible, not inferred.
+        self.inclusions_file_present = None
+        # Per-ETF fetch coverage: {ticker: {outcome, count, ...}}. See
+        # _fetch_etf_holdings — this is what keeps an outage from reading as a
+        # healthy build now that the caches are committed.
+        self.etf_coverage = {}
 
         cache_cfg = config.get("cache", {}) or {}
         self.universe_ttl_days = cache_cfg.get("universe_ttl_days", 7)
@@ -99,21 +191,47 @@ class UniverseSource:
         if self.include_sp500:
             sp_set.update(self._fetch_sp500_constituents())
 
+        ndx_set = set()
+        if self.include_nasdaq100:
+            ndx_set.update(self._load_nasdaq100())
+
         add_set = {t for t in (_norm(x) for x in self.manual_additions) if t}
+        inc_set = self._load_inclusions()
         excl_set = {t for t in (_norm(x) for x in self.manual_exclusions) if t}
 
-        tickers = (etf_set | sp_set | add_set) - excl_set
+        # Exclusions are subtracted from the UNION, once, at the end. That is
+        # what makes "exclusion wins" structural rather than a rule someone
+        # has to remember: there is no ordering of the sources by which an
+        # inclusion can re-admit an excluded ticker.
+        tickers = (etf_set | sp_set | ndx_set | add_set | inc_set) - excl_set
 
+        index_union = etf_set | sp_set
         return {
             "tickers": tickers,
             "by_source": {
                 "etf_holdings": len(etf_set - excl_set),
                 "sp500": len(sp_set - excl_set),
+                "nasdaq100": len(ndx_set - excl_set),
                 "manual_additions": len(add_set - excl_set),
+                "inclusions": len(inc_set - excl_set),
+                # What each hand/index source CONTRIBUTES that nothing else
+                # already supplied — the count that answers "what did adding
+                # this source actually buy us".
+                # Net-new must subtract EVERY other source, not just the two
+                # index feeds — otherwise a name hand-added to the inclusion
+                # list, then later admitted by the index, gets counted as
+                # newly contributed by the index when the pool did not move.
+                "nasdaq100_net_new": len(
+                    (ndx_set - index_union - add_set - inc_set) - excl_set),
+                "inclusions_net_new": len(
+                    (inc_set - index_union - ndx_set - add_set) - excl_set),
                 "overlap_count": len((etf_set & sp_set) - excl_set),
+                "excluded_applied": sorted(
+                    excl_set & (etf_set | sp_set | ndx_set | add_set | inc_set)),
             },
-            "sets": {"etf": etf_set, "sp500": sp_set,
-                     "additions": add_set, "exclusions": excl_set},
+            "sets": {"etf": etf_set, "sp500": sp_set, "nasdaq100": ndx_set,
+                     "additions": add_set, "inclusions": inc_set,
+                     "exclusions": excl_set},
         }
 
     # ------------------------------------------------------------------
@@ -122,24 +240,95 @@ class UniverseSource:
     def _fetch_etf_holdings(self, etf_ticker, top_n=25):
         """Top-N holdings of an ETF via yfinance funds_data (Yahoo caps at ~10).
 
-        Cached for `universe_ttl_days`. Falls back to stale cache (then []) on
-        any failure. A legitimately-empty result (e.g. GLD/IBIT) is cached as [].
+        Cached for `universe_ttl_days`, with a stale-cache fallback on failure.
+
+        RECORDS COVERAGE, NOT JUST THE OUTCOME (D-019). Every call writes an
+        entry to self.etf_coverage saying HOW the answer was obtained: fresh
+        fetch, TTL cache hit, stale fallback, or nothing at all.
+
+        This is not bookkeeping. Before the caches were committed, a fresh CI
+        checkout had no cache, so a Yahoo outage returned [] and collapsed
+        `by_source.etf_holdings` from ~150 to 0 — loud, and visible in the
+        published artifact. Committing the caches removes that signal, because
+        a stale copy is now always present: the build would sail through on
+        last week's holdings and look identical to a healthy one. The signal
+        has to be carried explicitly instead, or the outage impersonates
+        safety — exactly what D-019 forbids.
         """
-        cache_path = os.path.join(self.cache_dir, f"etf_{_norm(etf_ticker)}.json")
-        cached = self._read_cache(cache_path, self.universe_ttl_days)
-        if cached is not None:
-            return cached
+        key = _norm(etf_ticker)
+        cache_path = os.path.join(self.cache_dir, f"etf_{key}.json")
+
+        fresh_cache = self._read_cache_obj(cache_path, self.universe_ttl_days)
+        if fresh_cache is not None:
+            tickers = fresh_cache.get("tickers") or []
+            self.etf_coverage[key] = {
+                "outcome": "cache_hit", "count": len(tickers),
+                "fetched_at": fresh_cache.get("fetched_at")}
+            return tickers
+
+        prev = self._read_cache_obj(cache_path, ttl_days=None)
+        prev_tickers = (prev or {}).get("tickers") or []
+
+        # The PARSE stays inside the try alongside the fetch. A malformed
+        # payload is a source failure, not a programming error: if `.index`
+        # raises out here the exception escapes this method, escapes the ETF
+        # loop (which has no handler), and aborts a rotation that the stale
+        # cache could have carried — while recording no coverage entry at all.
         try:
             import yfinance as yf
             th = yf.Ticker(etf_ticker).funds_data.top_holdings
             tickers = ([t for t in (_norm(s) for s in list(th.index)[:top_n]) if t]
                        if th is not None else [])
-            self._write_cache(cache_path, tickers)   # cache only on a successful fetch
-            return tickers
         except Exception as e:
             print(f"[universe] ETF holdings fetch failed for {etf_ticker}: {e}")
-            stale = self._read_cache(cache_path, ttl_days=None)
-            return stale if stale is not None else []
+            return self._etf_fallback(key, prev, prev_tickers, str(e))
+
+        # An empty result is NOT the same claim as "this fund holds no
+        # equities". GLD and IBIT legitimately return nothing; a fund with
+        # holdings on record returning nothing is a broken scrape. Writing []
+        # over real holdings would stamp a fresh timestamp on a false
+        # statement — and now that these files are committed, would enter that
+        # statement into the repo as evidence.
+        if not tickers and prev_tickers:
+            return self._etf_fallback(
+                key, prev, prev_tickers,
+                "source returned no holdings for a fund that has them on record")
+
+        if tickers:
+            outcome = "fresh"
+        elif prev is not None:
+            # Empty now, empty last time too — GLD/IBIT and friends. The
+            # history corroborates it, so this is a real answer.
+            outcome = "empty_expected"
+        else:
+            # Empty with NOTHING to corroborate it. Counted as degraded: were
+            # this written as a plain success, the committed [] would read as
+            # a healthy TTL hit on every later run and the guard above would
+            # be permanently disarmed for this fund — an empty source that
+            # reports itself perfectly healthy forever.
+            outcome = "empty_unverified"
+
+        self._write_cache(cache_path, tickers)   # cache only on a real answer
+        self.etf_coverage[key] = {"outcome": outcome, "count": len(tickers)}
+        return tickers
+
+    def _etf_fallback(self, key, prev, prev_tickers, reason):
+        """Serve the stale cache, and say so loudly enough to be auditable."""
+        if prev is None:
+            self.etf_coverage[key] = {"outcome": "unavailable", "count": 0,
+                                      "reason": reason}
+            return []
+        age = None
+        try:
+            fetched = datetime.datetime.fromisoformat(prev["fetched_at"])
+            age = round((_now_utc() - fetched).total_seconds() / 86400.0, 2)
+        except Exception:
+            pass
+        self.etf_coverage[key] = {
+            "outcome": "stale_fallback", "count": len(prev_tickers),
+            "fetched_at": prev.get("fetched_at"), "age_days": age,
+            "reason": reason}
+        return prev_tickers
 
     def _fetch_sp500_constituents(self):
         """Current S&P 500 list (and its GICS sub-industry map).
@@ -210,13 +399,62 @@ class UniverseSource:
             print(f"[universe] S&P500 Wikipedia fetch failed: {e}")
             return [], {}
 
+    def _load_nasdaq100(self):
+        """Nasdaq-100 membership, READ FROM THE COMMITTED FILE.
+
+        There is deliberately no fetch and no network fallback in this method.
+        The list moves only when a human runs scripts/refresh_nasdaq100.py,
+        reads the membership diff, and commits it. Reintroducing a fetch here
+        would restore exactly the failure this design exists to prevent: what
+        the system can trade changing between two rotations, unreviewed,
+        because a third party's endpoint changed or broke.
+        """
+        obj = _read_committed_json(NASDAQ100_PATH, "Nasdaq-100 membership list")
+        symbols = obj.get("symbols")
+        if not isinstance(symbols, list) or not symbols:
+            raise UniverseSourceError(
+                f"{_rel(NASDAQ100_PATH)} has no usable 'symbols' list. Refusing "
+                "to build a pool from an index source that silently contributes "
+                "nothing — rebuild it with scripts/refresh_nasdaq100.py.")
+        prov = dict(obj.get("_provenance") or {})
+        prov["count"] = len(symbols)
+        self.nasdaq100_provenance = prov
+        return {t for t in (_norm(s) for s in symbols) if t}
+
+    def _load_inclusions(self):
+        """Hand-maintained candidate additions, read from the committed file.
+
+        Entries enter the CANDIDATE set only. Every gate still applies; an
+        entry whose history is too short simply produces no ranking row, which
+        is the gate working, not a fault. Exclusions are subtracted from the
+        union afterwards, so an entry that is also excluded stays excluded.
+        """
+        obj = _read_committed_json(INCLUSIONS_PATH, "pool inclusion list",
+                                   required=False)
+        if obj is None:
+            # Absent, not empty. Recorded rather than fatal — but recorded,
+            # because the two must not look alike to a reader.
+            print(f"[universe] NOTE: {_rel(INCLUSIONS_PATH)} is absent; "
+                  "treating the inclusion list as empty")
+            self.inclusions_file_present = False
+            return set()
+        self.inclusions_file_present = True
+        entries = obj.get("inclusions")
+        if not isinstance(entries, list):
+            raise UniverseSourceError(
+                f"{_rel(INCLUSIONS_PATH)} has no 'inclusions' list (use [] for "
+                "none). A missing list and an empty one must not look alike: "
+                "the first is a broken file, the second is a deliberate state.")
+        out = set()
+        for e in entries:
+            t = _norm(e.get("ticker") if isinstance(e, dict) else e)
+            if t:
+                out.add(t)
+        return out
+
     # ------------------------------------------------------------------
     # Cache helpers (TTL in days; ttl_days=None means "ignore age")
     # ------------------------------------------------------------------
-    def _read_cache(self, path, ttl_days):
-        obj = self._read_cache_obj(path, ttl_days)
-        return None if obj is None else obj.get("tickers")
-
     def _read_cache_obj(self, path, ttl_days):
         if not os.path.exists(path):
             return None
@@ -254,6 +492,129 @@ def load_universe_config(config_path=None):
     return full.get("universe", {})
 
 
+def _coverage_summary(coverage):
+    """{outcome: count} plus the count that should make a reader stop.
+
+    `degraded` is the number of ETFs whose holdings did NOT come from a live
+    fetch or a within-TTL cache this run. Zero is the healthy state. Anything
+    else means the pool was partly assembled from history, and the artifact
+    says so rather than leaving a reader to infer it from a ticker count.
+    """
+    by_outcome = {}
+    for rec in coverage.values():
+        by_outcome[rec["outcome"]] = by_outcome.get(rec["outcome"], 0) + 1
+    return {
+        "by_outcome": by_outcome,
+        "sources": len(coverage),
+        "degraded": sum(by_outcome.get(k, 0) for k in
+                        ("stale_fallback", "unavailable", "empty_unverified")),
+        # Any source contributing nothing, whatever the reason. GLD and IBIT
+        # sit here permanently and legitimately, so this is a number to watch
+        # for CHANGE rather than a fault on its own — but a fund that quietly
+        # stops contributing is otherwise invisible.
+        "zero_holding_sources": sorted(
+            k for k, rec in coverage.items() if not rec.get("count")),
+    }
+
+
+def pool_definition(uni_cfg=None):
+    """The canonical description of what the pool IS, for fingerprinting.
+
+    Deliberately describes the DEFINITION, not the outcome: the ETF *tickers*
+    we source from, not the holdings they returned this week. Holdings churn
+    weekly; if they were in here the fingerprint would move every rotation and
+    would tell you nothing about whether the pool was redefined.
+
+    Gates (min_market_cap and friends) are NOT here either. They filter the
+    pool, they do not constitute it, and rotation_config already records them
+    verbatim in the same artifact. Pool version answers "which names could
+    have been considered"; rotation_config answers "what did they have to
+    clear". Together they fully determine a ranking.
+    """
+    if uni_cfg is None:
+        uni_cfg = load_universe_config()
+    src = uni_cfg.get("source", {}) or {}
+
+    ndx_symbols, ndx_as_of = [], None
+    if src.get("include_nasdaq100", False):
+        obj = _read_committed_json(NASDAQ100_PATH, "Nasdaq-100 membership list")
+        # sorted(set(...)) — the loader returns a SET, so a duplicate entry in
+        # the file changes no pool. A fingerprint that moved on it would report
+        # a redefinition that did not happen.
+        ndx_symbols = sorted({t for t in (_norm(s) for s in obj.get("symbols") or []) if t})
+        ndx_as_of = (obj.get("_provenance") or {}).get("as_of")
+
+    inc = _read_committed_json(INCLUSIONS_PATH, "pool inclusion list", required=False)
+    inc_tickers = sorted(
+        {t for t in (_norm(e.get("ticker") if isinstance(e, dict) else e)
+                     for e in ((inc or {}).get("inclusions") or [])) if t})
+
+    # NOTE: nasdaq100_as_of is deliberately NOT in here. The refresh script
+    # stamps today's date on every write, so a no-change refresh would move
+    # the fingerprint and hash equality would stop meaning pool equality. The
+    # as-of date is carried in pool_stamp() for display; MEMBERSHIP is what
+    # identifies the pool.
+    return {
+        "pool_version": POOL_VERSION,
+        "etf_holdings": sorted(set(src.get("etf_holdings") or [])),
+        "include_sp500": bool(src.get("include_sp500")),
+        "include_nasdaq100": bool(src.get("include_nasdaq100", False)),
+        "nasdaq100_symbols": ndx_symbols,
+        "manual_additions": sorted(
+            {t for t in (_norm(x) for x in (src.get("manual_additions") or [])) if t}),
+        "inclusions": inc_tickers,
+        "manual_exclusions": sorted(
+            {t for t in (_norm(x) for x in (src.get("manual_exclusions") or [])) if t}),
+        "_as_of_display_only": ndx_as_of,
+    }
+
+
+def _definition_blob(d):
+    """Canonical bytes for hashing: underscore-prefixed keys are display-only
+    and excluded, so a field that changes without the pool changing (an as-of
+    date) cannot move the fingerprint."""
+    return json.dumps({k: v for k, v in d.items() if not k.startswith("_")},
+                      sort_keys=True, separators=(",", ":"))
+
+
+def pool_definition_hash(uni_cfg=None):
+    """16-hex fingerprint of pool_definition(). Moves on any deliberate edit
+    to a source list — including one made without bumping POOL_VERSION."""
+    return hashlib.sha256(
+        _definition_blob(pool_definition(uni_cfg)).encode()).hexdigest()[:16]
+
+
+# The exact keys pool_stamp() emits. Downstream artifacts copy the stamp by
+# THESE keys rather than recomputing it — recomputing at read time would brand
+# an old ranking with today's pool definition, which is precisely the
+# confusion the versioning exists to prevent.
+POOL_STAMP_KEYS = ("pool_version", "pool_definition_hash", "pool_sources",
+                   "nasdaq100_as_of", "pool_exclusions", "pool_inclusions")
+
+
+def pool_stamp(uni_cfg=None):
+    """The pool identity block stamped into every pool-derived artifact."""
+    d = pool_definition(uni_cfg)
+    sources = ["etf_holdings"]
+    if d["include_sp500"]:
+        sources.append("sp500")
+    if d["include_nasdaq100"]:
+        sources.append("nasdaq100")
+    if d["inclusions"]:
+        sources.append("inclusions")
+    if d["manual_additions"]:
+        sources.append("manual_additions")
+    return {
+        "pool_version": POOL_VERSION,
+        "pool_definition_hash": hashlib.sha256(
+            _definition_blob(d).encode()).hexdigest()[:16],
+        "pool_sources": sources,
+        "nasdaq100_as_of": d["_as_of_display_only"],
+        "pool_exclusions": d["manual_exclusions"],
+        "pool_inclusions": d["inclusions"],
+    }
+
+
 def build_universe_candidates(config_path=None, write=True, allow_remote=True):
     """Assemble the candidate universe, classify by GICS, and (optionally) write
     data/public universe_candidates.json. Returns (response_dict, tickers, by_gics)."""
@@ -280,8 +641,19 @@ def build_universe_candidates(config_path=None, write=True, allow_remote=True):
 
     out = {
         "generated_at": _now_utc().isoformat(),
+        **pool_stamp(uni_cfg),
         "total_count": len(tickers),
         "by_source": detailed["by_source"],
+        # Where the committed index list came from and when — carried into the
+        # artifact so source attribution is evidence a reader can check, not a
+        # claim they have to take on faith.
+        "nasdaq100_provenance": src.nasdaq100_provenance,
+        # HOW each ETF's holdings were obtained this run. A build that served
+        # stale holdings must not be indistinguishable from one that fetched
+        # them (D-019).
+        "etf_coverage": src.etf_coverage,
+        "etf_coverage_summary": _coverage_summary(src.etf_coverage),
+        "inclusions_file_present": src.inclusions_file_present,
         "by_gics_sub_industry": by_counts,
         "unclassified": len(unclassified),
         "unclassified_tickers": sorted(unclassified),
@@ -311,8 +683,16 @@ def write_candidates_artifact(out):
 if __name__ == "__main__":
     out, tickers, by_gics = build_universe_candidates()
     print(json.dumps({k: out[k] for k in
-                      ("generated_at", "total_count", "by_source", "unclassified")},
+                      ("generated_at", "pool_version", "pool_definition_hash",
+                       "pool_sources", "total_count", "by_source", "unclassified")},
                      indent=2))
+    prov = out.get("nasdaq100_provenance") or {}
+    if prov:
+        print(f"\nNasdaq-100 source: {prov.get('source_url')}"
+              f"\n  as of      : {prov.get('as_of')}  ({prov.get('count')} symbols)"
+              f"\n  retrieved  : {prov.get('retrieved_at')} by {prov.get('retrieved_by')}"
+              f"\n  runtime fetches this list: "
+              f"{prov.get('runtime_fetches_this')}")
     print(f"\nby_gics_sub_industry ({len(out['by_gics_sub_industry'])} sub-industries):")
     for name, count in out["by_gics_sub_industry"].items():
         print(f"  {count:>4}  {name}")

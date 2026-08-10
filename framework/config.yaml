@@ -280,12 +280,47 @@ universe:
       - XBI
       - GLD
     include_sp500: true
+    # Nasdaq-100, READ FROM data/pool/nasdaq100.json — never fetched at
+    # runtime. Set false to revert to the v1 two-index pool; do not delete
+    # the key, and do not replace the file read with a scrape. Note that
+    # data/pool/inclusions.json is read even when this is false, so reverting
+    # does not make either committed pool file optional.
+    include_nasdaq100: true
     manual_additions: []
+    # Hand-maintained inclusions live in data/pool/inclusions.json (one entry
+    # per ticker, with a reason and a date). Exclusions below are subtracted
+    # from the union of every source LAST: exclusion always wins.
     manual_exclusions:
       - PSTG  # currently failing yfinance >=20 days quality gate
+      # SPCX was excluded here on 2026-08-10 and the exclusion was REVERSED the
+      # same day, before it ever reached a rotation. Kept as a comment because
+      # the reasoning is the useful part:
+      #
+      # Two of the three stated reasons did not survive verification — it is
+      # not a tracking variant (quoteType EQUITY, an operating company), and
+      # the market-cap datum, though internally inconsistent, clears a $5B
+      # floor by ~200x on any reading, so it argues nothing about the gate.
+      # The third reason held — 40 bars against a 90-day history gate — but it
+      # is self-expiring around 2026-09-10, which makes it a reason to wait,
+      # not a reason to exclude.
+      #
+      # HONA decided it: 39 bars, first listed 2026-06-15, arriving from the
+      # same Nasdaq-100 list, and never excluded. One newly listed name barred
+      # by hand while its twin passes through the gates is not a doctrine, it
+      # is an inconsistency. Both now go to the gates, which is what the gates
+      # are for.
 
   cache:
-    universe_ttl_days: 7
+    # MUST stay strictly below the rotation interval. The rotation cron is
+    # weekly ('7 1 * * 6') and the TTL check expires only on age STRICTLY
+    # greater than the limit, so at 7 days the cache and the cadence are the
+    # same length: whenever a run starts marginally faster than the previous
+    # one did (GitHub queue delay and pip install both vary by minutes), the
+    # cache reads fresh and the fetch is skipped for that week. 6 leaves a
+    # full day of margin. Before the caches were committed this was invisible
+    # — a fresh CI checkout had no cache to hit — so committing them is what
+    # made the off-by-one reachable.
+    universe_ttl_days: 6
     gics_ttl_days: 30
 
   # Canonicalize classification labels to pure GICS sub-industry names.
@@ -326,7 +361,7 @@ universe:
     min_candidates: 3              # groups need >=3 candidate tickers for a slot
     max_tickers_per_group: 7
     min_composite_score: 50        # existing dashboard score_stock scale (0-100)
-    min_market_cap: 500000000      # 500M USD (foreign caps FX-converted)
+    min_market_cap: 5000000000     # 5B USD (foreign caps FX-converted)
     min_avg_volume: 500000         # 500K shares/day (63-trading-day mean)
     min_history_days: 90           # calendar days of price history
     composite_weights:

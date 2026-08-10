@@ -71,6 +71,10 @@ MIN_VIABLE_GROUPS = 3
 MIN_VIABLE_TICKERS = 8
 MIN_PRICE_COVERAGE = 0.60   # share of candidates with usable price history
 MIN_MCAP_COVERAGE = 0.70    # share of metric-valid tickers with a market cap
+# Share of the PREVIOUS rotation's candidate pool that must survive into this
+# one. A degraded feed shows up here as a shrink long before it shows up as a
+# thin universe — 15 groups can be assembled from a badly depleted pool.
+POOL_RETENTION_FLOOR = 0.90
 
 # Static FX fallbacks (approximate; only used when the live FX fetch fails)
 # for converting listing-currency market caps to USD before the 500M floor.
@@ -103,7 +107,9 @@ DEFAULT_ROTATION = {
     "min_candidates": 3,
     "max_tickers_per_group": 7,
     "min_composite_score": 50,
-    "min_market_cap": 500_000_000,
+    # Kept in step with config.yaml's universe.rotation.min_market_cap so a
+    # missing config key cannot silently reinstate the old, looser floor.
+    "min_market_cap": 5_000_000_000,
     "min_avg_volume": 500_000,
     "min_history_days": 90,
     "composite_weights": {"ytd": 0.50, "r3m": 0.30, "r1m": 0.20},
@@ -550,65 +556,43 @@ def load_rotation_config():
     return uni_cfg, rot
 
 
-def build_active_universe(write=True, verbose=True):
-    """Build the active universe from live data. Returns the full artifact:
-    {built_at, week_key, groups: INDUSTRY_GROUPS-schema, ranking, detail}."""
-    from universe_source import build_universe_candidates, DEFAULT_CACHE_DIR
+def pool_retention_ok(n_now, prev_total):
+    """False when this rotation's candidate pool shrank past the floor.
 
-    import signal_engine as se
+    A missing baseline returns True: on a first build, or after the rotation
+    cache is wiped, there is nothing to compare against, and refusing would be
+    unfixable without hand-editing state. The floor guards against a pool that
+    QUIETLY narrowed, not against not knowing.
+    """
+    if not prev_total:
+        return True
+    return n_now >= POOL_RETENTION_FLOOR * prev_total
 
-    uni_cfg, rot = load_rotation_config()
+
+def rank_and_select(by_gics, metrics, caps, rot):
+    """Rank every sub-industry, mark eligibility, select the top-N groups.
+
+    Pure: fetches nothing, writes nothing. Returns (ranking, selected).
+
+    Extracted from build_active_universe so that a counterfactual — "what
+    would this pool or gate change have selected?" — runs the SAME code the
+    rotation runs, over ONE shared price+cap fetch. Answering it with two
+    separate live builds is not honest during market hours: the intraday
+    movement between them lands in the diff looking like an effect of the
+    change being tested.
+
+    Two rules here are easy to misread, and both were re-verified against a
+    committed artifact before this extraction:
+      · min_candidates gates a group's MEMBERSHIP count (`candidates`), not
+        how many members qualified;
+      · eligibility needs only ONE qualifier.
+    A group can therefore be eligible with 3 members and 1 qualifier.
+
+    The composite is computed from ALL valid members, never from the
+    qualifiers alone — which is why tightening a gate cannot move a group's
+    composite or its rank. It can only empty a group of qualifiers.
+    """
     weights = rot["composite_weights"]
-
-    # Cheap pre-flight before the ~530-ticker fetch: one index call proves
-    # Yahoo is reachable AND the current year has >=2 trading days (the first
-    # January build cannot produce YTD metrics — fail in seconds, not minutes,
-    # so a self-healing weekday run falls back to the stale universe cheaply).
-    spx = se.fetch_data("^GSPC", period="1mo")
-    if spx is None or len(spx[spx.index.year == datetime.datetime.now().year]) < 2:
-        raise UniverseBuildError(
-            "pre-flight failed: index data unavailable or <2 trading days in the "
-            "current year (YTD undefined) — keeping previous universe")
-
-    # 1. candidates + canonical GICS classification (aliases applied).
-    # Candidates artifact is NOT written here — only after the viability
-    # floor passes (a degraded candidate list must never be published).
-    out, tickers, by_gics = build_universe_candidates(write=False)
-    by_gics = {k: v for k, v in by_gics.items() if k != "_unclassified"}
-    if verbose:
-        print(f"[builder] {len(tickers)} candidates in {len(by_gics)} sub-industries "
-              f"({out['unclassified']} unclassified excluded)")
-
-    if not tickers:
-        raise UniverseBuildError("candidate universe is empty (all feeds failed?)")
-
-    # 2. price history + per-ticker metrics
-    prices = _fetch_price_batch(tickers)
-    metrics = {}
-    for t in tickers:
-        try:
-            m = _ticker_metrics(t, prices.get(t))
-        except Exception as e:
-            print(f"[builder] metrics failed for {t}: {e} — skipping")
-            m = None
-        if m:
-            metrics[t] = m
-    if verbose:
-        print(f"[builder] price data OK for {len(prices)}, valid metrics for {len(metrics)}")
-    if len(prices) < MIN_PRICE_COVERAGE * len(tickers):
-        raise UniverseBuildError(
-            f"price data for only {len(prices)}/{len(tickers)} candidates "
-            f"(<{MIN_PRICE_COVERAGE:.0%}) — refusing to build from degraded data")
-
-    # 3. market caps (only tickers that still matter: valid metrics)
-    caps = _fetch_market_caps(list(metrics.keys()))
-    caps_ok = sum(1 for v in caps.values() if v.get("market_cap_usd") is not None)
-    if metrics and caps_ok < MIN_MCAP_COVERAGE * len(metrics):
-        raise UniverseBuildError(
-            f"market cap for only {caps_ok}/{len(metrics)} tickers "
-            f"(<{MIN_MCAP_COVERAGE:.0%}) — refusing to build from degraded data")
-
-    # 4. rank all groups (every sub-industry appears; no-data groups unranked)
     ranking = []
     for name, members in by_gics.items():
         valid = [metrics[t] for t in members if t in metrics]
@@ -655,7 +639,7 @@ def build_active_universe(write=True, verbose=True):
         g["rank"] = None
     ranking = ranked + unranked
 
-    # 5. eligibility + selection: top-N eligible groups, up to max tickers each
+    # eligibility + selection: top-N eligible groups, up to max tickers each
     for g in ranking:
         g["eligible"] = (g["candidates"] >= rot["min_candidates"]
                          and g["qualifier_count"] >= 1)
@@ -673,8 +657,26 @@ def build_active_universe(write=True, verbose=True):
             g["exclusion_reason"] = "no_qualifiers"
         else:
             g["exclusion_reason"] = "outranked"
+    return ranking, selected
 
-    # 6. per-ticker audit status (for the read-only ranking endpoint)
+
+def audit_ticker_rows(ranking, metrics, rot):
+    """Attach the per-ticker audit rows to each group, in place.
+
+    This builds the CANDIDATE AUDIT TABLE the ranking artifact publishes: a
+    row per candidate, carrying the gate it failed. A row means "this name was
+    considered", NOT "this name passed" — the distinction that makes a
+    sub-floor market cap appear in the artifact without the gate having leaked.
+
+    Extracted alongside rank_and_select so the "an unrankable candidate is
+    silent, not fatal" invariant can be pinned where it would actually break.
+    A name with too little history is absent from `metrics` entirely, and this
+    is the only place that absence is dereferenced; `metrics.get(t)` rather
+    than `metrics[t]` is the whole of that guarantee.
+
+    Mutates: sets g["tickers"] and removes g["members"]. Not idempotent — a
+    second call on the same ranking raises KeyError on the missing members.
+    """
     for g in ranking:
         chosen = {q["ticker"] for q in g["qualifiers"][:rot["max_tickers_per_group"]]}
         qual_by_ticker = {q["ticker"]: q for q in g["qualifiers"]}
@@ -701,10 +703,110 @@ def build_active_universe(write=True, verbose=True):
                 entry["fails"] = g["disqualified"][t]
                 entry["status"] = _gate_status(entry["fails"])
             tickers_out.append(entry)
+        # NOTE: this display order is (score, ticker) while SELECTION order is
+        # (score, ytd, ticker). Within a block of equal scores the published
+        # rows are therefore alphabetical, not selection order, and reading
+        # "the top max_tickers_per_group rows" off this table can name the
+        # wrong ticker. `status` is authoritative; row position is not.
         tickers_out.sort(key=lambda e: (e["score"] is None, -(e["score"] or 0),
                                         e["ticker"]))
         g["tickers"] = tickers_out
         del g["members"]
+    return ranking
+
+
+def build_active_universe(write=True, verbose=True):
+    """Build the active universe from live data. Returns the full artifact:
+    {built_at, week_key, groups: INDUSTRY_GROUPS-schema, ranking, detail}."""
+    from universe_source import build_universe_candidates, DEFAULT_CACHE_DIR
+
+    import signal_engine as se
+
+    uni_cfg, rot = load_rotation_config()
+
+    # Cheap pre-flight before the ~530-ticker fetch: one index call proves
+    # Yahoo is reachable AND the current year has >=2 trading days (the first
+    # January build cannot produce YTD metrics — fail in seconds, not minutes,
+    # so a self-healing weekday run falls back to the stale universe cheaply).
+    spx = se.fetch_data("^GSPC", period="1mo")
+    if spx is None or len(spx[spx.index.year == datetime.datetime.now().year]) < 2:
+        raise UniverseBuildError(
+            "pre-flight failed: index data unavailable or <2 trading days in the "
+            "current year (YTD undefined) — keeping previous universe")
+
+    # 1. candidates + canonical GICS classification (aliases applied).
+    # Candidates artifact is NOT written here — only after the viability
+    # floor passes (a degraded candidate list must never be published).
+    out, tickers, by_gics = build_universe_candidates(write=False)
+    by_gics = {k: v for k, v in by_gics.items() if k != "_unclassified"}
+    if verbose:
+        print(f"[builder] {len(tickers)} candidates in {len(by_gics)} sub-industries "
+              f"({out['unclassified']} unclassified excluded)")
+
+    if not tickers:
+        raise UniverseBuildError("candidate universe is empty (all feeds failed?)")
+
+    # 1b. POOL RETENTION FLOOR (ruled 2026-08-10, D-021).
+    #
+    # The failure this exists for: an ETF or S&P feed degrades, the stale-cache
+    # fallback quietly serves a partial answer, and the rotation builds a
+    # smaller pool without anyone noticing — because a smaller pool still
+    # produces 15 groups and 70-odd tickers, which is exactly what a healthy
+    # one produces. Per-source coverage is recorded (see universe_source), but
+    # coverage alone does not decide whether to proceed. This does.
+    #
+    # It triggers on POOL SHRINK, not on a source count, deliberately: what
+    # matters is how much of the tradeable population survived, and that is
+    # the one number every degradation path — a failed feed, a truncated
+    # response, a silently emptied cache, a bad list edit — has to move.
+    #
+    # Failing is the safe side. The viability floor already established that a
+    # rotation which refuses to write leaves the previous, committed, known-
+    # good universe authoritative. Building on partial holdings does not.
+    prev_active = load_cached_active()
+    prev_total = (prev_active or {}).get("candidates_total")
+    if not pool_retention_ok(len(tickers), prev_total):
+        raise UniverseBuildError(
+            f"candidate pool is {len(tickers)}, down from {prev_total} last "
+            f"rotation ({len(tickers) / prev_total - 1:+.1%}, floor "
+            f"{POOL_RETENTION_FLOOR - 1:+.0%}) — refusing to rotate on a pool "
+            f"this much smaller. A shrink this size is a degraded feed until "
+            f"proven otherwise; check etf_coverage in the candidates artifact "
+            f"and the source lists. The previous universe stays authoritative. "
+            f"If the shrink is intended (a deliberate source or list change), "
+            f"re-run once the new pool is the baseline.")
+
+    # 2. price history + per-ticker metrics
+    prices = _fetch_price_batch(tickers)
+    metrics = {}
+    for t in tickers:
+        try:
+            m = _ticker_metrics(t, prices.get(t))
+        except Exception as e:
+            print(f"[builder] metrics failed for {t}: {e} — skipping")
+            m = None
+        if m:
+            metrics[t] = m
+    if verbose:
+        print(f"[builder] price data OK for {len(prices)}, valid metrics for {len(metrics)}")
+    if len(prices) < MIN_PRICE_COVERAGE * len(tickers):
+        raise UniverseBuildError(
+            f"price data for only {len(prices)}/{len(tickers)} candidates "
+            f"(<{MIN_PRICE_COVERAGE:.0%}) — refusing to build from degraded data")
+
+    # 3. market caps (only tickers that still matter: valid metrics)
+    caps = _fetch_market_caps(list(metrics.keys()))
+    caps_ok = sum(1 for v in caps.values() if v.get("market_cap_usd") is not None)
+    if metrics and caps_ok < MIN_MCAP_COVERAGE * len(metrics):
+        raise UniverseBuildError(
+            f"market cap for only {caps_ok}/{len(metrics)} tickers "
+            f"(<{MIN_MCAP_COVERAGE:.0%}) — refusing to build from degraded data")
+
+    # 4-5. rank every group, mark eligibility, select the top-N
+    ranking, selected = rank_and_select(by_gics, metrics, caps, rot)
+
+    # 6. per-ticker audit status (for the read-only ranking endpoint)
+    audit_ticker_rows(ranking, metrics, rot)
 
     sector_map = _load_subindustry_sector_map(DEFAULT_CACHE_DIR,
                                               uni_cfg.get("gics_aliases") or {})
@@ -719,7 +821,8 @@ def build_active_universe(write=True, verbose=True):
     # reads 2.
     prev_groups = {}
     prev_week = None
-    prev_active = load_cached_active()
+    # Same artifact the retention floor read at step 1b — loaded once so the
+    # two cannot disagree about what "last rotation" was.
     if prev_active:
         prev_groups = prev_active.get("groups") or {}
         prev_week = prev_active.get("week_key")
@@ -744,11 +847,16 @@ def build_active_universe(write=True, verbose=True):
             f"not writing; stale cache stays authoritative")
 
     week_key = rotation_week_key()
+    from universe_source import pool_stamp
     active = {
         "built_at": _now_utc().isoformat(),
         # D-020a: scorer era stamp — artifacts without this key were
         # baked by the v1 scorer and are never retro-relabelled
         "scorer_version": "score_stock_v2",
+        # Pool era stamp: which candidate population this ranking was drawn
+        # from. With rotation_config (the gates) below, the two together
+        # fully determine what could have been selected.
+        **pool_stamp(uni_cfg),
         "week_key": week_key,
         "effective_week_of": effective_week_of(week_key),
         "rotation_config": rot,
@@ -773,9 +881,14 @@ def build_active_universe(write=True, verbose=True):
 def build_ranking_payload(active):
     """Read-only observability payload for /api/universe/ranking.json:
     the COMPLETE group ranking with per-ticker audit statuses."""
+    from universe_source import POOL_STAMP_KEYS
     return {
         "generated_at": active["built_at"],
         "scorer_version": active.get("scorer_version"),
+        # Copied from the artifact, never recomputed: a ranking must carry the
+        # pool that built it, not the pool that happens to be configured when
+        # someone reads it. Absent keys stay None on pre-v2 artifacts.
+        **{k: active.get(k) for k in POOL_STAMP_KEYS},
         "week_key": active["week_key"],
         "rotation_config": active["rotation_config"],
         "candidates_total": active["candidates_total"],

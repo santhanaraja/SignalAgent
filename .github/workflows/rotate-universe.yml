@@ -54,14 +54,20 @@ jobs:
         id: check
         run: |
           git add -N data/ public/
-          git diff --quiet data/universe_active.json public/universe_ranking.json public/universe_candidates.json || echo "changed=true" >> $GITHUB_OUTPUT
+          git diff --quiet data/universe_active.json public/universe_ranking.json public/universe_candidates.json data/universe_cache/ || echo "changed=true" >> $GITHUB_OUTPUT
 
       - name: Commit and push rotated universe
         if: steps.check.outputs.changed == 'true'
         run: |
           git config user.name "SignalAgent Bot"
           git config user.email "signal-bot@users.noreply.github.com"
-          git add data/universe_active.json public/universe_ranking.json public/universe_candidates.json
+          # The ETF holdings caches are committed WITH the rotation that used
+          # them. Committing them any other way would be worse than leaving
+          # them ignored: the 7-day TTL guarantees a fresh Actions checkout
+          # refetches and overwrites them, so a copy that is not written back
+          # here is permanently stale while still reading as evidence of what
+          # the build sourced.
+          git add data/universe_active.json public/universe_ranking.json public/universe_candidates.json data/universe_cache/
           git commit -m "data: rotate active universe $(date -u +'%Y-%m-%d %H:%M UTC')"
           git pull --rebase origin main
           git push

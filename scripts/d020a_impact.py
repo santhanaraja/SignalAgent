@@ -16,6 +16,7 @@ Run: python3 scripts/d020a_impact.py
 import datetime
 import json
 import os
+import subprocess
 import sys
 
 import numpy as np
@@ -26,9 +27,31 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 import signal_engine as se
 
-ranking = json.load(open(os.path.join(REPO, "data/universe_ranking.json")))
+# Pool population, READ FROM A FIXED COMMIT.
+#
+# This study previously read data/universe_ranking.json — a file that is
+# gitignored, written only by a LOCAL rotation run, and therefore frozen at
+# whenever this machine last built one. That is the Build 7 defect in a worse
+# form: a committed study whose input is not merely mutable but absent from
+# version control entirely, so a reviewer on a fresh clone cannot reproduce
+# it at all, and a reviewer on a stale clone reproduces it against the wrong
+# population without being told.
+#
+# 5214cfc is the 2026-07-24 rotation: 533 names, verified ticker-for-ticker
+# identical to the local copy this study's committed results were produced
+# from. The study uses the artifact only for that population list.
+PINNED_RANKING_COMMIT = "5214cfc"   # 2026-07-24 rotation, 533 names
+_r = subprocess.run(
+    ["git", "show", f"{PINNED_RANKING_COMMIT}:public/universe_ranking.json"],
+    cwd=REPO, capture_output=True, text=True)
+if _r.returncode != 0 or not _r.stdout.strip():
+    raise RuntimeError(
+        f"cannot read public/universe_ranking.json at {PINNED_RANKING_COMMIT}: "
+        f"{_r.stderr.strip()}. Refusing to fall back to the working tree — a "
+        "study that silently re-runs against a different pool is not a study.")
+ranking = json.loads(_r.stdout)
 names = sorted({t["ticker"] for g in ranking["groups"] for t in g["tickers"]})
-print(f"pool: {len(names)} names")
+print(f"pool: {len(names)} names (pinned at {PINNED_RANKING_COMMIT})")
 
 # ---- validate the 6mo slice against a direct fetch (grading frame) ----
 d6 = se.fetch_data("HPE", period="6mo")
