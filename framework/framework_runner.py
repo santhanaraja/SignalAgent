@@ -451,6 +451,18 @@ def run_framework(force_fetch: bool = False) -> dict:
         _cand_ts = position_signals.pop("candidate_signals_timestamp", None)
         if _cand is not None:
             output["candidate_grades"] = _cand
+            # Grade history: append today's grades to the committed
+            # per-ticker daily series (D-012 upsert pattern; rides the
+            # data commit). Best-effort — a history write must never
+            # fail the run; a failed grading run wrote nothing above.
+            try:
+                from .grade_history import append_daily_grade_history
+                append_daily_grade_history(
+                    _cand, output["generated_at"],
+                    output.get("scorer_version"))
+            except Exception as e:
+                print(f"[framework] grade-history append failed "
+                      f"(non-fatal): {e}")
 
     # --- Write output ---
     # NaN/Inf -> null guard on the full payload (same policy as every
