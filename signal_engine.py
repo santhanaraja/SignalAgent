@@ -1519,7 +1519,7 @@ def scorer_era(artifact):
     return artifact.get("scorer_version") or "score_stock_v1-era"
 
 
-def compute_grade_inputs(df, ytd_df=None):
+def compute_grade_inputs(df, ytd_df=None, now_et=None):
     """
     D-017 emission: the per-row scalars the framework runner feeds to the
     D-011 grade (grade_setup) for un-tracked candidates.
@@ -1544,7 +1544,11 @@ def compute_grade_inputs(df, ytd_df=None):
                                             strip_synthetic_last_bar)
     from framework.regime_calculator import confirmed_close_frame
     sdf = strip_synthetic_last_bar(df)
-    sdf, _forming = confirmed_close_frame(sdf)
+    # now_et injectable (D-020a grade-view review): a caller that split
+    # its frame under an injected clock must not have this internal
+    # re-split disagree under the REAL clock — a grade would then carry
+    # a basis bar it was not computed on
+    sdf, _forming = confirmed_close_frame(sdf, now_et=now_et)
     gi = grade_inputs_from_df(sdf)
     if gi is None:
         return None
@@ -1558,7 +1562,7 @@ def compute_grade_inputs(df, ytd_df=None):
     ytd_v = ytd_b = None
     if ytd_df is not None and len(ytd_df):
         sydf = strip_synthetic_last_bar(ytd_df)
-        sydf, _yf = confirmed_close_frame(sydf)
+        sydf, _yf = confirmed_close_frame(sydf, now_et=now_et)
         if sydf is not None and len(sydf):
             ytd_v, ytd_b = compute_ytd_return_v2(sydf, with_basis=True)
     s, _sig, _det = score_stock_v2(sdf, ytd_return=ytd_v, ytd_basis=ytd_b)

@@ -251,6 +251,15 @@
       <div class="stage-factors" id="stageFactors"></div>
     </div>
 
+    <!-- D-011 Grade (display only — grade_setup untouched) -->
+    <div class="trade-box" id="gradeBox" style="display:none;">
+      <h3>Setup Grade <span id="gradeSym" style="color:var(--blue);font-family:monospace;"></span> <span style="font-size:10px;color:var(--dim);font-weight:400;">D-011 · seven rows · display only</span></h3>
+      <div id="gradeHead" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:8px 0;"></div>
+      <div id="gradeBasis" style="font-size:11px;color:var(--dim);margin-bottom:8px;"></div>
+      <div id="gradeRows" style="overflow-x:auto;"></div>
+      <div id="gradeState" style="font-size:12px;color:var(--dim);"></div>
+    </div>
+
     <!-- Trade Signals: Position / Swing / Intraday -->
     <div class="trade-box">
       <h3>Trade Signals</h3>
@@ -373,6 +382,7 @@
           <span class="sig-badge" id="slBand">—</span>
         </div>
         <div class="sl-gate" id="slGate"></div>
+          <div id="slGradeRows" style="margin-top:10px;"></div>
         <div class="sl-error" id="slError"></div>
       </div>
     </div>
@@ -498,6 +508,7 @@ async function slSimulate(){
 }
 
 function slRender(d){
+  slRenderGradeRows(d.score);
   document.getElementById('slError').style.display = 'none';
   const c = d.score_components;
   for(const [k, id] of [['rsi','slPtsRsi'],['macd','slPtsMacd'],['ma','slPtsMa'],['ytd','slPtsYtd'],['vol','slPtsVol']]){
@@ -619,6 +630,7 @@ async function doSearch(){
     DATA = data;
     renderResults(data);
     seedScoreLab(data);   // Score Lab: seed sliders with the live components
+    loadGrade(ticker);    // D-011 grade view (confirmed + provisional)
     loadHistory();
   } catch(e) {
     errBanner.textContent = 'Connection error — is the API server running?';
@@ -954,6 +966,138 @@ async function clearHistory(){
 // Load history on page load
 loadHistory();
 </script>
-<script src="chat-widget.js"></script>
+<script>
+// ---- D-011 grade view (display only; no grade may render without its basis) ----
+let GRADE = null;
+const ROW_NAMES = {'1_conditions':'1 · Conditions','2_extension':'2 · Extension',
+  '3_approach':'3 · Approach','4_rsi':'4 · RSI','5_score':'5 · Score',
+  '6_breaker':'6 · Breaker','7_runway':'7 · Runway'};
+function gradeChip(g){
+  const col = g==='A+'?'var(--green)':g==='B'?'var(--yellow)':'var(--red)';
+  return '<span style="font-size:26px;font-weight:800;color:'+col+';">'+g+'</span>';
+}
+function rowActual(r){
+  if(r.row==='4_rsi') return (r.actual===null||r.actual===undefined?'—':r.actual)+' vs ['+r.threshold[0]+'–'+r.threshold[1]+']';
+  if(r.row==='2_extension') return (r.actual===null?'—':r.actual)+'×ATR vs '+r.threshold+' limit';
+  if(r.row==='3_approach') return 'close '+r.actual+' vs SMA5 '+r.threshold;
+  if(r.row==='5_score') return (r.actual===null?'—':r.actual)+' vs ≥'+r.threshold;
+  if(r.row==='7_runway') return (r.actual===null?'unbounded':r.actual+' sessions')+' vs ≥'+r.threshold;
+  if(r.row==='6_breaker') return String(r.actual)+' vs clear';
+  return r.actual+' of 5';
+}
+function gradeRowsTable(rows){
+  return '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+    + rows.map(function(r){
+      const chip = r.met
+        ? '<span style="color:var(--green);font-weight:700;">PASS</span>'
+        : '<span style="color:var(--red);font-weight:700;">FAIL</span>';
+      const line = r.line_price ? ' · line at $'+r.line_price.toFixed(2) : '';
+      return '<tr style="border-top:1px solid rgba(48,54,61,.5);">'
+        + '<td style="padding:4px 8px;white-space:nowrap;">'+ROW_NAMES[r.row]+'</td>'
+        + '<td style="padding:4px 8px;">'+chip+'</td>'
+        + '<td style="padding:4px 8px;font-family:monospace;">'+rowActual(r)+line+'</td>'
+        + '</tr>';
+    }).join('') + '</table>';
+}
+let loadGradeSeq = 0;
+async function loadGrade(sym){
+  const req = ++loadGradeSeq;      // stale-response guard (review: HIGH)
+  GRADE = null;
+  const box = document.getElementById('gradeBox');
+  const head = document.getElementById('gradeHead');
+  const basis = document.getElementById('gradeBasis');
+  const rowsEl = document.getElementById('gradeRows');
+  const state = document.getElementById('gradeState');
+  box.style.display = 'block';
+  document.getElementById('gradeSym').textContent = sym;
+  head.innerHTML = ''; basis.textContent = ''; rowsEl.innerHTML = '';
+  slRenderGradeRows();               // clear the Lab rows immediately too
+  state.textContent = 'Loading grade…';
+  try{
+    const r = await fetch('/api/grade/'+encodeURIComponent(sym)+'.json?t='+Date.now());
+    const d = await r.json();
+    if(req !== loadGradeSeq) return;   // a newer search superseded us
+    GRADE = d;
+    slRenderGradeRows();
+    if(d.status === 'off_universe'){
+      state.innerHTML = '<b>Outside the active universe.</b> '+d.message;
+      return;
+    }
+    if(d.status === 'breaker_unavailable'){
+      state.innerHTML = '<b style="color:var(--yellow);">GRADE WITHHELD.</b> '+d.message;
+      return;
+    }
+    if(d.status !== 'graded'){
+      state.textContent = d.message || d.status; return;
+    }
+    state.textContent = '';
+    const c = d.confirmed;
+    let h = '<div>'+gradeChip(c.grade)
+      + '<div style="font-size:10px;color:var(--dim);">CONFIRMED</div></div>';
+    if(d.provisional && d.provisional.grade && d.differs){
+      h += '<div style="border-left:1px solid var(--border);padding-left:14px;">'
+        + gradeChip(d.provisional.grade)
+        + '<div style="font-size:10px;color:var(--yellow);">PROVISIONAL — intraday, not the grade</div></div>';
+    }
+    head.innerHTML = h;
+    let b = 'Basis: confirmed close of <b>'+c.basis_bar+'</b>';
+    if(d.provisional && d.provisional.grade){
+      b += d.differs
+        ? ' · provisional basis: forming bar '+d.provisional.basis_bar+' (market open)'
+        : ' · provisional (forming bar '+d.provisional.basis_bar+') agrees';
+    } else if(!d.market_open){
+      b += ' · market closed — no provisional';
+    } else if(!d.forming_bar_available){
+      b += ' · market open but no forming bar in the feed yet — no provisional';
+    }
+    basis.innerHTML = b;
+    rowsEl.innerHTML = gradeRowsTable(c.rows);
+  }catch(e){
+    state.textContent = 'Grade unavailable — '+e.message;
+  }
+}
+// ---- Score Lab rows: live (simulated) vs fixed (real, not simulated) ----
+function slRenderGradeRows(score){
+  const el = document.getElementById('slGradeRows');
+  if(!el) return;
+  if(!GRADE){ el.innerHTML = '<div style="font-size:11px;color:var(--dim);">Analyze a ticker to load its grade rows.</div>'; return; }
+  if(GRADE.status === 'breaker_unavailable'){
+    el.innerHTML = '<div style="font-size:11px;color:var(--yellow);"><b>GRADE WITHHELD</b> — breaker coverage degraded/unavailable; rows not shown.</div>'; return;
+  }
+  if(GRADE.status === 'off_universe'){
+    el.innerHTML = '<div style="font-size:11px;color:var(--dim);"><b>Outside the active universe</b> — group-dependent rows cannot be evaluated; no grade.</div>'; return;
+  }
+  if(GRADE.status !== 'graded'){ el.innerHTML = ''; return; }
+  const simScore = (score!==undefined)?score:(parseInt((document.getElementById('slScore').textContent||'').split('/')[0])||null);
+  const simRsi = parseFloat(document.getElementById('slRsiNum').value);
+  // thresholds come from the PAYLOAD (the engine's own values), never
+  // re-implemented client-side (review finding: hardcoded 45/70/75
+  // would silently diverge on any approved-knob change)
+  const gi = GRADE.confirmed.inputs || {};
+  const rMin = gi.rsi_min, rMax = gi.rsi_max, sMin = gi.score_min;
+  const live = {
+    '4_rsi': {met: simRsi>=rMin && simRsi<=rMax, txt: simRsi.toFixed(1)+' vs ['+rMin+'–'+rMax+']'},
+    '5_score': {met: simScore!==null && simScore>=sMin, txt: (simScore===null?'—':simScore)+' vs ≥'+sMin},
+  };
+  const rows = GRADE.confirmed.rows.map(function(r){
+    if(live[r.row]){
+      const l = live[r.row];
+      return '<tr style="border-top:1px solid rgba(48,54,61,.5);background:rgba(88,166,255,.07);">'
+        + '<td style="padding:3px 8px;">'+ROW_NAMES[r.row]+'</td>'
+        + '<td style="padding:3px 8px;'+(l.met?'color:var(--green)':'color:var(--red)')+';font-weight:700;">'+(l.met?'PASS':'FAIL')+'</td>'
+        + '<td style="padding:3px 8px;font-family:monospace;">'+l.txt+' <span style="color:var(--blue);font-size:9px;font-weight:700;">SIMULATED</span></td></tr>';
+    }
+    const chip = r.met?'<span style="color:var(--green);">PASS</span>':'<span style="color:var(--red);">FAIL</span>';
+    return '<tr style="border-top:1px solid rgba(48,54,61,.5);opacity:.65;">'
+      + '<td style="padding:3px 8px;">'+ROW_NAMES[r.row]+'</td>'
+      + '<td style="padding:3px 8px;font-weight:700;">'+chip+'</td>'
+      + '<td style="padding:3px 8px;font-family:monospace;">'+rowActual(r)+' <span style="color:var(--dim);font-size:9px;">FIXED — not simulated</span></td></tr>';
+  }).join('');
+  el.innerHTML = '<div style="font-size:10px;color:var(--dim);margin-bottom:3px;">Grade rows — blue rows re-evaluate from the sliders; dimmed rows are the real confirmed values, not simulated (basis: '+GRADE.confirmed.basis_bar+')</div>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:11px;">'+rows+'</table>';
+}
+</script>
+<script src="chat-widget.js">
+</script>
 </body>
 </html>

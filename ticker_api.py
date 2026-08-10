@@ -17,6 +17,7 @@ from flask_cors import CORS
 from signal_engine import (
     fetch_data,
     fetch_fundamentals_yfinance,
+    sanitize_for_json,
     score_stock_v2,
     compute_ytd_return_v2,
     simulate_score,
@@ -2157,6 +2158,29 @@ def universe_candidates_json():
             status=500,
             mimetype="application/json",
         )
+
+
+@app.route("/api/grade/<symbol>.json")
+def grade_view_json(symbol):
+    """Public JSON API — the D-011 grade view for one ticker (read-only).
+
+    PRIMARY grade on the last CONFIRMED close (the bar that matches
+    candidate_grades and would drive an entry); a PROVISIONAL grade
+    only while the market is open, always labelled. Off-universe and
+    degraded-breaker names grade NOTHING — explicit states, same
+    withholding law as the trade signal. Display/evaluation only:
+    grade_setup and the framework artifact are untouched.
+    """
+    try:
+        from grade_view import compute_grade_view
+        payload = compute_grade_view(symbol.upper())
+        return app.response_class(
+            response=json.dumps(sanitize_for_json(payload), default=str),
+            mimetype="application/json")
+    except Exception as e:
+        return app.response_class(
+            response=json.dumps({"error": str(e)}), status=500,
+            mimetype="application/json")
 
 
 @app.route("/api/grade/outcomes.json")

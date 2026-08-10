@@ -949,6 +949,22 @@ class PositionSignalEngine:
 
     def _grade_one_candidate(self, gname, row, selected_groups,
                              breaker_by_group, regime_state, today):
+        """The artifact's candidate grade — EXACTLY the four keys it has
+        always returned (the 516-grade parity replay pins this shape and
+        answer). Display surfaces needing the row detail call
+        _grade_candidate_full; this wrapper discards the extras so the
+        framework's own artifact never changes shape."""
+        full = self._grade_candidate_full(gname, row, selected_groups,
+                                          breaker_by_group, regime_state,
+                                          today)
+        # keys BY PRESENCE, not by fiat: the null-grade early returns
+        # have always been 3-key dicts (no "failing") and the artifact
+        # must keep that exact shape (review finding)
+        return {k: full[k] for k in ("grade", "reasons", "failing",
+                                     "group") if k in full}
+
+    def _grade_candidate_full(self, gname, row, selected_groups,
+                              breaker_by_group, regime_state, today):
         gi = row.get("grade_inputs")
         if not isinstance(gi, dict):
             return {"grade": None, "group": gname,
@@ -1022,7 +1038,25 @@ class PositionSignalEngine:
         if not c5_met:
             reasons = f"{reasons}; {c5_det}" if reasons else c5_det
         return {"grade": grade["grade"], "reasons": reasons,
-                "failing": grade["failing"], "group": gname}
+                "failing": grade["failing"], "group": gname,
+                # display-only extras (grade view surfaces; NEVER stored
+                # in the framework artifact — the wrapper strips them)
+                "rows": grade["rows"], "conditions": res.get("conditions"),
+                "inputs": {"close": close, "sma20": sma20,
+                           "sma20_5d_ago": sma20_then, "atr14": atr,
+                           "sma5": _num(gi.get("sma5")),
+                           "extension_atr": ext_raw,
+                           "rsi14": _num(gi.get("rsi14")),
+                           "quality_score": _num(gi.get("quality_score")),
+                           "ytd_basis": gi.get("ytd_basis"),
+                           "runway_sessions": runway,
+                           "breaker_status": breaker_by_group.get(gname),
+                           "extension_guard_max": self.extension_guard_max,
+                           "rsi_min": ap["rsi_min"],
+                           "rsi_max": ap["rsi_max"],
+                           "score_min": ap["score_min"],
+                           "runway_min_sessions":
+                               ap["runway_min_sessions"]}}
 
     # ------------------------------------------------------------------
     # Live compute: load positions + prior states, evaluate, persist, emit
