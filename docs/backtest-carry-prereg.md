@@ -84,3 +84,26 @@ CAVEATS. One window. v1 grades. Costs modelled but slippage is not —
 5B measured 32-37% of stop exits filling below the entry stop, and
 that penalty falls harder on the wider-stop trades S6/S7 admit, so the
 no-guard arms are flattered by the model.
+
+--------------------------------------------------------------------
+POST-REGISTRATION AMENDMENT 1 — clauses 5 and 6 re-specified
+Ruled 2026-08-10. Made BEFORE any performance number was read: the
+2x2 had stopped at the integrity gate, no arm's CAGR, drawdown or
+terminal equity existed, and none was computed until after this
+amendment was committed.
+
+Clauses 5 and 6 are re-specified. The paired per-trade R bootstrap
+is void — R-multiples are share-scale invariant and the test is
+structurally blind to sizing (verified 4.5e-13 across 980 funded
+trades). Clauses 5 and 6 now read the PORTFOLIO comparison — CAGR,
+max drawdown, terminal equity — with a block bootstrap over the
+paired equity paths, accepting the reduced power that entails. The
+trades remain paired; only the metric changes.
+
+PROVENANCE OF THIS DEFECT, ON THE RECORD: it was found by the
+IMPLEMENTER, not the author. The pre-registration specified a test
+that cannot measure what it was written to measure; the implementation
+surfaced the arithmetic (shares cancel in pnl/r_usd), demonstrated it
+numerically, and reported it rather than quietly substituting a
+different statistic. The original clauses stand above, unedited, so
+the record shows what was specified and what replaced it.
