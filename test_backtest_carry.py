@@ -274,7 +274,7 @@ def test_prereg_record_discipline():
     """The prereg's ORIGINAL text is immutable; the post-registration
     amendment is appended and LABELLED, never an edit in place."""
     orig = subprocess.run(["git", "show",
-                           "a6bfd58:docs/backtest-carry-prereg.md"],
+                           "d8f5f42:docs/backtest-carry-prereg.md"],
                           capture_output=True, text=True, cwd=REPO).stdout
     assert orig, "the prereg commit is unreachable"
     assert hashlib.sha256(orig.encode()).hexdigest()[:16] == \
@@ -295,7 +295,7 @@ def test_prereg_record_discipline():
     for lab in ("sizing_S1_S8", "sizing_S6_S7"):
         v = res["comparisons"][lab]["void_per_trade_r_bootstrap"]
         assert "share-scale invariant" in v["void_reason"]
-    print("  (8) prereg: original text immutable vs a6bfd58, amendment "
+    print("  (8) prereg: original text immutable vs d8f5f42, amendment "
           "APPENDED and labelled, void test carried labelled: OK")
 
 

@@ -1,7 +1,7 @@
 # Build 7 — implementation declarations
 
 Committed BEFORE any results exist, alongside the pre-registration
-([backtest-carry-prereg.md](backtest-carry-prereg.md), `a6bfd58`,
+([backtest-carry-prereg.md](backtest-carry-prereg.md), `d8f5f42`,
 sha256 `4b11ffd563258b70`). The prereg fixes the design, the arms, the
 risk-parity formula and the decision table; the resolutions below are
 everything the implementation must additionally pin down. They are

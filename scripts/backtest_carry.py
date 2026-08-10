@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 Build 7 — extension-guard carry replay (pre-registered:
-docs/backtest-carry-prereg.md, a6bfd58, sha256 4b11ffd563258b70;
+docs/backtest-carry-prereg.md, d8f5f42, sha256 4b11ffd563258b70;
 implementation declarations: docs/backtest-carry-declarations.md,
-6330dcc — both committed BEFORE any results existed).
+faf824b — both committed BEFORE any results existed).
 
 The 2x2:                guard ON (1.8)      guard OFF
         fixed 6.5%           S1                  S6

@@ -5,10 +5,10 @@ Side-car builder: `scripts/build_noguard_frame.py` · Results:
 [backtest-carry-results.json](backtest-carry-results.json)
 (`results_hash 3a6a3d60b4ef8084`) · Pins: `test_backtest_carry.py` (7) ·
 Pre-registration: [backtest-carry-prereg.md](backtest-carry-prereg.md)
-(`a6bfd58`, sha256 `4b11ffd563258b70`; post-registration amendment 1
-`701e347`) · Declarations:
+(`d8f5f42`, sha256 `4b11ffd563258b70`; post-registration amendment 1
+`0cc36d8`) · Declarations:
 [backtest-carry-declarations.md](backtest-carry-declarations.md)
-(`6330dcc`, amendment 1 `0ac94cb`).
+(`faf824b`, amendment 1 `5ce1627`).
 
 **Integrity gates, all three, before any number below:**
 (a) S1 reproduces the committed 5B S1/score block **cent-exactly** —
