@@ -155,6 +155,27 @@
   <div class="section-title">Signal Changes <span id="changeCount"></span></div>
   <div id="timelineContent"><div class="empty"><p>Loading history...</p></div></div>
 
+  <div class="section-title" style="margin-top:32px;">Grade Outcomes — Simulated <span id="goCount"></span></div>
+  <div class="ph-law">SIMULATED outcomes on graded names — the committed grade-history
+    series replayed through the production fill discipline (entry next open, D-006;
+    SMA20 close-basis stop with equality exits, D-018; one trade per ticker at a time).
+    <b>Nothing here is a position.</b> Medians are CLOSED-ONLY; open/pending trades are
+    censoring and their counts are shown beside every number.</div>
+  <div class="controls" style="padding:0 0 10px 0;">
+    <button class="pill on" data-gograde="A+" onclick="goToggle(this)">A+</button>
+    <button class="pill on" data-gograde="B" onclick="goToggle(this)">B</button>
+    <button class="pill" data-gograde="C" onclick="goToggle(this)">C</button>
+    <span style="width:14px;"></span>
+    <button class="pill on" data-gostatus="all" onclick="goStatus(this)">All</button>
+    <button class="pill" data-gostatus="open" onclick="goStatus(this)">Open</button>
+    <button class="pill" data-gostatus="closed" onclick="goStatus(this)">Closed</button>
+    <span style="width:14px;"></span>
+    <button class="pill" data-gosort="days_held" onclick="goSort(this)">Sort: days held</button>
+    <button class="pill" data-gosort="pnl_pct" onclick="goSort(this)">Sort: P&L</button>
+  </div>
+  <div id="goAgg" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;"></div>
+  <div id="goTable" style="overflow-x:auto;"><div class="empty"><p>Loading grade outcomes...</p></div></div>
+
   <div class="section-title" style="margin-top:32px;">Position History
     <span id="posCount"></span>
     <span class="ph-tabs">
@@ -626,6 +647,100 @@ loadHistory();
 // Auto-refresh history every 60s
 setInterval(()=>loadHistory(), 60000);
 </script>
-<script src="chat-widget.js"></script>
+<script src="chat-widget.js">
+</script>
+<script>
+// ---- Grade Outcomes panel (simulated; observes only) ----
+let goData=null, goSel={"A+":true,"B":true,"C":false}, goStat="all",
+    goSortKey=null, goSortDesc=true;
+async function goLoad(){
+  try{
+    const r=await fetch('/api/grade/outcomes.json?t='+Date.now());
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    goData=await r.json();
+    goRender();
+  }catch(e){
+    document.getElementById('goTable').innerHTML=
+      '<div class="empty"><p>Grade outcomes unavailable ('+e.message+')</p></div>';
+  }
+}
+function goToggle(el){const g=el.dataset.gograde;goSel[g]=!goSel[g];
+  el.classList.toggle('on',goSel[g]);goRender();}
+function goStatus(el){goStat=el.dataset.gostatus;
+  document.querySelectorAll('[data-gostatus]').forEach(b=>b.classList.toggle('on',b===el));
+  goRender();}
+function goSort(el){const k=el.dataset.gosort;
+  if(goSortKey===k){goSortDesc=!goSortDesc;}else{goSortKey=k;goSortDesc=true;}
+  document.querySelectorAll('[data-gosort]').forEach(b=>b.classList.toggle('on',b.dataset.gosort===goSortKey));
+  goRender();}
+function goFmt(v,suf){return v===null||v===undefined?'—':(v>0?'+':'')+v+(suf||'');}
+function goRender(){
+  if(!goData) return;
+  const grades=['A+','B','C'].filter(g=>goSel[g]);
+  // aggregate strip — every number carries its censoring count
+  const agg=goData.aggregates||{};
+  document.getElementById('goAgg').innerHTML=grades.map(g=>{
+    const a=agg[g]||{}; const nc=a.n_closed||0, no=a.n_open||0;
+    const bd=a.open_breakdown||{};
+    const bdTxt=Object.entries(bd).map(([k,v])=>v+' '+k.toLowerCase()).join(', ');
+    let body='<span style="color:var(--dim);">'+nc+' closed / '+no+' open'
+      +(bdTxt?' ('+bdTxt+')':'')+'</span>';
+    if(nc>0){
+      body+='<br>hold median <b>'+a.days_held_median_closed+'d</b> '
+        +'<span style="color:var(--dim);">(closed-only, n='+nc+'; '+no+' censored)</span>'
+        +' · mean '+a.days_held_mean_closed+'d'
+        +'<br>'+a.pct_profitable_closed+'% profitable · P&L mean '
+        +goFmt(a.pnl_pct_mean_closed,'%')+' · median '+goFmt(a.pnl_pct_median_closed,'%')
+        +' <span style="color:var(--dim);">(closed-only)</span>'
+        +'<br>MFE med '+goFmt((a.mfe_pct_closed||{}).median,'%')
+        +' · p75 '+goFmt((a.mfe_pct_closed||{}).p75,'%')
+        +' · max '+goFmt((a.mfe_pct_closed||{}).max,'%')
+        +' <span style="color:var(--dim);">(closed-only)</span>';
+    } else { body+='<br><span style="color:var(--dim);">no closed trades yet — all censored</span>'; }
+    return '<div style="background:var(--surface);border:1px solid var(--border);'
+      +'border-radius:8px;padding:10px 14px;font-size:12px;min-width:230px;">'
+      +'<b style="font-size:13px;">'+g+'</b><br>'+body+'</div>';
+  }).join('');
+  // rows
+  let rows=(goData.trades||[]).filter(t=>goSel[t.grade]);
+  if(goStat==='open') rows=rows.filter(t=>t.status!=='STOPPED');
+  if(goStat==='closed') rows=rows.filter(t=>t.status==='STOPPED');
+  if(goSortKey){rows=rows.slice().sort((x,y)=>{
+    const a=x[goSortKey], b=y[goSortKey];
+    if(a===null||a===undefined) return 1; if(b===null||b===undefined) return -1;
+    return goSortDesc? b-a : a-b;});}
+  else{rows=rows.slice().sort((x,y)=>String(y.grade_date).localeCompare(String(x.grade_date)));}
+  const nO=rows.filter(t=>t.status!=='STOPPED').length;
+  document.getElementById('goCount').textContent=
+    rows.length+' trades shown · '+(rows.length-nO)+' closed / '+nO+' open';
+  const sCol={STOPPED:'var(--dim)',OPEN:'var(--green)',
+              EXIT_FIRED:'var(--yellow)',PENDING:'var(--blue)'};
+  document.getElementById('goTable').innerHTML=
+    '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+    +'<tr style="color:var(--dim);text-align:left;">'
+    +'<th style="padding:4px 8px;">Ticker</th><th>Grade</th><th>Era</th>'
+    +'<th>Grade date</th><th>Entry</th><th>Stop</th><th>R</th><th>Status</th>'
+    +'<th>Days</th><th>P&L</th><th>MFE</th><th>Ever +</th><th>Exit</th></tr>'
+    +rows.map(t=>'<tr style="border-top:1px solid rgba(48,54,61,.5);">'
+      +'<td style="padding:4px 8px;font-family:monospace;font-weight:700;color:var(--blue);">'+t.ticker+'</td>'
+      +'<td><b>'+t.grade+'</b></td>'
+      +'<td style="color:var(--dim);font-size:10px;">'+(t.scorer_era==='score_stock_v2'?'v2':'v1')+'</td>'
+      +'<td style="font-family:monospace;color:var(--dim);">'+t.grade_date+'</td>'
+      +'<td style="font-family:monospace;">'+(t.entry!==null?t.entry_date+' @ '+t.entry.toFixed(2):'—')+'</td>'
+      +'<td style="font-family:monospace;color:var(--dim);">'+t.initial_stop.toFixed(2)+'</td>'
+      +'<td style="font-family:monospace;">'+(t.initial_r!==null?t.initial_r.toFixed(2):'—')+'</td>'
+      +'<td style="color:'+(sCol[t.status]||'var(--text)')+';font-weight:600;">'+t.status+'</td>'
+      +'<td>'+t.days_held+'</td>'
+      +'<td style="font-family:monospace;color:'+((t.pnl_pct||0)>0?'var(--green)':(t.pnl_pct===null?'var(--dim)':'var(--red)'))+';">'
+        +goFmt(t.pnl_pct,'%')+(t.pnl_r!==null&&t.pnl_r!==undefined?' ('+goFmt(t.pnl_r,'R')+')':'')+'</td>'
+      +'<td style="font-family:monospace;">'+goFmt(t.mfe_pct,'%')+'</td>'
+      +'<td>'+(t.ever_profitable===null?'—':(t.ever_profitable?'✓':'✗'))+'</td>'
+      +'<td style="font-family:monospace;color:var(--dim);">'
+        +(t.exit!==null&&t.exit!==undefined?t.exit_date+' @ '+t.exit.toFixed(2):'—')+'</td>'
+      +'</tr>').join('')
+    +'</table>';
+}
+goLoad();
+</script>
 </body>
 </html>

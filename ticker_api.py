@@ -2159,6 +2159,29 @@ def universe_candidates_json():
         )
 
 
+@app.route("/api/grade/outcomes.json")
+def grade_outcomes_json():
+    """Public JSON API — the grade outcome tracker (read-only).
+
+    Serves the pre-built data/grade_outcomes.json: SIMULATED spell
+    trades over the committed grade-history series (entry next open
+    per D-006, SMA20 close-basis stop per D-018, one trade per ticker
+    at a time). Observability only — nothing here is a position; the
+    payload carries its own disclaimer and censoring counts.
+    """
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "data", "grade_outcomes.json")
+    if not os.path.exists(path):
+        return app.response_class(
+            response=json.dumps({
+                "error": "Grade outcomes have not been built yet.",
+                "hint": "Run: python3 grade_outcomes.py"}),
+            status=404, mimetype="application/json")
+    with open(path) as f:
+        return app.response_class(response=f.read(),
+                                  mimetype="application/json")
+
+
 @app.route("/api/universe/ranking.json")
 def universe_ranking_json():
     """

@@ -463,6 +463,19 @@ def run_framework(force_fetch: bool = False) -> dict:
             except Exception as e:
                 print(f"[framework] grade-history append failed "
                       f"(non-fatal): {e}")
+            # Grade OUTCOME tracker (observes only): rebuild when the
+            # series changed or the day rolled; intraday re-bakes with
+            # an unchanged series are a fast no-op. Best-effort.
+            try:
+                import sys as _sys
+                _parent = os.path.join(BASE_DIR, "..")
+                if _parent not in _sys.path:
+                    _sys.path.insert(0, _parent)
+                from grade_outcomes import refresh_if_stale
+                print(f"[framework] grade outcomes: {refresh_if_stale()}")
+            except Exception as e:
+                print(f"[framework] grade-outcomes refresh failed "
+                      f"(non-fatal): {e}")
 
     # --- Write output ---
     # NaN/Inf -> null guard on the full payload (same policy as every

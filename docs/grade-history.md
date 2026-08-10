@@ -57,6 +57,20 @@ evolution was an accident of the snapshot system and git retention
   within-era transitions: it mixes the scorer change with two days of
   tape and a universe rotation.
 
+## The outcome tracker (added 2026-08-09)
+
+`grade_outcomes.py` replays every grade SPELL in this series through
+the production fill discipline — entry next open (D-006), SMA20
+close-basis stop with equality exits (D-018), one trade per ticker at
+a time — and serves the result at `/api/grade/outcomes.json` for the
+Grade Outcomes panel on History & Changes. **Simulated, observes
+only; nothing there is a position.** Two laws from its adversarial
+review: frames pass the confirmed-close splitter so an intraday
+rebuild can never fire on a forming bar, and STOPPED trades are
+facts — carried forward, marked, never silently deleted when the
+price window rolls. Aggregates are closed-only with censoring counts
+beside every number. Pins: `test_grade_outcomes.py` (8).
+
 ## The dead archive (RULED 2026-08-09: deleted)
 
 `framework/output/framework_YYYY-MM-DD.json` was a dated archive that
