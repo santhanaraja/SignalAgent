@@ -479,12 +479,12 @@ def run_framework(force_fetch: bool = False) -> dict:
         json.dump(output, f, indent=2, default=str)
     print(f"[framework] Written to {latest_path}")
 
-    # Date-stamped archive
-    date_str = datetime.date.today().isoformat()
-    archive_path = os.path.join(OUTPUT_DIR, f"framework_{date_str}.json")
-    with open(archive_path, "w") as f:
-        json.dump(output, f, indent=2, default=str)
-    print(f"[framework] Archived to {archive_path}")
+    # Date-stamped archive DELETED (ruled 2026-08-09, recorded in
+    # docs/grade-history.md): it was gitignored and wrote to the
+    # ephemeral runner filesystem, so it structurally could not accrue
+    # — a directory that looked like history and produced nothing. Git
+    # history of public/framework.json, data/grade_history.json, and
+    # the snapshot system serve its purpose.
 
     # Also write to public dir for frontend access
     public_dir = os.path.join(BASE_DIR, "..", "public")

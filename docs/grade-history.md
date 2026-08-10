@@ -39,10 +39,14 @@ evolution was an accident of the snapshot system and git retention
 - 17 days, 2026-07-19 → 2026-08-09 (16 v1-era, 1 v2; Jul 19 and
   Aug 9 are weekend artifacts — D-017's ship day and the D-020a
   cutover bake).
-- **A+ spell length: median 1 day.** 17 closed spells — 9 of length
-  1, 5 of length 2, 1 of 3, 2 of 4 — plus 8 right-censored (A+ on the
-  final day). The one-day median that CR-2026-08-09-2 flagged as a
-  timing defect is now measured from committed artifacts.
+- **A+ spell length: median among CLOSED spells = 1 day.** 17 closed
+  spells — 9 of length 1, 5 of length 2, 1 of 3, 2 of 4. Eight
+  further spells are right-censored (still A+ at the series end),
+  which biases the closed-spell median downward. A Kaplan–Meier
+  estimate is the correct treatment if this number ever leaves the
+  report and enters a ruling. The one-day figure CR-2026-08-09-2
+  flagged as a timing defect is now measured from committed
+  artifacts, with that caveat attached.
 - **23 distinct names have touched A+** since D-017 shipped.
 - Within-era transitions (771 ticker-day pairs): A+ holds 13, decays
   to C 10 times vs B only 2 — **A+ mostly falls off a cliff, not down
@@ -53,16 +57,17 @@ evolution was an accident of the snapshot system and git retention
   within-era transitions: it mixes the scorer change with two days of
   tape and a universe rotation.
 
-## The dead archive (recommendation, nothing changed)
+## The dead archive (RULED 2026-08-09: deleted)
 
-`framework/output/framework_YYYY-MM-DD.json` is a dated archive that
-accrues nothing: it is gitignored, and on GitHub Actions it writes to
-an ephemeral runner filesystem that vanishes per run — the local
-copies stop at 2026-07-25 when local runs stopped. **Recommendation:
-DELETE the archive write and the five stale local files.** Its
-intended purpose is now served three better ways (git history of
-`public/framework.json` per bake, this committed series, and the
-snapshot system); "making it work" would mean committing dated copies
-via cron, which duplicates what git history already stores per
+`framework/output/framework_YYYY-MM-DD.json` was a dated archive that
+accrued nothing: gitignored, and on GitHub Actions it wrote to an
+ephemeral runner filesystem that vanishes per run — the local copies
+stopped at 2026-07-25 when local runs stopped. **Ruled and deleted
+same day**: the archive write removed from `framework_runner`, the
+five stale local files removed. Reason on record: structurally unable
+to accrue, and its purpose is served three better ways — git history
+of `public/framework.json` per bake, this committed series, and the
+snapshot system. "Making it work" would have meant committing dated
+copies via cron, duplicating what git history already stores per
 commit. A directory that looks like history and isn't is worse than
-no directory. Awaiting the ruling; no change made.
+no directory.
