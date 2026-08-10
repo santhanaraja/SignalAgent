@@ -65,6 +65,55 @@ def write_marker(now_et, marker_path=None):
         f.write(now_et.date().isoformat())
 
 
+def position_risk(holdings, data):
+    """Per-position and book risk from the fill facts the framework now
+    emits (entry_price / shares / entry_stop).
+
+    Conventions, fixed here so every caller shares them:
+      initial risk = shares x (entry - entry_stop)   [FIXED at entry]
+      risk to stop = shares x (entry - live stop)    [MOVES; negative
+                     once the stop clears entry = locked profit]
+      heat         = sum of POSITIVE risk-to-stop only. Netting a
+                     locked-profit position against a live one would
+                     understate what is actually at risk.
+      book R       = sum(open P&L) / sum(initial risk) — DOLLAR-WEIGHTED
+                     (5B's tiny-R ruling: a mean of per-position
+                     multiples lets a near-zero denominator dominate).
+    A holding missing any input is EXCLUDED and named, never counted
+    as zero risk.
+    """
+    rows, missing = {}, []
+    initial = heat = locked = pnl = 0.0
+    locked_n = 0
+    for t, x in (holdings or {}).items():
+        entry = x.get("entry_price")
+        shares = x.get("shares")
+        e_stop = x.get("entry_stop")
+        close = x.get("close")
+        stop = (x.get("stop") or {}).get("level")
+        if None in (entry, shares, e_stop) or entry <= e_stop:
+            missing.append(t)
+            continue
+        init = shares * (entry - e_stop)
+        to_stop = shares * (entry - stop) if stop is not None else init
+        open_pnl = shares * (close - entry) if close is not None else 0.0
+        rows[t] = {"initial_usd": init, "to_stop_usd": to_stop,
+                   "open_pnl_usd": open_pnl, "open_r": open_pnl / init}
+        initial += init
+        pnl += open_pnl
+        if to_stop > 0:
+            heat += to_stop
+        else:
+            locked += -to_stop
+            locked_n += 1
+    cap = ((data or {}).get("r28") or {}).get("capital_usd")
+    return {"rows": rows, "missing": missing, "initial_usd": initial,
+            "heat_usd": heat, "locked_usd": locked, "locked_n": locked_n,
+            "capital_usd": cap,
+            "heat_pct": (heat / cap * 100.0) if cap else None,
+            "book_r": (pnl / initial) if initial else 0.0}
+
+
 def build_message(data, now_et):
     """
     Compact Slack mrkdwn from the framework artifact (+ sibling files via
@@ -97,6 +146,8 @@ def build_message(data, now_et):
     watchers = {t: x for t, x in positions.items()
                 if isinstance(x, dict) and x.get("kind") == "watching"}
 
+    risk = position_risk(holdings, data)
+
     lines.append("*Holdings*")
     if not holdings:
         lines.append("• none — cash")
@@ -110,6 +161,42 @@ def build_message(data, now_et):
         stop_txt = (f"${x.get('close')} vs stop ${stop}" if stop is not None
                     else f"${x.get('close')} vs SMA20 ${x.get('sma20')}")
         lines.append(f"{flag}• {t} *{state}* — {stop_txt}{cu_txt}")
+        r = (risk["rows"] or {}).get(t)
+        if r is None:
+            lines.append("    ↳ risk unknown — no entry_stop/shares on "
+                         "the row (not zero: unmeasured)")
+            continue
+        if r["to_stop_usd"] < 0:
+            at_risk = f"locked profit ${abs(r['to_stop_usd']):,.2f}"
+        else:
+            at_risk = f"at risk ${r['to_stop_usd']:,.2f}"
+        lines.append(
+            f"    ↳ initial risk ${r['initial_usd']:,.2f} · {at_risk} "
+            f"· open {r['open_r']:+.2f}R")
+
+    if risk["rows"]:
+        cap_txt = (f" = {risk['heat_pct']:.2f}% of "
+                   f"${risk['capital_usd']:,.0f}"
+                   if risk["capital_usd"] else "")
+        lines.append(
+            f"*Risk* — heat ${risk['heat_usd']:,.2f}{cap_txt} "
+            f"(sum of positions still at risk to their stops)")
+        extra = [f"initial risk at entry ${risk['initial_usd']:,.2f}"]
+        if risk["locked_usd"]:
+            extra.append(f"locked profit ${risk['locked_usd']:,.2f} "
+                         f"({risk['locked_n']} stop"
+                         f"{'s' if risk['locked_n'] != 1 else ''} above "
+                         f"entry)")
+        extra.append(f"book {risk['book_r']:+.2f}R")
+        lines.append("    ↳ " + " · ".join(extra))
+        lines.append("    ↳ R = open P&L ÷ INITIAL risk (fixed at entry, "
+                     "never re-based); risk-to-stop is the MOVING one. "
+                     "Book R is dollar-weighted sum(P&L)/sum(risk), not a "
+                     "mean of per-position R.")
+        if risk["missing"]:
+            lines.append(f"    ↳ ⚠️ {len(risk['missing'])} holding(s) "
+                         f"excluded from every total — no entry data: "
+                         f"{', '.join(sorted(risk['missing']))}")
 
     lines.append("*Watchlist*")
     if not watchers:

@@ -1783,6 +1783,10 @@ def _assessment_positions(data):
                     "extension_guard", "conditions_met", "insufficient_data",
                     "grade", "grade_gate", "grade_inputs", "group",
                     "weeks_in_universe",
+                    # fill facts (2026-08-10): the close report computes
+                    # risk from these; absent means UNMEASURED, and the
+                    # report says so rather than reporting zero risk
+                    "entry_price", "shares", "entry_stop",
                     # D-018: the forming bar's labeled provisional read
                     # (display only — the state above is close-basis)
                     "intraday_preview", "catchup_truncated",

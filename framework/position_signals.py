@@ -1305,6 +1305,15 @@ class PositionSignalEngine:
                     result["intraday_preview_error"] = str(exc)
             result["ticker"] = ticker
             result["kind"] = kind
+            # The fill facts, emitted so downstream can compute RISK
+            # (2026-08-10 ruling). The engine does not consume these —
+            # they travel for the close report and any R arithmetic.
+            # Absent on a holding = that holding's risk is UNKNOWN and
+            # must be reported as such, never treated as zero.
+            if kind == "holding":
+                for f in ("entry_price", "shares", "entry_stop"):
+                    if entry.get(f) is not None:
+                        result[f] = entry[f]
             result["theme"] = entry.get("theme")
             result["group"] = thesis_status.get("group")
             result["weeks_in_universe"] = thesis_status.get("weeks_in_universe")

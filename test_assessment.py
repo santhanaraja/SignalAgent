@@ -391,6 +391,56 @@ def test_d018_aggregation_contract():
           "filter and read AS SUCH in the close report (aggregation contract): OK")
 
 
+def test_position_risk_conventions():
+    """The 2026-08-10 risk block, pinned to its ruled conventions.
+
+    initial risk is FIXED at entry; risk-to-stop MOVES and goes negative
+    once the stop clears entry (locked profit); heat sums only positions
+    STILL at risk (netting a locked-profit position against a live one
+    would understate what is actually at risk); book R is DOLLAR-WEIGHTED
+    sum(P&L)/sum(risk), never a mean of per-position multiples (5B's
+    tiny-R ruling); a holding missing entry data is EXCLUDED and NAMED,
+    never counted as zero risk.
+    """
+    import notify_assessment as na
+    holdings = {
+        # stop ABOVE entry -> negative risk-to-stop = locked profit
+        "UP": {"kind": "holding", "entry_price": 10.0, "shares": 100,
+               "entry_stop": 9.0, "close": 12.0, "stop": {"level": 11.0}},
+        # stop still below entry -> at risk
+        "FLAT": {"kind": "holding", "entry_price": 50.0, "shares": 10,
+                 "entry_stop": 45.0, "close": 50.0, "stop": {"level": 45.0}},
+        # a near-zero denominator: it must NOT dominate the book figure
+        "TINY": {"kind": "holding", "entry_price": 100.0, "shares": 1,
+                 "entry_stop": 99.99, "close": 101.0,
+                 "stop": {"level": 99.99}},
+        "NODATA": {"kind": "holding", "close": 5.0},      # excluded, named
+    }
+    r = na.position_risk(holdings, {"r28": {"capital_usd": 100_000.0}})
+    assert r["missing"] == ["NODATA"], r["missing"]
+    assert "NODATA" not in r["rows"]
+    up = r["rows"]["UP"]
+    assert up["initial_usd"] == 100.0            # 100 x (10.00 - 9.00)
+    assert up["to_stop_usd"] == -100.0           # 100 x (10.00 - 11.00)
+    assert abs(up["open_r"] - 2.0) < 1e-12       # +$200 open / $100 risk
+    flat = r["rows"]["FLAT"]
+    assert flat["initial_usd"] == 50.0 and flat["to_stop_usd"] == 50.0
+    # heat counts ONLY the at-risk side; the locked one is reported apart
+    assert abs(r["heat_usd"] - 50.01) < 1e-9, r["heat_usd"]
+    assert abs(r["locked_usd"] - 100.0) < 1e-9 and r["locked_n"] == 1
+    assert abs(r["heat_pct"] - 0.05001) < 1e-9
+    assert abs(r["initial_usd"] - 150.01) < 1e-9
+    # DOLLAR-WEIGHTED: (200 + 0 + 1) / 150.01 = 1.3399...
+    assert abs(r["book_r"] - (201.0 / 150.01)) < 1e-12
+    mean_of_multiples = (2.0 + 0.0 + 100.0) / 3      # TINY reads 100R alone
+    assert abs(r["book_r"] - mean_of_multiples) > 30, (
+        "book R must not be a mean of per-position multiples — the "
+        "near-zero denominator would dominate it")
+    print("  position risk: initial fixed / to-stop signed (locked profit "
+          "negative) / heat at-risk-only / book R dollar-weighted, not a "
+          "mean / missing data excluded and named: OK")
+
+
 if __name__ == "__main__":
     print("\n=== Assessment endpoint tests (PER-508 #21) ===")
     test_response_shape()
@@ -399,4 +449,5 @@ if __name__ == "__main__":
     test_sections_degrade_independently()
     test_term_structure_inverted()
     test_d018_aggregation_contract()
+    test_position_risk_conventions()
     print("\nAll assessment tests passed.\n")
