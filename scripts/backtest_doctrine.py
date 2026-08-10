@@ -595,6 +595,13 @@ def penalty_module(df):
 
 # ---------------------------------------------------------------- main
 def run(smoke=False, out_path=None):
+    # pinned inputs, asserted BEFORE any work (2026-08-10 ruling): a
+    # moved cache must fail loudly and NAME itself, not silently
+    # produce a different study
+    from study_inputs import assert_pinned_inputs
+    if not smoke:
+        assert_pinned_inputs(["prices_manifest", "earnings_dates",
+                              "regime_daily"], label="Layer A")
     with open(REGIME_PATH) as f:
         regime = json.load(f)
     regime_by_day = regime["states"]

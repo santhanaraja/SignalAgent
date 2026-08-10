@@ -38,6 +38,17 @@ from signal_engine import (compute_rsi, compute_macd, score_rsi_points,
                            compose_score)
 
 PRICES = bd.PRICES
+
+# The committed framework artifacts Layer A's honesty bridge was
+# REPORTED from (the newest 12 as of 9b5a450, the Layer A commit).
+# Pinned by SHA: the cron rewrites public/framework.json continuously,
+# and a sliding window silently re-based the evidence.
+BRIDGE_COMMITS = (
+    "32373ec", "42708f0", "4b1dc07", "7bd90fa", "2f91d92",
+    "35ea765", "da0e8cf", "7d7a430", "30b9c7d", "167c735",
+    "eec4f91", "dceca77", "59ebff4", "392a85a", "9fa149c",
+    "0ce29c9", "4796b85", "6968211", "9a6a950", "7875b7d")
+
 HAVE_CACHE = os.path.isdir(PRICES) and len(os.listdir(PRICES)) > 5
 
 
@@ -154,14 +165,17 @@ def test_production_grade_parity_overlap():
     convention, not just the pure function."""
     from framework.position_signals import PositionSignalEngine
 
-    log = subprocess.run(
-        ["git", "log", "--format=%H %ad", "--date=short", "--",
-         "public/framework.json"],
-        capture_output=True, text=True, cwd=REPO).stdout.strip().split("\n")
+    # SLIDING-WINDOW DEFECT, fixed 2026-08-10: this took the newest 12
+    # commits of a file the cron rewrites, so the window rolled off the
+    # artifacts the report was written from — the recorded "516 grades"
+    # silently became 680 across different days while the pin still
+    # passed (it asserts floors, never the recorded count). Anchored to
+    # the commits Layer A was reported from, per docs/testing.md.
+    log = [f"{sha} pinned" for sha in BRIDGE_COMMITS[:12]]
     checked = graded = mismatched = 0
     eng = PositionSignalEngine({"positions": {}}, fetcher=None)
     details = []
-    for line in log[:12]:
+    for line in log:
         if not line:
             continue
         sha, day = line.split()
@@ -436,11 +450,10 @@ def test_pipeline_honesty_bridge():
     if not HAVE_CACHE:
         raise AssertionError("doctrine price cache missing")
     LBL2STATE = {v: k for k, v in bd.CHASSIS_LABELS.items()}
-    log = subprocess.run(
-        ["git", "log", "--format=%H", "--", "public/framework.json"],
-        capture_output=True, text=True, cwd=REPO).stdout.split()
+    # same sliding-window fix: pinned commits, not the newest 20
+    log = list(BRIDGE_COMMITS)
     overlap = {}
-    for sha in log[:20]:
+    for sha in log:
         r = subprocess.run(["git", "show", f"{sha}:public/framework.json"],
                            capture_output=True, text=True, cwd=REPO)
         if r.returncode:

@@ -197,6 +197,12 @@ def cluster_ci(df_ex, df_ap, n_boot=2000, seed=20260731):
 
 
 def run(out_path=None):
+    # pinned inputs (2026-08-10 ruling) — 5.1 reads the frame, the
+    # prices, the earnings cache and the regime series
+    from study_inputs import assert_pinned_inputs
+    assert_pinned_inputs(["prices_manifest", "earnings_dates",
+                          "regime_daily", "master_frame"],
+                         label="Build 5.1")
     with open(REGIME_PATH) as f:
         regime = json.load(f)
     regime_by_day = regime["states"]

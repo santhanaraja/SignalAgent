@@ -55,6 +55,36 @@ sys.path.insert(0, os.path.join(REPO, "scripts"))
 import numpy as np
 import pandas as pd
 
+# ---------------------------------------------------------------------
+# PINNED STUDY INPUTS (ruled 2026-08-10, Build 7's stop)
+# ---------------------------------------------------------------------
+# public/universe_ranking.json is REWRITTEN by the weekly rotation. Read
+# live, it silently changes how R28's group caps bind and a committed
+# backtest stops reproducing through no fault of its code — Build 7's
+# integrity gate caught exactly that (the 2026-08-08 rotation moved 3
+# tickers between sub-industries and 5B/6A drifted $587 of end equity).
+# The studies therefore read the artifact from a FIXED COMMIT: the one
+# their committed results were produced under. Same law as the
+# sliding-window pin in docs/testing.md — anchor to a commit, never to
+# whatever the sequence currently holds.
+PINNED_UNIVERSE_COMMIT = "1d67d1c"      # 2026-08-01 rotation
+
+
+def pinned_universe_ranking(commit=PINNED_UNIVERSE_COMMIT):
+    """The group map as of the pinned commit. An unreachable anchor
+    RAISES — a study that silently fell back to the live artifact would
+    be unreproducible again, and would say nothing about it."""
+    r = subprocess.run(
+        ["git", "show", f"{commit}:public/universe_ranking.json"],
+        capture_output=True, text=True, cwd=REPO)
+    if r.returncode != 0 or not r.stdout.strip():
+        raise RuntimeError(
+            f"pinned universe artifact {commit} unreachable — the "
+            "studies must not fall back to the live rotation "
+            f"(git said: {r.stderr.strip()[:200]})")
+    return json.loads(r.stdout)
+
+
 CACHE = os.path.join(REPO, "data", "doctrine_cache")
 PRICES = os.path.join(CACHE, "prices")
 FRAME_PATH = os.path.join(CACHE, "master_frame.csv.gz")
@@ -78,7 +108,15 @@ NATIVE_RULE = {"S1": "low_ext", "S2": "low_ext", "S3": "low_ext",
 # ------------------------------------------------------------------ data
 def load_panel(smoke=False):
     """Prices (open/close/sma20/ext), gates from the Layer A frame,
-    regime series, group map, IRX cash yield. Everything the sim reads."""
+    regime series, group map, IRX cash yield. Everything the sim reads.
+
+    Every input is pinned: the group map by COMMIT, the gitignored
+    caches by asserted content hash (2026-08-10 ruling)."""
+    if not smoke:
+        from study_inputs import assert_pinned_inputs
+        assert_pinned_inputs(["prices_manifest", "regime_daily",
+                              "master_frame", "IRX", "SPY"],
+                             label="5B panel (shared by 6A and 7)")
     with open(REGIME_PATH) as f:
         regime = json.load(f)
     states = regime["states"]
@@ -126,8 +164,7 @@ def load_panel(smoke=False):
         if r.ticker in px:
             gates_by_day[r.date].append(r)
 
-    with open(os.path.join(REPO, "public", "universe_ranking.json")) as f:
-        rk = json.load(f)
+    rk = pinned_universe_ranking()
     group_of = {}
     for g in rk.get("groups", []):
         for t in g.get("tickers", []) or []:

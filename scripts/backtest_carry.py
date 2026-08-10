@@ -87,6 +87,9 @@ class patched_gate:
 
 def load_carry_panel(smoke=False):
     """5B's panel plus the guard-OFF grade column on every frame row."""
+    if not smoke:
+        from study_inputs import assert_pinned_inputs
+        assert_pinned_inputs(["master_frame_noguard"], label="Build 7")
     panel = bs.load_panel(smoke=smoke)
     ng = pd.read_csv(NOGUARD_PATH)
     lookup = {(d, t): int(g) for d, t, g in
@@ -320,21 +323,31 @@ def paired_path_boot(c0, c1, n_boot=N_BOOT, block=BLOCK, seed=SEED):
     return {"d_cagr_ci": ci(dc), "d_mdd_ci": ci(dm)}
 
 
-def random_k_band(panel, arm, seeds=RANDOM_SEEDS, cash_daily=None):
-    """5B's selection-noise null for the UNPAIRED guard comparison
-    (declaration 9): the same arm's gate under random ordering."""
-    out = []
+def random_k_series(panel, arms, seeds=RANDOM_SEEDS, cash_daily=None):
+    """PAIRED-BY-SEED random-K (5B's addendum construction): both arms
+    run under the SAME shuffle seed, so the guard effect is measured
+    against matched selection noise instead of against two independent
+    noise clouds. Comparing a score-ordered arm to a random-ordered
+    band would conflate the ORDERING effect with the guard effect —
+    5B measured ordering as larger than any gate effect."""
+    out = {a: [] for a in arms}
     with patched_gate():
-        for s in range(seeds):
-            sim = bs.run_sim(panel, arm, "random", seed=s)
-            m = curve_metrics(sim["curve"], cash_daily)
-            out.append({"seed": s, "cagr_pct": m["cagr_pct"],
-                        "max_dd_pct": m["max_dd_pct"],
-                        "trades": len(sim["trades"])})
+        for sd in range(seeds):
+            for a in arms:
+                sim = bs.run_sim(panel, a, "random", seed=sd)
+                m = curve_metrics(sim["curve"], cash_daily)
+                out[a].append({"seed": sd, "cagr_pct": m["cagr_pct"],
+                               "max_dd_pct": m["max_dd_pct"],
+                               "trades": len(sim["trades"])})
+    return out
+
+
+def band_summary(out):
+    """One arm's marginal band."""
     cagrs = sorted(x["cagr_pct"] for x in out)
     mdds = sorted(x["max_dd_pct"] for x in out)
     pct = lambda a, q: round(float(np.percentile(a, q)), 3)
-    return {"seeds": seeds,
+    return {"seeds": len(out),
             "cagr_band": [pct(cagrs, 2.5), pct(cagrs, 97.5)],
             "cagr_median": pct(cagrs, 50),
             "mdd_band": [pct(mdds, 2.5), pct(mdds, 97.5)],
@@ -438,7 +451,9 @@ def run(smoke=False, out_path=None):
                       "gate_b_patch_max_diff_usd": round(dv, 6),
                       "gate_c_replay": "cent-exact"},
         "provenance": {"frame_hash": panel["frame_hash"],
-                       "regime": panel["regime_prov"]},
+                       "regime": panel["regime_prov"],
+                       "pinned_universe_commit":
+                           bs.PINNED_UNIVERSE_COMMIT},
         "arms": {}, "validity": {}, "comparisons": {},
     }
     for a in ARMS:
@@ -452,7 +467,13 @@ def run(smoke=False, out_path=None):
         results["arms"][a] = blk
 
     # ---- validity checks, BEFORE conclusions ------------------------
+    k = lambda t: (t["ticker"], t["entry_date"])
+    p1, p6 = {k(t) for t in s1["trades"]}, {k(t) for t in s6["trades"]}
     results["validity"] = {
+        "population_overlap": {
+            "shared": len(p1 & p6), "only_S1": len(p1 - p6),
+            "only_S6": len(p6 - p1),
+            "jaccard": round(len(p1 & p6) / len(p1 | p6), 3)},
         "trade_counts": {a: len(sims[a]["trades"]) for a in ARMS},
         "population_ratio_s6_over_s1": round(
             len(s6["trades"]) / len(s1["trades"]), 3),
@@ -482,8 +503,28 @@ def run(smoke=False, out_path=None):
 
     # ---- comparisons ----------------------------------------------
     if not smoke:
-        results["random_k"] = {a: random_k_band(panel, a, cash_daily=cd)
-                               for a in ("S1", "S6")}
+        rk = random_k_series(panel, ("S1", "S6"), cash_daily=cd)
+        results["random_k"] = {a: band_summary(rk[a]) for a in rk}
+        # THE guard test: paired by seed. Under one shuffle, does the
+        # guard-off gate beat the guard-on gate — and how often?
+        d_cagr = np.array([rk["S6"][i]["cagr_pct"] - rk["S1"][i]["cagr_pct"]
+                           for i in range(len(rk["S1"]))])
+        d_mdd = np.array([rk["S6"][i]["max_dd_pct"] - rk["S1"][i]["max_dd_pct"]
+                          for i in range(len(rk["S1"]))])
+        pctl = lambda a, q: round(float(np.percentile(a, q)), 3)
+        results["random_k_paired_by_seed"] = {
+            "seeds": len(d_cagr),
+            "d_cagr_mean": round(float(d_cagr.mean()), 3),
+            "d_cagr_band": [pctl(d_cagr, 2.5), pctl(d_cagr, 97.5)],
+            "d_cagr_share_positive_pct": round(
+                100.0 * float((d_cagr > 0).mean()), 1),
+            "d_mdd_mean": round(float(d_mdd.mean()), 3),
+            "d_mdd_band": [pctl(d_mdd, 2.5), pctl(d_mdd, 97.5)],
+            "d_mdd_share_positive_pct": round(
+                100.0 * float((d_mdd > 0).mean()), 1),
+            "observed_score_order_d_cagr": None,   # filled below
+            "observed_score_order_d_mdd": None,
+        }
     for label, a, b, kind in (("sizing_S1_S8", "S1", "S8", "paired"),
                               ("sizing_S6_S7", "S6", "S7", "paired"),
                               ("guard_S1_S6", "S1", "S6", "unpaired"),
@@ -498,16 +539,44 @@ def run(smoke=False, out_path=None):
                     4)}
         if kind == "paired":
             src = fixed1 if a == "S1" else fixed6
-            cmp_.update(paired_trade_boot(src["trades"],
-                                          sims[b]["trades"]))
+            # prereg post-registration amendment 1: the per-trade R
+            # bootstrap is VOID (R is share-scale invariant). Computed
+            # and carried VOID-LABELLED so the record shows the
+            # arithmetic; clauses 5/6 read the PORTFOLIO comparison.
+            cmp_["void_per_trade_r_bootstrap"] = {
+                **paired_trade_boot(src["trades"], sims[b]["trades"]),
+                "void_reason": ("R-multiples are share-scale invariant; "
+                                "this test cannot see a sizing change")}
             cmp_.update(paired_path_boot(sims[a]["curve"],
                                          sims[b]["curve"]))
+            cmp_["d_end_equity"] = round(
+                results["arms"][b]["full"]["end_equity"]
+                - results["arms"][a]["full"]["end_equity"], 2)
         results["comparisons"][label] = cmp_
         print(f"{label} ({kind}): dCAGR {cmp_['d_cagr_pp']:+}pp, "
               f"dMDD {cmp_['d_mdd_pp']:+}pp, dExpR "
               f"{cmp_['d_expectancy_r']:+}"
-              + (f", paired dR {cmp_.get('mean_diff_r')} CI "
-                 f"{cmp_.get('ci_r')}" if kind == "paired" else ""))
+              + (f", dEnd ${cmp_.get('d_end_equity'):,}, dCAGR CI "
+                 f"{cmp_.get('d_cagr_ci')}, dMDD CI "
+                 f"{cmp_.get('d_mdd_ci')}" if kind == "paired" else ""))
+
+    if "random_k_paired_by_seed" in results:
+        rkp = results["random_k_paired_by_seed"]
+        obs_c = results["comparisons"]["guard_S1_S6"]["d_cagr_pp"]
+        obs_m = results["comparisons"]["guard_S1_S6"]["d_mdd_pp"]
+        rkp["observed_score_order_d_cagr"] = obs_c
+        rkp["observed_score_order_d_mdd"] = obs_m
+        rkp["observed_inside_band_cagr"] = bool(
+            rkp["d_cagr_band"][0] <= obs_c <= rkp["d_cagr_band"][1])
+        rkp["observed_inside_band_mdd"] = bool(
+            rkp["d_mdd_band"][0] <= obs_m <= rkp["d_mdd_band"][1])
+        print(f"guard paired-by-seed: dCAGR mean {rkp['d_cagr_mean']:+} "
+              f"band {rkp['d_cagr_band']} ({rkp['d_cagr_share_positive_pct']}%"
+              f" of seeds positive); observed {obs_c:+} -> "
+              f"{'INSIDE' if rkp['observed_inside_band_cagr'] else 'OUTSIDE'}"
+              f" | dMDD mean {rkp['d_mdd_mean']:+} band {rkp['d_mdd_band']}"
+              f"; observed {obs_m:+} -> "
+              f"{'INSIDE' if rkp['observed_inside_band_mdd'] else 'OUTSIDE'}")
 
     # interaction (declaration 12)
     s = results["comparisons"]
@@ -516,9 +585,8 @@ def run(smoke=False, out_path=None):
         "sizing_effect_guard_off_d_cagr": s["sizing_S6_S7"]["d_cagr_pp"],
         "difference_pp": round(s["sizing_S6_S7"]["d_cagr_pp"]
                                - s["sizing_S1_S8"]["d_cagr_pp"], 3),
-        "sizing_effect_guard_on_d_r": s["sizing_S1_S8"].get("mean_diff_r"),
-        "sizing_effect_guard_off_d_r":
-            s["sizing_S6_S7"].get("mean_diff_r"),
+        "sizing_effect_guard_on_d_mdd": s["sizing_S1_S8"]["d_mdd_pp"],
+        "sizing_effect_guard_off_d_mdd": s["sizing_S6_S7"]["d_mdd_pp"],
     }
 
     canon = json.loads(json.dumps(results))

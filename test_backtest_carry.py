@@ -234,7 +234,18 @@ def test_committed_5b_reproduces_under_the_pinned_map():
     committed = json.load(open(os.path.join(
         REPO, "docs", "backtest-systems-results.json"))
     )["arms"]["S1"]["score"]["full"]
-    live_map = dict(panel["group_of"])
+    # the WORKING-TREE artifact, read from disk — not panel["group_of"],
+    # which now returns the pinned map and would compare the pin to
+    # itself (a tautology; caught on review of this very pin)
+    with open(os.path.join(REPO, "public",
+                           "universe_ranking.json")) as f:
+        rk_live = json.load(f)
+    live_map = {}
+    for g in rk_live.get("groups", []):
+        for t in g.get("tickers", []) or []:
+            sym = t.get("ticker") if isinstance(t, dict) else t
+            if sym:
+                live_map.setdefault(sym, g.get("name"))
     panel["group_of"] = _group_map(PINNED_MAP_COMMIT)
     s1 = bs.run_sim(panel, "S1", "score")
     m = curve_metrics(s1["curve"], panel["cash_daily"])
@@ -247,12 +258,45 @@ def test_committed_5b_reproduces_under_the_pinned_map():
                 if live_map[t] != panel["group_of"][t])
     added = len(set(live_map) - set(panel["group_of"]))
     dropped = len(set(panel["group_of"]) - set(live_map))
+    assert panel["group_of"] != live_map, (
+        "the working-tree artifact equals the pinned one — this pin "
+        "cannot demonstrate the drift it exists to guard against; "
+        "check that it is reading the live file, not the pinned map")
     print(f"  (7) committed 5B S1 reproduces cent-exactly under the "
           f"PINNED map {PINNED_MAP_COMMIT} (${committed['end_equity']:,}); "
-          f"the working-tree map differs by {moved} regrouped / {added} "
-          f"added / {dropped} dropped tickers"
+          f"the LIVE working-tree artifact differs by {moved} regrouped "
+          f"/ {added} added / {dropped} dropped tickers"
           + (" — DRIFTED, Build 7's gate stops on this"
              if (moved or added or dropped) else " — no drift"))
+
+
+def test_prereg_record_discipline():
+    """The prereg's ORIGINAL text is immutable; the post-registration
+    amendment is appended and LABELLED, never an edit in place."""
+    orig = subprocess.run(["git", "show",
+                           "a6bfd58:docs/backtest-carry-prereg.md"],
+                          capture_output=True, text=True, cwd=REPO).stdout
+    assert orig, "the prereg commit is unreachable"
+    assert hashlib.sha256(orig.encode()).hexdigest()[:16] == \
+        "4b11ffd563258b70", "the prereg commit's content moved"
+    now = open(os.path.join(REPO, "docs",
+                            "backtest-carry-prereg.md")).read()
+    assert now.startswith(orig.rstrip() + "\n"), (
+        "the original pre-registration was EDITED, not appended to")
+    tail = now[len(orig.rstrip()):]
+    for phrase in ("POST-REGISTRATION AMENDMENT 1",
+                   "BEFORE any performance number was read",
+                   "IMPLEMENTER, not the author",
+                   "share-scale invariant"):
+        assert phrase in tail, f"amendment missing: {phrase}"
+    # and the void test is carried, labelled, in the results
+    res = json.load(open(os.path.join(
+        REPO, "docs", "backtest-carry-results.json")))
+    for lab in ("sizing_S1_S8", "sizing_S6_S7"):
+        v = res["comparisons"][lab]["void_per_trade_r_bootstrap"]
+        assert "share-scale invariant" in v["void_reason"]
+    print("  (8) prereg: original text immutable vs a6bfd58, amendment "
+          "APPENDED and labelled, void test carried labelled: OK")
 
 
 if __name__ == "__main__":
@@ -263,4 +307,5 @@ if __name__ == "__main__":
     test_risk_budget_identity()
     test_r_multiple_is_scale_invariant()
     test_committed_5b_reproduces_under_the_pinned_map()
+    test_prereg_record_discipline()
     print("All carry-replay pins passed.")

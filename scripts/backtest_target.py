@@ -373,6 +373,11 @@ def span_block(sim, cash_daily):
 
 
 def run(smoke=False, out_path=None):
+    # 6A inherits 5B's pinned panel; it also reads the committed 5B
+    # results for its own gate (a) and the earnings cache via the frame
+    if not smoke:
+        from study_inputs import assert_pinned_inputs
+        assert_pinned_inputs(["earnings_dates"], label="Build 6A")
     panel = add_highs(load_panel(smoke=smoke))
     print(f"panel: {len(panel['px'])} tickers, {len(panel['days'])} days,"
           f" frame_hash {panel['frame_hash']}")
