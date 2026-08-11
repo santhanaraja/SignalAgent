@@ -260,19 +260,49 @@ def _analyze_ticker(symbol):
     # to a selected group (PER-509 fix 1: hardcoded "clear" made J show
     # BUY NOW here while the dashboard showed AVOID from the same function)
     group_ctx = _group_breaker_context(symbol)
-    breaker_status = (group_ctx.get("breaker_status", "clear")
-                      if group_ctx.get("status") == "resolved" else "clear")
-    trade_sig, trade_reason = compute_trade_signal(details, breaker_status=breaker_status)
-    # AN OUTAGE NEVER IMPERSONATES SAFETY: when the breaker could not be
-    # checked, the signal above rests on a PRESUMED clear. Gate it — the
-    # D-011 grade_gate precedent (no new machine state; the render is
-    # blocked and says why). "not_in_universe" is NOT gated: no group
-    # breaker exists to check, which is a verified answer.
+    _gstatus = group_ctx.get("status")
+
+    # AN OUTAGE NEVER IMPERSONATES SAFETY — and neither does an ABSENCE.
+    #
+    # Only "resolved" carries a breaker that was actually computed. Every
+    # other status previously collapsed to the literal "clear" and was fed
+    # to compute_trade_signal, which treats "clear" as a positive finding —
+    # it is the value that lets BUY NOW through. The result rendered
+    # identically to a name whose macro checks really ran and really passed.
+    #
+    # "not_in_universe" was deliberately exempted on the reasoning that no
+    # group breaker exists to check, so its absence is an answer rather than
+    # an outage. That is true about the BREAKER and false about the SIGNAL:
+    # the thesis check still never ran, so the verdict cannot claim it did.
+    # A name outside the universe was getting a BUY NOW backed by zero macro
+    # coverage, chipped the same green as a fully checked one.
+    #
+    # So the VALUE is withheld, not merely flagged — the engine's own
+    # convention (signal_engine.compute_trade_signal returns the literal
+    # "SIGNAL WITHHELD" on a degraded breaker, changing the value rather
+    # than adding a side-channel flag). Withholding at the value keeps the
+    # JSON and the rendered chip from disagreeing, which is how the old
+    # gate-only shape let a cached or third-party client print a
+    # presumed-clear verdict the server meant to suppress.
     trade_signal_gate = None
-    if group_ctx.get("status") in ("unavailable", "degraded"):
+    if _gstatus == "resolved":
+        breaker_status = group_ctx.get("breaker_status", "clear")
+        trade_sig, trade_reason = compute_trade_signal(
+            details, breaker_status=breaker_status)
+    else:
+        if _gstatus == "not_in_universe":
+            why = ("outside the selected universe — no group breaker exists "
+                   "for this name, so the thesis check never ran")
+        else:
+            why = f"breaker unverified — {group_ctx.get('reason', 'lookup failed')}"
         trade_signal_gate = (
-            f"breaker unverified — {group_ctx.get('reason', 'lookup failed')}; "
-            f"the signal below presumes a clear breaker and is NOT shown")
+            f"{why}; no trade signal is published on an unverified breaker")
+        trade_sig = "SIGNAL WITHHELD"
+        trade_reason = (
+            f"{why}. The other evidence still reads normally below — what is "
+            "missing is the macro/thesis check, and a verdict that cannot "
+            "include it is withheld rather than computed on an assumed-clear "
+            "breaker.")
     swing_signal = compute_swing_trade_signal(details, df)
     intraday_signal = compute_intraday_trade_signal(details, df)
     stage_analysis = compute_stage_analysis(details, df)

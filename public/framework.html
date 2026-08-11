@@ -148,6 +148,9 @@
   .ts-hold{background:rgba(139,148,158,.1);color:#8b949e;border:1px solid rgba(139,148,158,.2);}
   .ts-reduce{background:rgba(240,136,62,.15);color:#f0883e;border:1px solid rgba(240,136,62,.25);}
   .ts-avoid{background:rgba(248,81,73,.18);color:#f85149;border:1px solid rgba(248,81,73,.3);}
+  /* D-019 refusal chip — dashed border, deliberately not a solid verdict.
+     Matches index.html:187 and search.html:77 exactly. */
+  .ts-withheld{background:rgba(210,153,34,.12);color:#d29922;border:1px dashed rgba(210,153,34,.5);}
   .gl2-sub{background:rgba(88,166,255,.03);}
   .gl2-sub td{padding:6px 12px 6px 40px;}
   .gl2-tick{display:flex;align-items:center;gap:12px;padding:4px 0;font-size:12px;flex-wrap:wrap;border-bottom:1px solid rgba(48,54,61,.4);}
@@ -1074,6 +1077,13 @@ async function gl2Signals(){
 function gl2TsClass(ts){            // the dashboard's exact chip mapping
   if(!ts) return 'ts-hold';
   const t=ts.toUpperCase();
+  // D-019: this reads the ENGINE artifact, which publishes the literal
+  // "SIGNAL WITHHELD" when a group's breaker could not be fully checked.
+  // Without this branch it fell through to a neutral 'hold' chip — the one
+  // outcome a refusal must never be mistaken for. index.html:419 has always
+  // had it; this mapper claimed to be "the dashboard's exact mapping" and
+  // was not.
+  if(t==='SIGNAL WITHHELD') return 'ts-withheld';
   if(t==='BUY NOW') return 'ts-buy-now';
   if(t.includes('WAIT')) return 'ts-wait';
   if(t.includes('ACCUMULATE')) return 'ts-accumulate';

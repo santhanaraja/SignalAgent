@@ -411,6 +411,10 @@ function sigClass(s){return 'sig-'+(s||'hold');}
 function tsClass(ts){
   if(!ts) return 'ts-hold';
   const t=ts.toUpperCase();
+  // D-019: a withheld signal is a REFUSAL, never a neutral hold. The server
+  // can now put this literal string in trade_signal itself, so every caller
+  // of this mapper must handle it — not just the paths that check the gate.
+  if(t==='SIGNAL WITHHELD') return 'ts-withheld';
   // Position signals
   if(t==='BUY NOW') return 'ts-buy-now';
   if(t.includes('ACCUMULATE')) return 'ts-accumulate';
@@ -758,19 +762,30 @@ function renderResults(d){
   // null/loose group_context) must not silently un-gate the chip —
   // over-gating is safe, under-gating is the bug this fix exists for.
   const gcs = (d.group_context || {}).status;
-  // D-019: 'degraded' is the same non-proof as 'unavailable' — some
-  // checks never ran, so no clear may be presumed. Only 'resolved' and
-  // 'not_in_universe' positively prove the breaker state.
-  const breakerProven = (gcs === 'resolved' || gcs === 'not_in_universe');
+  // D-019: 'degraded' is the same non-proof as 'unavailable' — some checks
+  // never ran, so no clear may be presumed. 'not_in_universe' was treated
+  // here as positive proof too, on the reasoning that a name outside the
+  // universe has no group breaker to check. That proves something about the
+  // BREAKER and nothing about the SIGNAL: the thesis check still never ran,
+  // so a verdict computed as if it had is not proven either. ONLY 'resolved'
+  // means the breaker was actually computed.
+  const breakerProven = (gcs === 'resolved');
   if (d.trade_signal_gate || !breakerProven) {
     tradeBadge.textContent = 'SIGNAL WITHHELD';
     tradeBadge.className = 'ts-badge ts-withheld';
     tradeBadge.title = d.trade_signal_gate
       || 'breaker context not proven by the server response';
+    // Say WHY accurately. This used to hardcode "This is a data outage",
+    // which is true of unavailable/degraded and false of an off-universe
+    // name — there the breaker is absent, not broken. The server sends the
+    // status-specific reason; prefer it and keep the generic line only as a
+    // fallback for a response that carries none.
     document.getElementById('tradeReasoning').textContent =
-      'The group breaker could not be verified, so no trade signal is shown. '
-      + 'This is a data outage, not a neutral reading — the signal is '
-      + 'withheld rather than computed on an assumed-clear breaker.';
+      (d.trade_signal_gate
+        ? d.trade_signal_gate.charAt(0).toUpperCase() + d.trade_signal_gate.slice(1) + '.'
+        : 'The group breaker could not be verified, so no trade signal is shown.')
+      + ' The signal is withheld rather than computed on an assumed-clear '
+      + 'breaker; the other evidence on this page is unaffected.';
   } else {
     tradeBadge.textContent = d.trade_signal;
     tradeBadge.className = 'ts-badge ' + tsClass(d.trade_signal);

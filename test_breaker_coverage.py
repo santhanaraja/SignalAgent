@@ -411,9 +411,15 @@ def test_pages_render_degraded_distinctly():
     sr = rd("public/search.html")
     assert "gc.status === 'degraded'" in sr
     assert "GROUP BREAKER PARTIALLY UNVERIFIED" in sr
-    # the gate predicate must NOT admit degraded as proof
-    assert "gcs === 'resolved' || gcs === 'not_in_universe'" in sr
-    assert "'degraded'" not in sr.split("const breakerProven")[1][:200]
+    # The gate predicate must admit ONLY 'resolved' as proof. This used to
+    # read `gcs === 'resolved' || gcs === 'not_in_universe'`, and this pin
+    # asserted that string — pinning the defect. 'not_in_universe' proves
+    # something about the BREAKER (there is none) and nothing about the
+    # SIGNAL (the thesis check still never ran).
+    assert "const breakerProven = (gcs === 'resolved');" in sr
+    tail = sr.split("const breakerProven")[1][:200]
+    for bad in ("'degraded'", "'not_in_universe'", "'unavailable'"):
+        assert bad not in tail, f"breakerProven admits {bad} as proof"
 
     fw = rd("public/framework.html")
     assert "brkDeg" in fw and "breaker_checks_expected" in fw
@@ -616,13 +622,18 @@ def test_degraded_gate_is_behavioural():
     BEHAVIOUR (review finding: it was source-grep only). Executes the
     page's own gate predicate over every shape D-019 introduces."""
     sr = open(os.path.join(REPO, "public", "search.html")).read()
-    assert "gcs === 'resolved' || gcs === 'not_in_universe'" in sr, \
+    assert "const breakerProven = (gcs === 'resolved');" in sr, \
         "the gate predicate changed — re-derive this pin"
 
     def withholds(payload):
         gcs = (payload.get("group_context") or {}).get("status")
-        proven = gcs in ("resolved", "not_in_universe")
+        proven = gcs == "resolved"          # ONLY a computed breaker proves
         return bool(payload.get("trade_signal_gate")) or not proven
+
+    # not_in_universe used to be treated as proof and rendered a verdict.
+    assert withholds({"trade_signal": "BUY NOW",
+                      "group_context": {"status": "not_in_universe"}}), \
+        "an off-universe name still renders a verdict with no macro check"
 
     must_withhold = [
         {"trade_signal": "BUY NOW",
@@ -815,6 +826,159 @@ def test_both_flavours_gate_everywhere():
           "are not over-gated: OK")
 
 
+def _synthetic_frame(n=140):
+    """A clean uptrend — enough bars to score, and healthy enough that a
+    RESOLVED-clear control produces a real, publishable verdict. Without
+    that control the withhold assertions could pass vacuously."""
+    import numpy as np
+    import pandas as pd
+    idx = pd.date_range("2026-01-02", periods=n, freq="B")
+    close = pd.Series(np.linspace(100.0, 150.0, n), index=idx)
+    return pd.DataFrame({"Open": close * 0.995, "High": close * 1.01,
+                         "Low": close * 0.99, "Close": close,
+                         "Volume": pd.Series([1_000_000] * n, index=idx)})
+
+
+def test_unresolved_breaker_withholds_the_trade_signal():
+    """An unresolvable breaker context must WITHHOLD, never present as clear.
+
+    The defect: every non-'resolved' status collapsed to the literal
+    "clear" and was fed to compute_trade_signal, where "clear" is a
+    positive finding — the value that lets BUY NOW through. Worse,
+    'not_in_universe' was exempted from the gate entirely, so a name
+    outside the universe published a verdict backed by zero macro coverage
+    and chipped identically to a fully checked one.
+    """
+    import ticker_api
+    df = _synthetic_frame()
+    saved = (ticker_api.fetch_data, ticker_api.fetch_fundamentals_yfinance,
+             ticker_api._group_breaker_context, dict(ticker_api._cache))
+    try:
+        ticker_api.fetch_data = lambda sym, period="6mo": df
+        ticker_api.fetch_fundamentals_yfinance = lambda sym: {}
+
+        # CONTROL first: a resolved-clear breaker must still publish, or
+        # every assertion below is vacuous.
+        ticker_api._cache.clear()
+        ticker_api._group_breaker_context = lambda s: {
+            "status": "resolved", "group": "G", "breaker_status": "clear"}
+        ok = ticker_api._analyze_ticker("AAA")
+        publishable = {"BUY NOW", "WAIT FOR PULLBACK", "ACCUMULATE ON DIP",
+                       "HOLD POSITION", "REDUCE/EXIT", "AVOID"}
+        assert ok["trade_signal"] in publishable, ok["trade_signal"]
+        assert ok["trade_signal_gate"] is None
+        print(f"  (12a) control: a RESOLVED clear breaker still publishes "
+              f"{ok['trade_signal']!r}: OK")
+
+        # Every non-resolved status withholds — including not_in_universe.
+        for status, ctx in (
+                ("not_in_universe", {"status": "not_in_universe"}),
+                ("unavailable", {"status": "unavailable", "group": "G",
+                                 "reason": "signals artifact missing",
+                                 "breaker_status": "unknown"}),
+                ("degraded", {"status": "degraded", "group": "G",
+                              "breaker_status": "clear",
+                              "reason": "a check never ran"})):
+            ticker_api._cache.clear()
+            ticker_api._group_breaker_context = lambda s, c=ctx: c
+            r = ticker_api._analyze_ticker("AAA")
+            assert r["trade_signal"] == "SIGNAL WITHHELD", \
+                f"{status} published {r['trade_signal']!r}"
+            assert r["trade_signal_gate"], f"{status} carries no gate reason"
+            assert "clear" not in (r["trade_signal"] or "")
+        print("  (12b) not_in_universe, unavailable and degraded all "
+              "withhold the VALUE, not merely flag it: OK")
+
+        # THE FAILURE, DEMONSTRATED. The old code fed "clear" for exactly
+        # these statuses. On this same evidence that produces a real
+        # verdict — which is what a user saw, indistinguishable from a
+        # checked one.
+        from signal_engine import compute_trade_signal, score_stock_v2
+        _s, _sig, details = score_stock_v2(df)
+        old, _ = compute_trade_signal(details, breaker_status="clear")
+        assert old in publishable, old
+        assert old != "SIGNAL WITHHELD"
+        print(f"  (12c) the old collapse-to-clear yields {old!r} on the same "
+              "evidence — a verdict backed by no macro check at all: OK")
+
+        # And the JSON must not disagree with the chip: the withheld value
+        # is in trade_signal itself, so a cached or third-party client
+        # cannot render a presumed-clear verdict the server suppressed.
+        ticker_api._cache.clear()
+        ticker_api._group_breaker_context = lambda s: {"status": "not_in_universe"}
+        r = ticker_api._analyze_ticker("AAA")
+        assert r["trade_signal"] == "SIGNAL WITHHELD" and r["trade_signal_gate"]
+        print("  (12d) the withheld state lives in trade_signal itself, so "
+              "the JSON and the rendered chip cannot disagree: OK")
+    finally:
+        (ticker_api.fetch_data, ticker_api.fetch_fundamentals_yfinance,
+         ticker_api._group_breaker_context, cache) = saved
+        ticker_api._cache.clear()
+        ticker_api._cache.update(cache)
+
+
+def _js_function_body(src, name):
+    """Extract a JS function body by brace matching, so a branch found here
+    is genuinely INSIDE the mapper and not merely elsewhere in the file."""
+    start = src.index(f"function {name}(")
+    open_brace = src.index("{", start)
+    depth, i = 0, open_brace
+    while i < len(src):
+        if src[i] == "{":
+            depth += 1
+        elif src[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return src[open_brace:i + 1]
+        i += 1
+    raise AssertionError(f"unbalanced braces in {name}")
+
+
+def test_every_chip_mapper_handles_withheld():
+    """All THREE chip mappers must treat SIGNAL WITHHELD as a refusal.
+
+    framework.html's gl2TsClass called itself "the dashboard's exact chip
+    mapping" and had no such branch, so a withheld signal fell through to
+    ts-hold — the one outcome a refusal must never be mistaken for. It
+    reads the engine artifact, which publishes that literal string, so it
+    was reachable.
+    """
+    rd = lambda p: open(os.path.join(REPO, p)).read()
+    mappers = [("public/index.html", "tsClass"),
+               ("public/search.html", "tsClass"),
+               ("public/framework.html", "gl2TsClass")]
+    for path, fn in mappers:
+        src = rd(path)
+        body = _js_function_body(src, fn)
+        assert "SIGNAL WITHHELD" in body, \
+            f"{path}:{fn} has no SIGNAL WITHHELD branch — a refusal falls " \
+            f"through to a neutral chip"
+        # the branch must return the refusal class, not a verdict class
+        line = next(l for l in body.splitlines() if "SIGNAL WITHHELD" in l
+                    and "return" in l)
+        assert "ts-withheld" in line, f"{path}:{fn} maps withheld to {line!r}"
+        # and the branch must come BEFORE any fallthrough return
+        assert body.index("SIGNAL WITHHELD") < body.rindex("return"), \
+            f"{path}:{fn} reaches its fallthrough before the withheld branch"
+        # the class must actually be styled on that page
+        assert ".ts-withheld{" in src, \
+            f"{path} maps to ts-withheld but never styles it"
+    print(f"  (13a) all {len(mappers)} chip mappers map SIGNAL WITHHELD to "
+          "ts-withheld, ahead of their fallthrough, and style it: OK")
+
+    # THE FAILURE, DEMONSTRATED — mirror the mapper on a body with the
+    # branch removed and confirm it lands on the neutral chip.
+    fw = _js_function_body(rd("public/framework.html"), "gl2TsClass")
+    stripped = "\n".join(l for l in fw.splitlines()
+                         if "SIGNAL WITHHELD" not in l)
+    assert "SIGNAL WITHHELD" not in stripped
+    assert stripped.rstrip().rstrip("}").rstrip().endswith("return 'ts-hold';"), \
+        "the fallthrough is no longer ts-hold — re-check what a stripped " \
+        "mapper would render"
+    print("  (13b) with the branch removed, framework.html's mapper falls "
+          "through to ts-hold — the regression this pin guards: OK")
+
+
 if __name__ == "__main__":
     print("\n=== D-019 breaker coverage pins ===")
     test_full_coverage_reads_clear()
@@ -828,4 +992,6 @@ if __name__ == "__main__":
     test_degraded_gate_is_behavioural()
     test_degraded_input_and_published_signal()
     test_both_flavours_gate_everywhere()
+    test_unresolved_breaker_withholds_the_trade_signal()
+    test_every_chip_mapper_handles_withheld()
     print("\nAll breaker-coverage tests passed.\n")

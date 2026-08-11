@@ -646,7 +646,13 @@ def test_breaker_outage_never_presumes_clear():
     None (or worse, to a ctx carrying a FABRICATED breaker_status="clear"),
     and the caller then computed a real BUY NOW on a breaker nobody
     verified. Each failure must now report `unavailable` and gate the
-    signal; only a genuine not-in-universe answer may proceed unguarded."""
+    signal.
+
+    The CONTEXT RESOLVER still answers `not_in_universe` — that remains a
+    true statement about the breaker (there is none). What changed is what
+    the caller does with it: an off-universe name no longer proceeds
+    unguarded, because a verdict that never ran a thesis check may not be
+    published as though it had."""
     import ticker_api
     tmp = tempfile.mkdtemp(prefix="brk_")
     old = ticker_api.DATA_DIR
@@ -734,11 +740,15 @@ def test_swallowed_fetch_honest_failure_states():
     # proxy — it survives a refactor that renders the chip anyway). Execute
     # the page's own gate predicate over every payload shape that must
     # withhold, and assert no signal string can win.
-    _pred = ("gcs === 'resolved' || gcs === 'not_in_universe'")
+    # ONLY 'resolved' proves the breaker was computed. 'not_in_universe' was
+    # admitted here too, on the reasoning that a name with no group has no
+    # breaker to check — true of the BREAKER, false of the SIGNAL, since the
+    # thesis check still never ran and the verdict was published as if it had.
+    _pred = "const breakerProven = (gcs === 'resolved');"
     assert _pred in sr, "the gate predicate changed — re-derive this pin"
     def _withholds(payload):
         gcs = (payload.get("group_context") or {}).get("status")
-        breaker_proven = gcs in ("resolved", "not_in_universe")
+        breaker_proven = gcs == "resolved"
         return bool(payload.get("trade_signal_gate")) or not breaker_proven
     must_withhold = [
         {"trade_signal": "BUY NOW", "trade_signal_gate": "breaker unverified",
@@ -751,11 +761,14 @@ def test_swallowed_fetch_honest_failure_states():
     ]
     for p in must_withhold:
         assert _withholds(p), f"a BUY NOW would render on {p}"
+    # not_in_universe MOVED from this list to must_withhold: an off-universe
+    # name gets no verdict, because none of its macro checks ran.
+    assert _withholds({"trade_signal": "BUY NOW",
+                       "group_context": {"status": "not_in_universe"}}), \
+        "an off-universe name still renders a verdict with no macro check"
     for p in ({"trade_signal": "BUY NOW",
                "group_context": {"status": "resolved",
-                                 "breaker_status": "clear"}},
-              {"trade_signal": "BUY NOW",
-               "group_context": {"status": "not_in_universe"}}):
+                                 "breaker_status": "clear"}},):
         assert not _withholds(p), f"a proven-breaker signal was withheld: {p}"
 
     # the withheld signal must not be PERSISTED as fact either — the search
@@ -767,7 +780,7 @@ def test_swallowed_fetch_honest_failure_states():
     #  * new page + OLD server (no gate field / loose group_context) must
     #    still withhold — gate on positive proof, not on a field's presence
     assert "breakerProven" in sr and "!breakerProven" in sr
-    assert "gcs === 'resolved' || gcs === 'not_in_universe'" in sr
+    assert "const breakerProven = (gcs === 'resolved');" in sr
     #  * OLD cached page + NEW server must not read "clear": every
     #    unavailable result carries breaker_status "unknown", which the old
     #    page's own non-clear branch renders as an alarming breaker box
