@@ -736,6 +736,303 @@ def test_unclassified_inclusion_is_recorded():
     print(f"  (9e) committed inclusions: {declared}: OK")
 
 
+# ----------------------------------------------------------------------
+# 10. An UNMEASURABLE market cap is not a small company (D-022).
+# ----------------------------------------------------------------------
+class _CapYF:
+    """yfinance stand-in for the market-cap fetch.
+
+    Per ticker, `fast` and `info` hold a LIST of outcomes consumed one per
+    call (the last repeats forever), so a retry pass can succeed where the
+    first attempt failed — the behaviour the ladder exists for. An outcome is
+    either a number, None (the endpoint answered and omitted the field), or
+    the string "raise" (the call itself failed, e.g. a rate limit).
+    """
+
+    def __init__(self, fast, info=None, currency="USD"):
+        self.fast = {t: list(v) for t, v in fast.items()}
+        self.info = {t: list(v) for t, v in (info or {}).items()}
+        self.currency = currency
+        self.calls = []
+
+    def _next(self, table, sym):
+        seq = table.get(sym)
+        if not seq:
+            return None
+        return seq.pop(0) if len(seq) > 1 else seq[0]
+
+    def Ticker(self, sym):
+        outer = self
+
+        class _T:
+            @property
+            def fast_info(self):
+                outer.calls.append(("fast_info", sym))
+                val = outer._next(outer.fast, sym)
+                if val == "raise":
+                    raise RuntimeError("Too Many Requests. Rate limited.")
+                return {"marketCap": val, "currency": outer.currency}
+
+            @property
+            def info(self):
+                outer.calls.append(("info", sym))
+                val = outer._next(outer.info, sym)
+                if val == "raise":
+                    raise RuntimeError("Too Many Requests. Rate limited.")
+                return {"marketCap": val, "currency": outer.currency}
+        return _T()
+
+
+def _with_cap_yf(fake, fn):
+    saved_mod = sys.modules.get("yfinance")
+    saved_sleep = ub.time.sleep
+    sys.modules["yfinance"] = fake
+    ub.time.sleep = lambda _s: None          # the ladder must not cost 17s here
+    try:
+        return fn()
+    finally:
+        ub.time.sleep = saved_sleep
+        if saved_mod is None:
+            sys.modules.pop("yfinance", None)
+        else:
+            sys.modules["yfinance"] = saved_mod
+
+
+def _rot_5b():
+    rot = dict(ub.DEFAULT_ROTATION)
+    rot["composite_weights"] = dict(ub.DEFAULT_ROTATION["composite_weights"])
+    rot.update({"top_n": 15, "min_candidates": 3, "max_tickers_per_group": 7,
+                "min_composite_score": 50, "min_history_days": 90,
+                "min_avg_volume": 500_000, "min_market_cap": 5_000_000_000})
+    return rot
+
+
+def test_unmeasurable_mcap_is_not_a_small_company():
+    """A cap the build could not READ must not publish as a cap it MEASURED.
+
+    The failure this pin exists for, measured 2026-08-11: the cap fetch runs
+    straight after the ~550-ticker price download, trips Yahoo's rate limiter
+    partway down a SORTED ticker list, and 48 of 546 names arrive with no cap
+    — positions 498-545, a contiguous alphabetical suffix. 34 of them would
+    otherwise have qualified, every one with a true cap far ABOVE the floor
+    (WMT $897B, XOM $657B, UNH $371B). All 34 published as
+    `failed_mcap_gate`: "market cap below min_market_cap USD".
+    """
+    rot = _rot_5b()
+    group = {"Test Industry": ["AAA", "BBB", "CCC", "WMT"]}
+    metrics = {t: _metric(t) for t in ["AAA", "BBB", "CCC", "WMT"]}
+
+    # (a) THE FAILURE, DEMONSTRATED. WMT is a $897B company whose cap this
+    #     build could not read. It must be held out — an unverified size must
+    #     not buy admission — but it must not be published as a small cap.
+    caps = {t: {"market_cap_usd": 50e9} for t in ["AAA", "BBB", "CCC"]}
+    caps["WMT"] = {"market_cap_usd": None, "outcome": "unavailable"}
+    ranking, _ = ub.rank_and_select(group, metrics, caps, rot)
+    g = ranking[0]
+    assert "WMT" not in [q["ticker"] for q in g["qualifiers"]], \
+        "an unmeasured cap bought admission — it must fail CLOSED"
+    assert ub._gate_status(g["disqualified"]["WMT"]) == "mcap_unavailable", \
+        "an unmeasurable cap published as a size verdict"
+    print("  (10a) an unmeasured cap fails closed AND publishes as "
+          "mcap_unavailable, not failed_mcap_gate: OK")
+
+    # (b) The other side of the distinction: a cap we DID measure, below the
+    #     floor, must still read as the size verdict it is.
+    caps_small = dict(caps)
+    caps_small["WMT"] = {"market_cap_usd": 399e6, "outcome": "fast_info"}
+    ranking_s, _ = ub.rank_and_select(group, metrics, caps_small, rot)
+    assert ub._gate_status(
+        ranking_s[0]["disqualified"]["WMT"]) == "failed_mcap_gate"
+    assert ub._gate_status(ranking_s[0]["disqualified"]["WMT"]) != \
+        ub._gate_status(ranking[0]["disqualified"]["WMT"]), \
+        "measured-and-small is indistinguishable from could-not-measure"
+    print("  (10b) a MEASURED sub-floor cap still reads failed_mcap_gate, and "
+          "the two statuses differ: OK")
+
+    # (c) The distinction has to survive into the PUBLISHED artifact — the
+    #     audit row and the legend, not just the helper's return value.
+    ub.audit_ticker_rows(ranking, metrics, rot)
+    row = {r["ticker"]: r for r in ranking[0]["tickers"]}["WMT"]
+    assert row["status"] == "mcap_unavailable", row
+    assert row["fails"] == [ub.MCAP_UNMEASURED], row
+    payload = ub.build_ranking_payload({
+        "built_at": "2026-08-11T00:00:00+00:00", "week_key": "2026-W33",
+        "rotation_config": rot, "candidates_total": 4, "groups": {},
+        "ranking": ranking, "mcap_coverage": ub.mcap_coverage(caps, ranking)})
+    legend = payload["status_legend"]
+    assert "mcap_unavailable" in legend and "failed_mcap_gate" in legend
+    assert legend["mcap_unavailable"] != legend["failed_mcap_gate"]
+    assert "below" not in legend["mcap_unavailable"].split("—")[0], \
+        "the unavailable legend still describes the company as small"
+    assert payload["mcap_coverage"]["degraded"] == 1
+    print("  (10c) the published artifact carries mcap_unavailable, a "
+          "distinct legend entry, and the coverage record: OK")
+
+    # (c2) The `fails` TEXT is user-visible too — index.html renders it as the
+    #      near-miss tooltip (`n.fails.join('; ')`). A correct status with a
+    #      reason string that reads "$0M<$5,000M" still tells a human the
+    #      company is small. Mutation-checked: this is the assertion that
+    #      catches a token reverted to size-verdict shape.
+    assert "$" not in ub.MCAP_UNMEASURED and "<" not in ub.MCAP_UNMEASURED, \
+        f"the published reason reads like a size comparison: {ub.MCAP_UNMEASURED}"
+
+    # (c3) ...and the dashboard's own annotation, parsed OUT of the page
+    #      rather than restated here, so reinstating 'small cap' turns this
+    #      red instead of leaving the pin agreeing with a stale copy.
+    with open(os.path.join(REPO, "public", "index.html")) as f:
+        page = f.read()
+    note_map = page.split("function nmNote(s){return ", 1)[1].split("}[s]", 1)[0]
+    assert "mcap_unavailable:" in note_map, \
+        "index.html has no annotation for mcap_unavailable"
+    annotation = note_map.split("mcap_unavailable:", 1)[1].split("'")[1]
+    assert "small" not in annotation.lower(), \
+        f"the dashboard still calls an unmeasurable cap {annotation!r}"
+    print(f"  (10c2) the reason string and the dashboard annotation "
+          f"({annotation!r}) both refuse to describe the company as small: OK")
+
+    # (d) COVERAGE, the etf_coverage contract: degraded is ZERO when healthy,
+    #     and the harm is NAMED, not merely counted.
+    healthy = {t: {"market_cap_usd": 50e9, "outcome": "fast_info"}
+               for t in ["AAA", "BBB", "CCC", "WMT"]}
+    rk_ok, _ = ub.rank_and_select(group, metrics, healthy, rot)
+    cov_ok = ub.mcap_coverage(healthy, rk_ok)
+    assert cov_ok["degraded"] == 0 and cov_ok["blocked"] == [], cov_ok
+    assert cov_ok["by_outcome"] == {"fast_info": 4}, cov_ok
+    cov_bad = ub.mcap_coverage(caps, ranking)
+    assert cov_bad["degraded"] == 1 and cov_bad["blocked"] == ["WMT"], cov_bad
+    assert cov_bad["unavailable_tickers"] == ["WMT"], cov_bad
+    print("  (10d) coverage: degraded 0 when healthy; when not, the blocked "
+          "name is named rather than counted: OK")
+
+    # (e) `blocked` is the name that would OTHERWISE have qualified — a name that
+    #     fails another gate anyway is not counted as harm.
+    metrics_lowscore = dict(metrics)
+    metrics_lowscore["WMT"] = _metric("WMT", score=20)
+    rk_low, _ = ub.rank_and_select(group, metrics_lowscore, caps, rot)
+    cov_low = ub.mcap_coverage(caps, rk_low)
+    assert cov_low["degraded"] == 1, "the cap is still unmeasured"
+    assert cov_low["blocked"] == [], \
+        "a name that fails the score gate anyway is not cap-fetch harm"
+    print("  (10e) a name disqualified on score too is degraded but NOT "
+          "blocked — harm is what the missing cap actually cost: OK")
+
+
+def test_unmeasured_caps_that_change_the_book_refuse_to_rotate():
+    """The gate. Neither existing floor can see this failure.
+
+    POOL_RETENTION_FLOOR counts CANDIDATES and runs before the price fetch, so
+    a cap wave cannot move it. MIN_MCAP_COVERAGE catches only a catastrophe:
+    at 0.70 it lets nearly a third of the universe be disqualified silently
+    while the build reports success — in the measured run coverage was 91%
+    and it stayed quiet through all 34 casualties.
+    """
+    rot = _rot_5b()
+    group = {"Test Industry": ["AAA", "BBB", "CCC", "WMT"]}
+    metrics = {t: _metric(t) for t in ["AAA", "BBB", "CCC", "WMT"]}
+    healthy = {t: {"market_cap_usd": 50e9} for t in group["Test Industry"]}
+
+    # Healthy: silent. The gate must not fire on a clean rotation.
+    material, detail = ub.mcap_materiality(group, metrics, healthy, rot)
+    assert material is False and detail["changed_tickers"] == [], detail
+    print("  (11a) a rotation with every cap resolved is not material — the "
+          "gate is silent in the healthy state: OK")
+
+    # THE FAILURE, DEMONSTRATED: WMT's cap goes missing and the book changes.
+    caps = dict(healthy)
+    caps["WMT"] = {"market_cap_usd": None}
+    material, detail = ub.mcap_materiality(group, metrics, caps, rot)
+    assert material is True, "a name dropped by a fetch failure was not material"
+    assert detail["lost_to_unmeasured"] == ["WMT"], detail
+    assert detail["changed_groups"] == ["Test Industry"], detail
+    print("  (11b) an unmeasured cap that costs the book a holding is "
+          f"material, and names it: {detail['lost_to_unmeasured']}: OK")
+
+    # ...but an unmeasured cap that costs NOTHING must not stop the week.
+    # WMT here is outranked inside its own group regardless of its cap, so
+    # the missing measurement changes nothing that gets traded.
+    rot_one = dict(rot, max_tickers_per_group=1)
+    metrics_out = dict(metrics)
+    metrics_out["WMT"] = _metric("WMT", score=51)     # qualifies, ranks last
+    for t, s in (("AAA", 90), ("BBB", 85), ("CCC", 80)):
+        metrics_out[t] = _metric(t, score=s)
+    material, detail = ub.mcap_materiality(group, metrics_out, caps, rot_one)
+    assert material is False, \
+        f"a cap failure that changes nothing tradeable stopped the rotation: {detail}"
+    print("  (11c) an unmeasured cap on a name that would not have been "
+          "selected anyway does NOT stop the rotation: OK")
+
+    # The retention floor genuinely cannot see this — pinned, not assumed.
+    assert ub.pool_retention_ok(550, 550), \
+        "precondition: an unchanged candidate pool passes the retention floor"
+    import inspect
+    body = inspect.getsource(ub.build_active_universe)
+    assert body.index("POOL_RETENTION_FLOOR") < body.index("_fetch_market_caps"), \
+        "the retention floor is evaluated before caps are fetched"
+    assert body.index("mcap_materiality") < body.index("audit_ticker_rows"), \
+        "materiality must be decided before the artifact is assembled"
+    print("  (11d) the retention floor is evaluated BEFORE the cap fetch, so "
+          "a cap wave cannot move it — this gate is the only one that sees "
+          "it: OK")
+
+
+def test_cap_fetch_retries_and_falls_back_to_the_other_endpoint():
+    """The fetch tries harder, and says how it got each answer.
+
+    Honest about what this buys: the ladder recovers ISOLATED transient
+    failures. It does NOT rescue a rate-limit wave — measured 2026-08-11, the
+    48 throttled names survived 2s, 3s, 8s and 15s pauses and a probe 3.5
+    minutes later, so the wave is handled by refusing to publish, not here.
+    """
+    # A ticker that fails the first pass and answers on a retry is recovered,
+    # and the artifact records that it took a retry.
+    fake = _CapYF(fast={"AAA": [50e9], "BBB": ["raise", 20e9]})
+    caps = _with_cap_yf(fake, lambda: ub._fetch_market_caps(["AAA", "BBB"]))
+    assert caps["BBB"]["market_cap_usd"] == 20e9, caps["BBB"]
+    assert caps["AAA"]["outcome"] == "fast_info"
+    assert caps["BBB"]["outcome"] == "fast_info_retry", caps["BBB"]
+    print("  (12a) a transient first-pass failure is recovered by the ladder "
+          "and recorded as fast_info_retry: OK")
+
+    # fast_info exhausted, .info carries it — the mirror of the fallback
+    # signal_engine gained in 4e5eec4, where .info omitted marketCap for HPQ
+    # and ADI while fast_info had it. Each module now tries both endpoints.
+    fake = _CapYF(fast={"AAA": [50e9], "HPQ": ["raise"]}, info={"HPQ": [30e9]})
+    caps = _with_cap_yf(fake, lambda: ub._fetch_market_caps(["AAA", "HPQ"]))
+    assert caps["HPQ"]["market_cap_usd"] == 30e9, caps["HPQ"]
+    assert caps["HPQ"]["outcome"] == "info_fallback", caps["HPQ"]
+    assert caps["HPQ"]["source"] == "info", caps["HPQ"]
+    assert ("info", "HPQ") in fake.calls and ("info", "AAA") not in fake.calls, \
+        "the .info fallback ran for a ticker that never needed it"
+    print("  (12b) fast_info exhausted -> .info rescues the cap, records the "
+          "endpoint, and is not called for names that resolved: OK")
+
+    # Everything fails: unavailable, named, and NOT a number.
+    fake = _CapYF(fast={"AAA": [50e9], "ZZZ": ["raise"]}, info={"ZZZ": ["raise"]})
+    caps = _with_cap_yf(fake, lambda: ub._fetch_market_caps(["AAA", "ZZZ"]))
+    assert caps["ZZZ"]["market_cap_usd"] is None, caps["ZZZ"]
+    assert caps["ZZZ"]["outcome"] == "unavailable", caps["ZZZ"]
+    print("  (12c) both endpoints exhausted -> outcome 'unavailable', never a "
+          "fabricated cap: OK")
+
+    # An endpoint that ANSWERS and omits the field is the same unavailable,
+    # not a zero. (The HPQ/ADI shape from 4e5eec4, with no fallback left.)
+    fake = _CapYF(fast={"ZZZ": [None]}, info={"ZZZ": [None]})
+    caps = _with_cap_yf(fake, lambda: ub._fetch_market_caps(["ZZZ"]))
+    assert caps["ZZZ"]["market_cap_usd"] is None
+    assert caps["ZZZ"]["outcome"] == "unavailable", caps["ZZZ"]
+    print("  (12d) an endpoint that answers WITHOUT the field is unavailable, "
+          "not zero: OK")
+
+    # A cap measured in a currency we cannot convert is its own outcome —
+    # knowing the size and not the rate is a third state.
+    fake = _CapYF(fast={"XXX": [1e12]}, currency="ZZZ")
+    caps = _with_cap_yf(fake, lambda: ub._fetch_market_caps(["XXX"]))
+    assert caps["XXX"]["market_cap"] == 1e12 and caps["XXX"]["market_cap_usd"] is None
+    assert caps["XXX"]["outcome"] == "fx_unconvertible", caps["XXX"]
+    print("  (12e) measured but unconvertible is fx_unconvertible, not "
+          "'unavailable' — it says WHICH fetch failed: OK")
+
+
 if __name__ == "__main__":
     print("\n=== pool-builder pins (pool v3, 2026-08-11) ===")
     test_nasdaq100_is_read_not_fetched()
@@ -747,4 +1044,7 @@ if __name__ == "__main__":
     test_cache_ttl_is_below_the_rotation_interval()
     test_pool_retention_floor()
     test_unclassified_inclusion_is_recorded()
+    test_unmeasurable_mcap_is_not_a_small_company()
+    test_unmeasured_caps_that_change_the_book_refuse_to_rotate()
+    test_cap_fetch_retries_and_falls_back_to_the_other_endpoint()
     print("\nAll pool-builder pins passed.\n")

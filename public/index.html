@@ -351,7 +351,10 @@ function ytdColor(v){return (v===null||v===undefined||isNaN(v))?'var(--dim)':(v>
 /* Near-miss strip: rounded YTD + short annotation for gate failures
    (score-gate failures show no note — the score itself says it) */
 function nmYtd(v){return (v===null||v===undefined||isNaN(v))?'—':(v>=0?'+':'')+Math.round(v)+'%';}
-function nmNote(s){return {failed_volume_gate:'low vol',failed_mcap_gate:'small cap',failed_history_gate:'short history'}[s]||'';}
+/* 'cap unavailable' is deliberately NOT 'small cap' (D-022): the name was
+   held out because the build could not READ its size, which is a fetch
+   failure, not a finding about the company. */
+function nmNote(s){return {failed_volume_gate:'low vol',failed_mcap_gate:'small cap',failed_history_gate:'short history',mcap_unavailable:'cap unavailable'}[s]||'';}
 
 /* Score-breakdown tooltip (components emitted by score_stock — see docs/scoring.md).
    Thresholds mirror signal_engine: bands 75/60/45/30, qualifier gate 50. */

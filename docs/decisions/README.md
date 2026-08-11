@@ -63,6 +63,7 @@ flowchart TD
 | [D-018](D-018-close-basis-position-ladder.md) | The close-basis law extends to the position ladder — transitions only on confirmed closes; intraday previews, never transitions; gap-proof catch-up replay | 2026-07-23 | Ruled | — |
 | [D-019](D-019-breaker-coverage.md) | Breaker coverage, not outcome — an outage never impersonates safety; three flavours of incomplete; trigger still wins | 2026-07-25 | Ruled | — |
 | [D-020a](D-020a-ytd-anchor-cap.md) | One honest YTD — real prior-year-close anchor on both paths; YTD component capped flat at the curve's peak above it; scorer versioned (v1 frozen with three pinned anchors) | 2026-08-09 | Ruled | — |
+| [D-022](D-022-unmeasurable-market-cap.md) | An unmeasurable market cap is not a small company — `mcap_unavailable` split from `failed_mcap_gate`, coverage record, and a rotation that refuses when missing caps change the book | 2026-08-11 | Ruled | — |
 
 Also in this directory: [CHAT-RULINGS](CHAT-RULINGS.md) — the living
 registry of operator rulings issued in session (scope calls,

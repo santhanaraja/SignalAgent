@@ -74,7 +74,28 @@ MIN_MCAP_COVERAGE = 0.70    # share of metric-valid tickers with a market cap
 # Share of the PREVIOUS rotation's candidate pool that must survive into this
 # one. A degraded feed shows up here as a shrink long before it shows up as a
 # thin universe — 15 groups can be assembled from a badly depleted pool.
+#
+# NOTE (D-022): this floor CANNOT see a market-cap fetch failure. It counts
+# candidates, and it is evaluated at step 1b, before the price fetch and long
+# before caps are read. A wave that strips the cap off 48 names leaves the
+# candidate count identical. Nothing about a mass cap failure moves this
+# number, so the cap gate needs its own refusal (see mcap_materiality).
 POOL_RETENTION_FLOOR = 0.90
+
+# Retry ladder for the market-cap fetch: (workers, seconds to pause first).
+# Deliberately modest — a rate-limit wave outlasts anything a build can wait
+# out (measured: still throttled 3.5 minutes later), so these passes exist to
+# recover ISOLATED transient failures, not to rescue a throttled session.
+MCAP_RETRY_LADDER = ((2, 2), (2, 5), (2, 10))
+
+# The `fails` token for a cap that could not be MEASURED, kept distinct from
+# the below-floor token so `_gate_status` can publish the two apart. A cap we
+# failed to read is not a small company (D-019).
+MCAP_UNMEASURED = "mcap unmeasured"
+
+# Largest unresolved set still worth trying on `.info`. Above this it is a
+# throttled session rather than an omitted field, and .info shares the limiter.
+MCAP_INFO_FALLBACK_MAX = 25
 
 # Static FX fallbacks (approximate; only used when the live FX fetch fails)
 # for converting listing-currency market caps to USD before the 500M floor.
@@ -322,41 +343,129 @@ def _fetch_price_batch(tickers, period="1y", chunk_size=100, max_single_retries=
 
 
 def _fetch_market_caps(tickers, workers=6):
-    """{ticker: {market_cap, currency, market_cap_usd}} via yfinance fast_info.
+    """{ticker: {market_cap, currency, market_cap_usd, outcome, source}}.
 
-    Threaded, with one retry pass for failures (a transient rate-limit wave
-    must not become a mass 'mcap unavailable' disqualification). Caps are
-    converted to USD so the min_market_cap floor is meaningful for
-    foreign-listed candidates (KRW/TWD/EUR).
+    COVERAGE, NOT OUTCOME (D-019). A cap this function could not MEASURE is
+    not a small company. Both used to arrive at `_qualify` as a bare None and
+    published as the same `failed_mcap_gate`, so "we could not read this
+    company's size" was indistinguishable from "this company is too small" —
+    an absent input reading as a finding. Every entry now carries `outcome`,
+    and `market_cap_usd is None` always has a named reason attached.
+
+    THE RETRIES DO NOT SAVE A RATE-LIMIT WAVE, and the ladder is not sold as
+    if they do. Measured 2026-08-11: the same fetch run COLD failed 0 of 534;
+    run in production position — immediately after the ~550-ticker price
+    download — it failed 48 of 546, every one a YFRateLimitError, and the
+    failures were positions 498-545 of a SORTED list, a contiguous
+    alphabetical suffix with no gaps. The old single retry pass (2s, 2
+    workers) recovered 0 of those 48. So did 3s, 8s and 15s. So did a probe
+    3.5 minutes later. The limiter's window outlasts any pause a build can
+    afford, so the ladder is here for ISOLATED transient failures, which it
+    does fix, and the wave is handled by refusing to publish (see
+    mcap_materiality) rather than by retrying harder.
+
+    That suffix shape is why this cannot be left as fetch luck: the names lost
+    are not a random sample, they are the end of the alphabet. In the measured
+    run all 34 otherwise-qualifying casualties had real caps ABOVE the floor —
+    WMT at $897B, XOM at $657B, UNH at $371B — every one published as "market
+    cap below min_market_cap USD".
+
+    THE .info FALLBACK is a different ENDPOINT, not another attempt at the
+    same one, and it is the mirror of the fallback signal_engine.
+    fetch_fundamentals_yfinance gained in 4e5eec4 (where `.info` omitted
+    marketCap for HPQ and ADI while fast_info carried it). The two modules
+    reached for opposite endpoints first and so had different blind spots for
+    the same company; each now tries both. `source` records which one
+    answered, so a cap is never an anonymous number. It shares the rate
+    limiter, so it rescues an omitted field, not a throttled session — it
+    rescued 0 of the 48 above, and that is the expected result, not a defect.
+
+    Caps are converted to USD so the min_market_cap floor is meaningful for
+    foreign-listed candidates (KRW/TWD/EUR). A cap that was measured but
+    could not be CONVERTED is its own outcome (`fx_unconvertible`) — knowing
+    the size and not the exchange rate is a third state, and collapsing it
+    into "unavailable" would misreport which fetch failed.
     """
     import yfinance as yf
     from concurrent.futures import ThreadPoolExecutor
 
-    def one(t):
+    def one(t, endpoint="fast_info"):
         try:
-            fi = yf.Ticker(t).fast_info
-            cap = fi["marketCap"]
-            return t, {"market_cap": cap, "currency": fi.get("currency")}
+            if endpoint == "fast_info":
+                fi = yf.Ticker(t).fast_info
+                return t, {"market_cap": fi["marketCap"],
+                           "currency": fi.get("currency"), "source": "fast_info"}
+            info = yf.Ticker(t).info or {}
+            return t, {"market_cap": info.get("marketCap"),
+                       "currency": info.get("currency"), "source": "info"}
         except Exception:
-            return t, {"market_cap": None, "currency": None}
+            return t, {"market_cap": None, "currency": None, "source": None}
+
+    def run(batch, n_workers, endpoint="fast_info"):
+        with ThreadPoolExecutor(max_workers=n_workers) as ex:
+            return dict(ex.map(lambda t: one(t, endpoint), batch))
 
     tickers = sorted(set(tickers))
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        caps = dict(ex.map(one, tickers))
+    caps = run(tickers, workers)
+    outcomes = {t: ("fast_info" if v["market_cap"] is not None else None)
+                for t, v in caps.items()}
+    unresolved = sorted(t for t in tickers if caps[t]["market_cap"] is None)
+    first_pass_unresolved = len(unresolved)
 
-    failed = [t for t, v in caps.items() if v["market_cap"] is None]
-    if failed:
-        print(f"[builder] retrying market cap for {len(failed)} tickers...")
-        time.sleep(2)
-        with ThreadPoolExecutor(max_workers=2) as ex:
-            caps.update(dict(ex.map(one, failed)))
+    for n_workers, pause in MCAP_RETRY_LADDER:
+        if not unresolved:
+            break
+        print(f"[builder] retrying market cap for {len(unresolved)} tickers "
+              f"(sleep {pause}s, {n_workers} workers)...")
+        time.sleep(pause)
+        got = run(unresolved, n_workers)
+        for t, v in got.items():
+            if v["market_cap"] is not None:
+                caps[t], outcomes[t] = v, "fast_info_retry"
+        unresolved = sorted(t for t in unresolved if caps[t]["market_cap"] is None)
+
+    # The .info fallback is bounded on purpose. It exists for the HPQ/ADI
+    # shape — an endpoint that ANSWERS and omits marketCap for a handful of
+    # names — and `.info` is a far heavier call than fast_info. A large
+    # unresolved set is a throttled session, not a field omission, and .info
+    # shares the same limiter: running it over hundreds of names would add
+    # minutes to the rotation to rescue nothing (measured: 0 of 48).
+    endpoints_tried = "fast_info"
+    if unresolved and len(unresolved) > MCAP_INFO_FALLBACK_MAX:
+        print(f"[builder] skipping the .info fallback: {len(unresolved)} "
+              f"unresolved is a throttled session, not an omitted field "
+              f"(threshold {MCAP_INFO_FALLBACK_MAX}) — .info shares the same "
+              f"rate limiter and would cost minutes to rescue nothing")
+    elif unresolved:
+        endpoints_tried = "fast_info + .info"
+        print(f"[builder] fast_info exhausted for {len(unresolved)} tickers — "
+              f"falling back to .info")
+        got = run(unresolved, 2, endpoint="info")
+        for t, v in got.items():
+            if v["market_cap"] is not None:
+                caps[t], outcomes[t] = v, "info_fallback"
+        unresolved = sorted(t for t in unresolved if caps[t]["market_cap"] is None)
 
     fx = _fx_to_usd({v["currency"] for v in caps.values() if v["currency"]})
-    for v in caps.values():
+    for t, v in caps.items():
         cap, cur = v["market_cap"], v["currency"] or "USD"
         rate = fx.get(cur)
         v["market_cap_usd"] = cap * rate if (cap is not None and rate) else (
             cap if cur == "USD" else None)
+        if v["market_cap_usd"] is None:
+            # Measured but unconvertible is NOT the same failure as unmeasured.
+            v["outcome"] = "fx_unconvertible" if cap is not None else "unavailable"
+        else:
+            v["outcome"] = outcomes[t]
+        v.setdefault("source", None)
+
+    if unresolved:
+        print(f"[builder] *** MARKET CAP UNMEASURABLE for {len(unresolved)}/"
+              f"{len(tickers)} tickers via {endpoints_tried} "
+              f"({first_pass_unresolved} failed the first pass). These are NOT "
+              f"small companies — they are companies whose size this build "
+              f"could not read: {', '.join(unresolved[:20])}"
+              f"{' ...' if len(unresolved) > 20 else ''}")
     return caps
 
 
@@ -485,14 +594,22 @@ def _qualify(m, caps, rot):
         fails.append(f"avg_vol {m['avg_volume']:,}<{rot['min_avg_volume']:,}")
     cap = (caps.get(m["ticker"]) or {}).get("market_cap_usd")
     if cap is None:
-        fails.append("mcap unavailable")
+        # NOT a size verdict. This says the build could not read the company's
+        # size — which fails closed exactly like a sub-floor cap, but must
+        # never PUBLISH as one (D-022).
+        fails.append(MCAP_UNMEASURED)
     elif cap < rot["min_market_cap"]:
         fails.append(f"mcap ${cap / 1e6:,.0f}M<${rot['min_market_cap'] / 1e6:,.0f}M")
     return (not fails), fails
 
 
 def _gate_status(fails):
-    """Ticker status for the first failed qualifier gate."""
+    """Ticker status for the first failed qualifier gate.
+
+    `mcap_unavailable` is a separate status from `failed_mcap_gate` on
+    purpose. They used to be the same one, so a rate-limited fetch published
+    WMT ($897B) with the same label as a genuine $399M microcap.
+    """
     first = fails[0]
     if first.startswith("score"):
         return "failed_score_gate"
@@ -500,6 +617,8 @@ def _gate_status(fails):
         return "failed_history_gate"
     if first.startswith("avg_vol"):
         return "failed_volume_gate"
+    if first == MCAP_UNMEASURED:
+        return "mcap_unavailable"
     return "failed_mcap_gate"
 
 
@@ -554,6 +673,85 @@ def load_rotation_config():
     weights.update((uni_cfg.get("rotation", {}) or {}).get("composite_weights", {}) or {})
     rot["composite_weights"] = weights
     return uni_cfg, rot
+
+
+def mcap_blocked_tickers(ranking):
+    """Candidates whose ONLY disqualifier is a cap we could not measure.
+
+    This is the harm number. A name here cleared score, history and volume;
+    the single thing standing between it and the book is a measurement the
+    build failed to take. Zero in the healthy state.
+    """
+    return sorted(t for g in ranking for t, fails in g["disqualified"].items()
+                  if fails == [MCAP_UNMEASURED])
+
+
+def mcap_coverage(caps, ranking=None):
+    """How each candidate's market cap was obtained, and what it cost.
+
+    Same contract as universe_source's etf_coverage_summary and
+    inclusions_coverage: a per-item outcome plus a `degraded` count that is
+    ZERO in the healthy state. A reader must be able to see that a cap was
+    missing without reverse-engineering it from a ticker count.
+
+    `degraded` counts caps the GATE cannot use — unmeasured, or measured in a
+    currency we could not convert. `blocked` is the subset that would
+    otherwise have qualified, which is the number that decides whether this
+    rotation is publishable at all.
+    """
+    by_outcome = {}
+    for v in caps.values():
+        o = v.get("outcome") or "unavailable"
+        by_outcome[o] = by_outcome.get(o, 0) + 1
+    unusable = sorted(t for t, v in caps.items()
+                      if v.get("market_cap_usd") is None)
+    return {
+        "by_outcome": by_outcome,
+        "tickers": len(caps),
+        "resolved": len(caps) - len(unusable),
+        "degraded": len(unusable),
+        "unavailable_tickers": unusable,
+        # Named, not just counted: "which companies did we fail to measure"
+        # is the question a reader actually has, and a count cannot answer it.
+        "blocked": mcap_blocked_tickers(ranking) if ranking is not None else [],
+    }
+
+
+def mcap_materiality(by_gics, metrics, caps, rot):
+    """Did the unmeasurable caps change the book? Returns (material, detail).
+
+    Runs the SAME pure ranker twice over ONE shared fetch — the counterfactual
+    rank_and_select was extracted for. The optimistic pass grants every
+    unusable cap exactly the floor, so each blocked name qualifies on size;
+    anything that moves between the two runs moved because of a measurement
+    we failed to take, not because of a company's size.
+
+    A false alarm here is the safe side: "the missing caps MIGHT have changed
+    the book" and "they did" are the same state to a system that cannot tell
+    them apart, and both should stop a rotation rather than publish a guess.
+    """
+    unusable = [t for t, v in caps.items() if v.get("market_cap_usd") is None]
+    if not unusable:
+        return False, {"unmeasured": 0, "changed_tickers": [],
+                       "changed_groups": [], "lost_to_unmeasured": []}
+
+    optimistic = {t: dict(v) for t, v in caps.items()}
+    for t in unusable:
+        optimistic[t]["market_cap_usd"] = rot["min_market_cap"]
+
+    def book(caps_variant):
+        _, selected = rank_and_select(by_gics, metrics, caps_variant, rot)
+        return {(g["name"], q["ticker"]) for g in selected
+                for q in g["qualifiers"][:rot["max_tickers_per_group"]]}
+
+    actual, would_be = book(caps), book(optimistic)
+    changed = actual ^ would_be
+    return bool(changed), {
+        "unmeasured": len(unusable),
+        "changed_tickers": sorted({t for _, t in changed}),
+        "changed_groups": sorted({g for g, _ in changed}),
+        "lost_to_unmeasured": sorted(t for g, t in (would_be - actual)),
+    }
 
 
 def pool_retention_ok(n_now, prev_total):
@@ -624,7 +822,12 @@ def rank_and_select(by_gics, metrics, caps, rot):
                  "r3m": m["r3m"], "r1m": m["r1m"], "avg_volume": m["avg_volume"],
                  "market_cap": (caps.get(m["ticker"]) or {}).get("market_cap"),
                  "market_cap_usd": (caps.get(m["ticker"]) or {}).get("market_cap_usd"),
-                 "currency": (caps.get(m["ticker"]) or {}).get("currency")}
+                 "currency": (caps.get(m["ticker"]) or {}).get("currency"),
+                 # Which endpoint produced the cap that cleared the floor —
+                 # the same provenance signal_engine carries as
+                 # market_cap_source (4e5eec4). A selected name's size is
+                 # evidence a reader can check, not an anonymous number.
+                 "market_cap_source": (caps.get(m["ticker"]) or {}).get("source")}
                 for m in qualified
             ],
             "disqualified": disqualified,
@@ -805,6 +1008,50 @@ def build_active_universe(write=True, verbose=True):
     # 4-5. rank every group, mark eligibility, select the top-N
     ranking, selected = rank_and_select(by_gics, metrics, caps, rot)
 
+    # 5b. MARKET-CAP MATERIALITY (ruled 2026-08-11, D-022).
+    #
+    # The failure this exists for: the cap fetch runs immediately after the
+    # ~550-ticker price download, trips Yahoo's rate limiter partway through a
+    # SORTED ticker list, and every name past the cutoff arrives at the gate
+    # with no cap. `_qualify` fails those closed — correctly, since an
+    # unverified size must not buy admission — but the rotation then publishes
+    # a book that was decided in part by where the throttling started.
+    # Measured 2026-08-11: 48 of 546 lost their cap, positions 498-545 of the
+    # sorted list with no gaps, and 34 of them would otherwise have qualified,
+    # every one with a true cap above the floor (WMT $897B, XOM $657B).
+    #
+    # Neither existing floor sees this. POOL_RETENTION_FLOOR counts candidates
+    # and is evaluated before the price fetch, so a cap wave cannot move it.
+    # MIN_MCAP_COVERAGE catches only a catastrophe: at 0.70 it licenses nearly
+    # a third of the universe — ~160 names — to be silently disqualified while
+    # the build reports success. In the measured run coverage was 91%, so it
+    # stayed quiet through all 34.
+    #
+    # So the test is not "how many caps are missing" but "did the missing caps
+    # change what we would trade". That question is answerable exactly, by
+    # running the pure ranker twice, and it is the only version of the
+    # question worth gating on: an unmeasured cap on a name that was never
+    # going to be selected costs nothing and should not stop the week.
+    material, mat_detail = mcap_materiality(by_gics, metrics, caps, rot)
+    coverage = mcap_coverage(caps, ranking)
+    if coverage["degraded"] and verbose:
+        print(f"[builder] market cap unusable for {coverage['degraded']}/"
+              f"{coverage['tickers']} tickers; {len(coverage['blocked'])} of them "
+              f"would otherwise have qualified")
+    if material:
+        raise UniverseBuildError(
+            f"{mat_detail['unmeasured']} market caps could not be measured, and "
+            f"they CHANGE the book: {', '.join(mat_detail['lost_to_unmeasured']) or '—'} "
+            f"would have been selected with a cap and were not "
+            f"(groups affected: {', '.join(mat_detail['changed_groups'])}). "
+            f"Refusing to rotate on a universe decided by which fetches landed. "
+            f"These names are not small — their size is unknown to this build; "
+            f"check the cap fetch log for YFRateLimitError and re-run, which "
+            f"normally clears it. The previous universe stays authoritative. "
+            f"If a name is PERMANENTLY unmeasurable, drop it deliberately via "
+            f"universe.source.manual_exclusions in framework/config.yaml so the "
+            f"exclusion is on the record rather than decided by a rate limiter.")
+
     # 6. per-ticker audit status (for the read-only ranking endpoint)
     audit_ticker_rows(ranking, metrics, rot)
 
@@ -860,6 +1107,12 @@ def build_active_universe(write=True, verbose=True):
         "week_key": week_key,
         "effective_week_of": effective_week_of(week_key),
         "rotation_config": rot,
+        # HOW each candidate's market cap was obtained, and what a missing one
+        # cost. `degraded` is zero in the healthy state, the same contract as
+        # etf_coverage_summary and inclusions_coverage. A build that could not
+        # measure a company must not be indistinguishable from one that
+        # measured it and found it small (D-022).
+        "mcap_coverage": coverage,
         "groups": groups,
         "ranking": ranking,
         "candidates_total": len(tickers),
@@ -892,6 +1145,9 @@ def build_ranking_payload(active):
         "week_key": active["week_key"],
         "rotation_config": active["rotation_config"],
         "candidates_total": active["candidates_total"],
+        # Absent on artifacts baked before D-022 — those are not relabelled as
+        # healthy, they are reported as not having recorded it.
+        "mcap_coverage": active.get("mcap_coverage"),
         "total_groups": len(active["ranking"]),
         "selected_groups": len(active["groups"]),
         "status_legend": {
@@ -902,7 +1158,8 @@ def build_ranking_payload(active):
             "failed_score_gate": "dashboard composite score below min_composite_score",
             "failed_history_gate": "less than min_history_days of price history",
             "failed_volume_gate": "63-day average volume below min_avg_volume",
-            "failed_mcap_gate": "market cap below min_market_cap USD (or unavailable)",
+            "failed_mcap_gate": "market cap MEASURED and below min_market_cap USD",
+            "mcap_unavailable": "market cap could not be measured this build — a fetch failure, NOT a size verdict; the name was held out because an unverified size must not buy admission",
             "no_valid_data": "no usable price data (needs >=63 trading days incl. current year)",
         },
         "groups": [
