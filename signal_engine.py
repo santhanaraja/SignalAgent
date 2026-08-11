@@ -747,12 +747,28 @@ def fetch_data(ticker, period="6mo"):
 
 
 def fetch_fundamentals_yfinance(ticker):
-    """Fetch fundamental data via yfinance .info and .financials."""
+    """Fetch fundamental data via yfinance .info and .financials.
+
+    COVERAGE, NOT OUTCOME (D-019). Every field here can be None for two
+    completely different reasons: Yahoo answered and did not carry that
+    field, or the call never succeeded at all. Those render identically as
+    an empty value, and the second one is a silent failure wearing a dash.
+    `fetch_status` separates them so a surface can say "unavailable" and
+    why, instead of a placeholder that reads like "this company has no
+    market cap".
+
+    marketCap specifically: `.info` omits it for some tickers while
+    returning everything else (observed 2026-08-10 on HPQ and ADI — 14 of
+    15 fields present, cap missing). `fast_info` carries it. That is the
+    same endpoint universe_builder._fetch_market_caps uses, which is why
+    those names cleared the $5B universe gate while the dashboard showed
+    no cap at all — two market-cap paths in one repo, disagreeing.
+    """
     fundamentals = {
         "market_cap": None,
         "forward_pe": None,
         "trailing_pe": None,
-        "revenue_growth_yoy": None,
+        "revenue_growth": None,
         "gross_margin": None,
         "operating_margin": None,
         "profit_margin": None,
@@ -761,12 +777,18 @@ def fetch_fundamentals_yfinance(ticker):
         "dividend_yield": None,
         "beta": None,
         "short_pct_float": None,
-        "target_mean_price": None,
+        "target_price": None,
         "recommendation": None,
         "sector": None,
         "industry": None,
         "fifty_two_week_high": None,
-        "fifty_two_week_low": None
+        "fifty_two_week_low": None,
+        # "ok" | "failed" | "disabled". A consumer that treats a None field
+        # as "not available" without reading this is guessing.
+        "fetch_status": "disabled",
+        "fetch_error": None,
+        # "info" | "fast_info" | None — which endpoint supplied the cap.
+        "market_cap_source": None,
     }
     if not USE_YFINANCE:
         return fundamentals
@@ -776,7 +798,7 @@ def fetch_fundamentals_yfinance(ticker):
         fundamentals["market_cap"] = info.get("marketCap")
         fundamentals["forward_pe"] = info.get("forwardPE")
         fundamentals["trailing_pe"] = info.get("trailingPE")
-        fundamentals["revenue_growth_yoy"] = info.get("revenueGrowth")
+        fundamentals["revenue_growth"] = info.get("revenueGrowth")
         fundamentals["gross_margin"] = info.get("grossMargins")
         fundamentals["operating_margin"] = info.get("operatingMargins")
         fundamentals["profit_margin"] = info.get("profitMargins")
@@ -785,14 +807,32 @@ def fetch_fundamentals_yfinance(ticker):
         fundamentals["dividend_yield"] = info.get("dividendYield")
         fundamentals["beta"] = info.get("beta")
         fundamentals["short_pct_float"] = info.get("shortPercentOfFloat")
-        fundamentals["target_mean_price"] = info.get("targetMeanPrice")
+        fundamentals["target_price"] = info.get("targetMeanPrice")
         fundamentals["recommendation"] = info.get("recommendationKey")
         fundamentals["sector"] = info.get("sector")
         fundamentals["industry"] = info.get("industry")
         fundamentals["fifty_two_week_high"] = info.get("fiftyTwoWeekHigh")
         fundamentals["fifty_two_week_low"] = info.get("fiftyTwoWeekLow")
+        fundamentals["fetch_status"] = "ok"
+        if fundamentals["market_cap"] is not None:
+            fundamentals["market_cap_source"] = "info"
     except Exception as e:
         print(f"  [WARN] Fundamentals failed for {ticker}: {e}")
+        fundamentals["fetch_status"] = "failed"
+        fundamentals["fetch_error"] = f"{type(e).__name__}: {e}"
+        return fundamentals
+
+    # Cap fallback. Only reached when the call SUCCEEDED and the field was
+    # simply absent, so a failure above can never be papered over by it.
+    if fundamentals["market_cap"] is None:
+        try:
+            cap = yf.Ticker(ticker).fast_info["marketCap"]
+            if cap:
+                fundamentals["market_cap"] = int(cap)
+                fundamentals["market_cap_source"] = "fast_info"
+        except Exception as e:
+            print(f"  [WARN] fast_info market cap failed for {ticker}: {e}")
+
     return fundamentals
 
 
@@ -2492,7 +2532,7 @@ def run_engine():
             "market_cap": fund.get("market_cap"),
             "forward_pe": fund.get("forward_pe"),
             "trailing_pe": fund.get("trailing_pe"),
-            "revenue_growth": fund.get("revenue_growth_yoy"),
+            "revenue_growth": fund.get("revenue_growth"),
             "gross_margin": fund.get("gross_margin"),
             "operating_margin": fund.get("operating_margin"),
             "profit_margin": fund.get("profit_margin"),
@@ -2501,9 +2541,15 @@ def run_engine():
             "dividend_yield": fund.get("dividend_yield"),
             "beta": fund.get("beta"),
             "short_pct_float": fund.get("short_pct_float"),
-            "target_price": fund.get("target_mean_price"),
+            "target_price": fund.get("target_price"),
             "recommendation": fund.get("recommendation"),
-            "industry": fund.get("industry")
+            "industry": fund.get("industry"),
+            # Carried into the artifact so the dashboard can tell a field
+            # Yahoo did not return from a fetch that never landed — the
+            # two are the same empty cell otherwise (D-019).
+            "fetch_status": fund.get("fetch_status"),
+            "fetch_error": fund.get("fetch_error"),
+            "market_cap_source": fund.get("market_cap_source"),
         }
 
         # Stage analysis

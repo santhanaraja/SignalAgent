@@ -330,6 +330,17 @@ function scoreBg(s){
 }
 function sigClass(s){return 'sig-'+(s||'hold');}
 function fmtMcap(v){if(!v)return '—';if(v>=1e12)return '$'+(v/1e12).toFixed(1)+'T';if(v>=1e9)return '$'+(v/1e9).toFixed(1)+'B';if(v>=1e6)return '$'+(v/1e6).toFixed(0)+'M';return '$'+v;}
+/* D-019 at the surface: a fundamentals fetch that never landed must not
+   render as an empty value. "—" means Yahoo answered and did not carry the
+   field; "unavailable" means the call failed, with the reason in the
+   tooltip. Rows baked before fetch_status existed have no status and keep
+   the old behaviour rather than being relabelled as failures. */
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fundCell(f,v,fmt){
+  if(f&&f.fetch_status==='failed')
+    return '<span style="color:var(--orange)" title="fundamentals fetch failed — '+esc(f.fetch_error||'reason not recorded')+'">unavailable</span>';
+  return fmt(v);
+}
 function fmtPct(v){if(v===null||v===undefined)return '—';return (v*100).toFixed(1)+'%';}
 function fmtNum(v,d){if(v===null||v===undefined)return '—';return Number(v).toFixed(d||1);}
 function fmtComma(v){return v?v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';}
@@ -733,7 +744,7 @@ function renderGroups(){
         </tr></thead><tbody>
         ${(query?stocks:g.stocks).map(s=>{const f=s.fundamentals||{};return `<tr>
           <td>${tvLink(s.ticker)}</td>
-          <td class="mono">${fmtMcap(f.market_cap)}</td>
+          <td class="mono">${fundCell(f,f.market_cap,fmtMcap)}</td>
           <td class="mono">${fmtNum(f.forward_pe,1)}</td>
           <td class="mono">${fmtNum(f.trailing_pe,1)}</td>
           <td class="mono" style="color:${f.revenue_growth!=null?(f.revenue_growth>=0?'var(--green)':'var(--red)'):'var(--dim)'}">${f.revenue_growth!=null?fmtPct(f.revenue_growth):'—'}</td>

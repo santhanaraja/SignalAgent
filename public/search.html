@@ -435,6 +435,15 @@ function tsClass(ts){
   return 'ts-hold';
 }
 function fmtMcap(v){if(!v)return '—';if(v>=1e12)return '$'+(v/1e12).toFixed(2)+'T';if(v>=1e9)return '$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return '$'+(v/1e6).toFixed(0)+'M';return '$'+v;}
+/* D-019 at the surface — mirrors index.html. "—" means Yahoo answered
+   without the field; "unavailable" means the fetch failed, reason in the
+   tooltip. Payloads without fetch_status keep the old behaviour. */
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fundCell(f,v,fmt){
+  if(f&&f.fetch_status==='failed')
+    return '<span style="color:var(--orange)" title="fundamentals fetch failed — '+esc(f.fetch_error||'reason not recorded')+'">unavailable</span>';
+  return fmt(v);
+}
 function fmtPct(v){if(v===null||v===undefined)return '—';return (v*100).toFixed(1)+'%';}
 function fmtNum(v,d){if(v===null||v===undefined)return '—';return Number(v).toFixed(d===undefined?2:d);}
 function stat(label,value,color,title){return `<div class="stat"${title?` title="${title}"`:''}><div class="l">${label}</div><div class="v" style="${color?'color:'+color:''}">${value}</div></div>`;}
@@ -882,7 +891,8 @@ function renderResults(d){
   // Fundamentals tab
   const f = d.fundamentals || {};
   document.getElementById('fundamentalsGrid').innerHTML = [
-    stat('Market Cap', fmtMcap(f.market_cap), ''),
+    stat('Market Cap', fundCell(f,f.market_cap,fmtMcap), '',
+         f.market_cap_source==='fast_info'?'market cap from fast_info — .info did not carry it for this ticker':''),
     stat('Sector', f.sector||'—', 'var(--cyan)'),
     stat('Industry', f.industry||'—', 'var(--cyan)'),
     stat('Forward P/E', fmtNum(f.forward_pe,1), ''),
@@ -893,7 +903,13 @@ function renderResults(d){
     stat('Profit Margin', f.profit_margin!=null?fmtPct(f.profit_margin):'—', f.profit_margin!=null?(f.profit_margin>=0?'var(--green)':'var(--red)'):''),
     stat('EPS (Forward)', fmtNum(f.eps_forward,2), ''),
     stat('EPS (Trailing)', fmtNum(f.eps_trailing,2), ''),
-    stat('Dividend Yield', f.dividend_yield!=null?(f.dividend_yield*100).toFixed(2)+'%':'—', ''),
+    /* AS DELIVERED — no scaling. Yahoo's dividendYield is already a PERCENT
+       (HPQ arrives as 3.99, meaning 3.99%); the old *100 rendered that as
+       399.00%. Deliberately NOT guarded by a magnitude heuristic: 0.5% is
+       0.005 as a fraction and 0.5 as a percent, both below 1, so no runtime
+       branch can tell the two scales apart. The protection is a pin that
+       breaks loudly if the upstream scale reverts — test_fundamentals.py. */
+    stat('Dividend Yield', f.dividend_yield!=null?Number(f.dividend_yield).toFixed(2)+'%':'—', ''),
     stat('Beta', fmtNum(f.beta,2), ''),
     stat('Short Float %', f.short_pct_float!=null?fmtPct(f.short_pct_float):'—', f.short_pct_float>0.1?'var(--orange)':''),
     stat('Analyst Target', f.target_price?'$'+fmtNum(f.target_price,0):'—', ''),
