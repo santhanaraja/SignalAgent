@@ -56,6 +56,20 @@ membership is ordinary and is exactly what the dedupe handles.
 `data/pool/inclusions.json`: one object per ticker with `ticker`,
 `reason` (one line), `added` (ISO date). **Seeded empty.**
 
+> **AMENDED 2026-08-11 — the list is no longer empty, and its scope is
+> wider than this section states.** Its first entry is `ARWR`, and the
+> rule was widened in the file's own `_doc.why` from *new listings* to
+> **"a legitimate large-cap that no index source carries."** New
+> listings are the most obvious instance of that rule, not the
+> definition of it: ARWR has been public since 2004, is $12.5B, and is
+> simply absent from the S&P 500, the Nasdaq-100, and the ~10-deep
+> top-holdings slice the ETF feed returns. Scoping the list to new
+> listings would have left that larger population unreachable for no
+> principled reason, and would have made the mechanism's first entry
+> teach the wrong pattern. Pool version **v3-2026-08-11**. The entry
+> decision, its impact and its consequences are recorded in the
+> commit that added it.
+
 Its purpose is new listings. The index sources lag: a company that
 lists today joins no index for months, and until it does the system
 cannot see it at all — not to reject it, to *see* it.

@@ -690,8 +690,54 @@ def test_pool_retention_floor():
           "pool fails fast: OK")
 
 
+# ----------------------------------------------------------------------
+# 9. A hand-added entry that fails to classify is LOUD, not silent.
+# ----------------------------------------------------------------------
+def test_unclassified_inclusion_is_recorded():
+    """An inclusion is a deliberate act. If it classifies nowhere it is
+    dropped from by_gics and contributes nothing — pool count one higher,
+    no other trace. Same shape as an absent input reading as a normal
+    result, and the exposure is real: a name absent from the S&P 500 CSV
+    seed has no free classification and falls through to a live yfinance
+    call cached in a GITIGNORED file, so a fresh CI checkout can miss it.
+    """
+    cov = us._inclusions_coverage(
+        {"ARWR"}, {"Biotechnology": ["ARWR", "BIIB"], "Semis": ["AMAT"]}, [])
+    assert cov["degraded"] == 0, cov
+    assert cov["classified"] == {"ARWR": "Biotechnology"}, cov
+    assert cov["unclassified"] == []
+    print("  (9a) a classified inclusion reports degraded 0 and names its "
+          "group: OK")
+
+    # THE FAILURE, DEMONSTRATED — the classifier could not place it.
+    cov = us._inclusions_coverage(
+        {"ARWR"}, {"Semis": ["AMAT"]}, ["ARWR"])
+    assert cov["degraded"] == 1 and cov["unclassified"] == ["ARWR"], cov
+    assert "ARWR" not in cov["classified"]
+    print("  (9b) an inclusion in _unclassified is reported degraded and "
+          "named — not silently dropped: OK")
+
+    # The other way to vanish: in neither by_gics nor the unclassified list.
+    cov = us._inclusions_coverage({"ARWR"}, {"Semis": ["AMAT"]}, [])
+    assert cov["degraded"] == 1 and cov["unclassified"] == ["ARWR"], cov
+    print("  (9c) an inclusion absent from BOTH by_gics and the unclassified "
+          "list still counts as degraded, never a group of None: OK")
+
+    # An excluded inclusion is not degraded — it was never meant to arrive.
+    cov = us._inclusions_coverage(set(), {"Semis": ["AMAT"]}, [])
+    assert cov == {"declared": [], "classified": {}, "unclassified": [],
+                   "degraded": 0}, cov
+    print("  (9d) an empty/entirely-excluded list is healthy, not degraded: OK")
+
+    # And the real committed list must be healthy right now.
+    with open(us.INCLUSIONS_PATH) as f:
+        declared = [e["ticker"] for e in json.load(f)["inclusions"]]
+    assert declared, "the inclusion list is empty — this pin has nothing to guard"
+    print(f"  (9e) committed inclusions: {declared}: OK")
+
+
 if __name__ == "__main__":
-    print("\n=== pool-builder pins (pool v2, 2026-08-10) ===")
+    print("\n=== pool-builder pins (pool v3, 2026-08-11) ===")
     test_nasdaq100_is_read_not_fetched()
     test_exclusion_beats_inclusion()
     test_included_name_without_history_is_silent()
@@ -700,4 +746,5 @@ if __name__ == "__main__":
     test_degraded_etf_fetch_is_visible()
     test_cache_ttl_is_below_the_rotation_interval()
     test_pool_retention_floor()
+    test_unclassified_inclusion_is_recorded()
     print("\nAll pool-builder pins passed.\n")

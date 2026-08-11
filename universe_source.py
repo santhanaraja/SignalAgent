@@ -64,7 +64,12 @@ INCLUSIONS_PATH = os.path.join(POOL_DIR, "inclusions.json")
 #                             − manual_exclusions
 #   v2  (2026-08-10)          + Nasdaq-100 (committed list), + inclusions
 #                             list, exclusion precedence made explicit
-POOL_VERSION = "v2-2026-08-10"
+#   v3  (2026-08-11)          first inclusion-list entry: ARWR. The pool's
+#                             MEMBERSHIP changed by hand, which is exactly
+#                             the case this counter exists to mark — the
+#                             hash moves regardless, but a reader scanning
+#                             versions should see that a human added a name.
+POOL_VERSION = "v3-2026-08-11"
 
 _HEADERS = {"User-Agent": "Mozilla/5.0 SignalAgent/1.0 (universe-source)"}
 SP500_CSV_URL = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
@@ -517,6 +522,36 @@ def _coverage_summary(coverage):
     }
 
 
+def _inclusions_coverage(inc_live, by_gics, unclassified):
+    """Did each hand-added entry actually reach a group?
+
+    `degraded` is zero in the healthy state, the same contract as
+    etf_coverage_summary. A non-zero value means somebody deliberately added
+    a name and the pool silently did nothing with it.
+    """
+    inc_live = sorted(inc_live)
+    unc = set(unclassified or [])
+    missed = [t for t in inc_live if t in unc]
+    # A name can also vanish by classifying nowhere at all — absent from
+    # by_gics AND absent from the unclassified list. Treat that as degraded
+    # too rather than reporting a group of None as if it were placed.
+    placed = {}
+    for t in inc_live:
+        if t in unc:
+            continue
+        g = next((name for name, m in by_gics.items() if t in m), None)
+        if g is None:
+            missed.append(t)
+        else:
+            placed[t] = g
+    return {
+        "declared": inc_live,
+        "classified": placed,
+        "unclassified": sorted(set(missed)),
+        "degraded": len(set(missed)),
+    }
+
+
 def pool_definition(uni_cfg=None):
     """The canonical description of what the pool IS, for fingerprinting.
 
@@ -636,6 +671,30 @@ def build_universe_candidates(config_path=None, write=True, allow_remote=True):
     by_gics = gics.get_universe_by_gics(tickers, allow_remote=allow_remote)
 
     unclassified = by_gics.pop("_unclassified", [])
+
+    # CLASSIFICATION COVERAGE FOR THE HAND-MAINTAINED ENTRIES (D-019).
+    #
+    # An inclusion is a deliberate act: somebody decided this name should be
+    # considered. If it fails to classify it lands in _unclassified, is
+    # dropped from by_gics by the builder, and contributes NOTHING — with
+    # the pool count one higher and no other trace. That is the same shape
+    # as an absent input reading as a normal result.
+    #
+    # The exposure is real, not theoretical: a name absent from the S&P 500
+    # CSV seed has no free classification and falls through to a live
+    # yfinance .info call cached in data/universe_cache/gics_cache.json,
+    # which is gitignored — so on a fresh CI checkout the call must succeed
+    # or the entry silently does nothing.
+    inclusions_coverage = _inclusions_coverage(
+        detailed["sets"]["inclusions"] - detailed["sets"]["exclusions"],
+        by_gics, unclassified)
+    if inclusions_coverage["degraded"]:
+        print(f"[universe] *** INCLUSION NOT CLASSIFIED: "
+              f"{', '.join(inclusions_coverage['unclassified'])} — these names "
+              f"are in the pool but belong to no group, so they contribute "
+              f"nothing to any ranking. Deliberate entries must not fail "
+              f"silently; check data/universe_cache/gics_cache.json and the "
+              f"GICS lookup.")
     by_counts = {k: len(v) for k, v in sorted(by_gics.items(),
                                               key=lambda kv: (-len(kv[1]), kv[0]))}
 
@@ -655,6 +714,9 @@ def build_universe_candidates(config_path=None, write=True, allow_remote=True):
         "etf_coverage_summary": _coverage_summary(src.etf_coverage),
         "inclusions_file_present": src.inclusions_file_present,
         "by_gics_sub_industry": by_counts,
+        # Which hand-added entries actually reached a group. `degraded` is
+        # zero in the healthy state, exactly like etf_coverage_summary.
+        "inclusions_coverage": inclusions_coverage,
         "unclassified": len(unclassified),
         "unclassified_tickers": sorted(unclassified),
     }
