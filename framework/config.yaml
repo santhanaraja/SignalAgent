@@ -353,6 +353,69 @@ universe:
     "Internet Content & Information": "Interactive Media & Services"
     "Utilities - Independent Power Producers": "Independent Power Producers & Energy Traders"
     "Insurance - Property & Casualty": "Property & Casualty Insurance"
+    # Found by sweeping the WHOLE 2026-08-11 pool against the canonical GICS
+    # vocabulary rather than by noticing individual names (D-023). Each of
+    # these was a group of its own, below min_candidates, permanently
+    # ineligible — and its members were missing from the canonical group
+    # where their peers compete, so BOTH groups' composites were wrong.
+    "Internet Retail": "Broadline Retail"                      # MELI, PDD -> AMZN, EBAY
+    "Beverages - Non - Alcoholic": "Soft Drinks & Non-alcoholic Beverages"   # CCEP -> KO, PEP, KDP, MNST
+    "Medical Devices": "Health Care Equipment"                 # GKOS -> ABT, BSX, SYK, ...
+    # NOT "Health Care Facilities" (35102020, hospital OPERATORS — HCA, UHS).
+    # The similar name is the trap; the REIT belongs with the REITs.
+    "REIT - Healthcare Facilities": "Health Care REITs"        # CTRE -> WELL, VTR, DOC
+    # EA, and only in the ROTATION's environment. EA has left the S&P 500 CSV,
+    # so it no longer gets the authoritative seed and falls through to Yahoo;
+    # a local run still reads the pre-departure cached seed and looks clean.
+    # The 2026-08-07 artifact is the proof: it carries BOTH "Electronic Gaming
+    # & Multimedia" (EA, 1 member) and "Interactive Home Entertainment" (TTWO,
+    # 1 member) — one sub-industry split into two permanently ineligible
+    # groups. Found in a committed artifact, not in a live sweep, which is why
+    # the pin reads artifacts.
+    "Electronic Gaming & Multimedia": "Interactive Home Entertainment"
+
+  # Vendor labels DELIBERATELY left uncanonicalised, with the reason. Not a
+  # backlog and not a suppression list: a label whose GICS image is
+  # MANY-TO-ONE cannot be repaired by a label->label alias at all. Any target
+  # chosen fits one member and misfiles the next, and a wrong merge is worse
+  # than a phantom group — it silently moves an existing group's composite and
+  # rank, where a phantom group only strands its own members. Repairing these
+  # needs a per-ticker override, which is a separate decision (D-023, "What
+  # this change does not fix"). An entry here is what keeps a DECIDED problem
+  # from burying an undecided one in the coverage record.
+  # Every reason below was MEASURED, not reasoned from name similarity: S&P
+  # 500 tickers have an authoritative GICS sub-industry in the same CSV the
+  # pipeline already consumes, so asking Yahoo what IT calls those tickers
+  # gives a real label -> GICS contingency table (2026-08-11, 77 names).
+  gics_unmappable_labels:
+    "Specialty Business Services": >-
+      Probed over S&P 500 names this Yahoo label holds CTAS and CPRT, both
+      GICS Diversified Support Services, and NO Research & Consulting Services
+      name — GICS R&CS (EFX, VRSK) sits under Yahoo "Consulting Services"
+      instead. The only pool member, TRI, is the exception the label does not
+      describe. Mapping to the label's real target misfiles TRI; mapping to
+      TRI's target misfiles every future support-services name into EFX/VRSK.
+    "Health Information Services": >-
+      Yahoo files BTSG here, but BTSG is a home & community health services
+      and pharmacy provider, not health IT; the label's own modal target
+      (Health Care Technology — VEEV) is therefore wrong for the one member
+      the pool actually has. The label is not clean either way: GICS Health
+      Care Technology names are split across it and "Medical Instruments &
+      Supplies" (SOLV).
+    "Capital Markets": >-
+      Over S&P 500 names this label is clean (GS, MS, SCHW — all GICS
+      Investment Banking & Brokerage), and that is exactly why aliasing it
+      would be harmful: it is also where Yahoo files crypto miners (HUT here,
+      RIOT already in the cache). An alias would inject a bitcoin miner INTO
+      the brokers' group, where it would contribute to that group's composite
+      and could be selected as one of its members. A phantom group only
+      strands its own member; this would corrupt a real one.
+    "Medical Instruments & Supplies": >-
+      Not currently a pool group name — recorded because it is the sibling of
+      the "Medical Devices" alias above and the obvious next thing to map.
+      Do not. Probed: ISRG, BAX, RMD are GICS Health Care Equipment while
+      WST, COO, ALGN are GICS Health Care Supplies. One label, two
+      sub-industries GICS deliberately separates.
 
   # Weekly rotation parameters for the active dashboard universe
   # (consumed by universe_builder.py).

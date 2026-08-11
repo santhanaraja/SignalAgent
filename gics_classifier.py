@@ -17,6 +17,12 @@ All three paths are canonicalized through the config alias map
 
 Does NOT modify FALLBACK_INDUSTRY_GROUPS or signal_engine — it only imports
 the constant to read it.
+
+A label the alias map does not cover is not an inert cosmetic difference:
+universe_builder GROUPS BY THIS STRING, so an uncanonicalised vendor label
+becomes its own group, sits below rotation.min_candidates, and can never be
+eligible at any composite. `unaliased_labels()` below is how that condition
+is detected rather than discovered months later (D-023).
 """
 
 import datetime
@@ -25,6 +31,10 @@ import os
 import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# The canonical GICS sub-industry vocabulary — committed, read, never fetched
+# (same doctrine as data/pool/nasdaq100.json). See that file's own _doc for
+# what it is, where it comes from, and why it is deliberately incomplete.
+VOCABULARY_PATH = os.path.join(BASE_DIR, "data", "pool", "gics_vocabulary.json")
 
 
 def _now_utc():
@@ -61,6 +71,53 @@ def _build_industry_groups_map():
     return mapping
 
 
+def load_vocabulary(path=None):
+    """Canonical GICS sub-industry names from the committed vocabulary file.
+
+    Raises rather than degrading to an empty set. An empty vocabulary makes
+    every group name look non-canonical, and a caller that reads "empty" as
+    "no opinion" makes every group name look fine — a missing input reading
+    as a clean result is the exact failure this whole check exists to end.
+    """
+    with open(path or VOCABULARY_PATH) as f:
+        doc = json.load(f)
+    names = {n for n in (doc.get("sub_industries") or []) if n}
+    if not names:
+        raise ValueError(
+            f"{path or VOCABULARY_PATH} carries no sub_industries — the "
+            "canonical vocabulary is committed and has no fetch fallback; "
+            "refusing to report every group name as canonical by default.")
+    return names
+
+
+def unaliased_labels(group_names, aliases=None, unmappable=None, vocabulary=None):
+    """Group names that are a vendor's own label, not a GICS sub-industry.
+
+    Returns {"new": [...], "known": [...]}:
+      · **new** — flagged and UNDECIDED. Each one is a group that exists only
+        because a label was not canonicalised, holding names that can never
+        be eligible and thinning the canonical group where their peers sit.
+      · **known** — labels config records as deliberately unmapped, with a
+        reason (universe.gics_unmappable_labels). A vendor label whose GICS
+        image is many-to-one CANNOT be repaired by a label→label alias; any
+        target it is given misfiles some other member. Listing them keeps a
+        decided problem from drowning the signal for an undecided one.
+
+    Canonical means: in the committed vocabulary, or the TARGET of a
+    configured alias (an alias target is a name a human reviewed). That
+    second clause is self-certifying by construction — an alias pointing at
+    a label nobody verified would make that label canonical here — so the
+    pin, not this function, is what checks targets against the vocabulary
+    (test_gics_aliases.test_alias_and_unmappable_maps_are_coherent).
+    """
+    vocab = set(vocabulary) if vocabulary is not None else load_vocabulary()
+    vocab |= set((aliases or {}).values())
+    known_set = set(unmappable or ())
+    flagged = [n for n in sorted(set(group_names)) if n and n not in vocab]
+    return {"new": [n for n in flagged if n not in known_set],
+            "known": [n for n in flagged if n in known_set]}
+
+
 class GICSClassifier:
     """Classify tickers by GICS sub-industry with caching + static base-map reuse."""
 
@@ -88,6 +145,24 @@ class GICSClassifier:
         if sub_industry is None:
             return None
         return self.aliases.get(sub_industry, sub_industry)
+
+    def unaliased_group_names(self, group_names, unmappable=None):
+        """`unaliased_labels` against THIS classifier's alias map.
+
+        Never raises. A vocabulary that cannot be read is reported as
+        `error` — not as an empty `new` list. The whole point of the check
+        is that a missing input must not read as a clean result, and that
+        applies to the check's own input first.
+        """
+        try:
+            out = unaliased_labels(group_names, aliases=self.aliases,
+                                   unmappable=unmappable)
+            out["error"] = None
+            return out
+        except Exception as e:
+            print(f"[gics] canonical vocabulary unreadable ({e}) — group names "
+                  f"NOT checked this run")
+            return {"new": [], "known": [], "error": str(e)}
 
     # ------------------------------------------------------------------
     # Public API

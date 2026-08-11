@@ -695,6 +695,30 @@ def build_universe_candidates(config_path=None, write=True, allow_remote=True):
               f"nothing to any ranking. Deliberate entries must not fail "
               f"silently; check data/universe_cache/gics_cache.json and the "
               f"GICS lookup.")
+    # CANONICALISATION COVERAGE FOR THE GROUP NAMES THEMSELVES (D-023).
+    #
+    # The builder groups by the classification STRING. A vendor label the
+    # alias map does not cover therefore becomes its own group — below
+    # rotation.min_candidates, permanently ineligible at any composite — and
+    # its members are simultaneously missing from the canonical group where
+    # their peers compete, so both groups' composites are computed over the
+    # wrong population. Nothing in the artifact distinguished that from a
+    # genuinely small sub-industry; the eight found by the 2026-08-11 sweep
+    # had been accumulating unnoticed for as long as the pool has reached
+    # beyond the S&P 500 CSV seed.
+    #
+    # Recorded, never fatal. A rotation that refuses on a classification
+    # nobody has reviewed yet would trade a silent mistake for an outage.
+    unaliased = gics.unaliased_group_names(
+        list(by_gics), uni_cfg.get("gics_unmappable_labels"))
+    if unaliased["new"]:
+        print(f"[universe] *** UNCANONICALISED GROUP NAME(S): "
+              f"{', '.join(unaliased['new'])} — each is a group of its own "
+              f"that can never reach min_candidates, holding names that are "
+              f"missing from the canonical group where their peers sit. Add "
+              f"an entry to universe.gics_aliases, or — if the label's GICS "
+              f"image is many-to-one — to universe.gics_unmappable_labels "
+              f"with the reason.")
     by_counts = {k: len(v) for k, v in sorted(by_gics.items(),
                                               key=lambda kv: (-len(kv[1]), kv[0]))}
 
@@ -717,6 +741,10 @@ def build_universe_candidates(config_path=None, write=True, allow_remote=True):
         # Which hand-added entries actually reached a group. `degraded` is
         # zero in the healthy state, exactly like etf_coverage_summary.
         "inclusions_coverage": inclusions_coverage,
+        # Group names that are a vendor's own label rather than a GICS
+        # sub-industry. `new` is empty in the healthy state; `known` carries
+        # the labels config records as unmappable-by-alias, with reasons.
+        "unaliased_labels": unaliased,
         "unclassified": len(unclassified),
         "unclassified_tickers": sorted(unclassified),
     }
