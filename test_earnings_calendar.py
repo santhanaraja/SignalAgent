@@ -9,6 +9,7 @@ import datetime
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -217,6 +218,70 @@ def test_failed_resolution_does_not_preserve_a_past_date():
         env.close()
 
 
+def test_pins_do_not_write_the_real_cache():
+    """No pin may leave a write in data/earnings_calendar.json.
+
+    THE DEFECT THIS GUARDS. Two files drove production code that reaches the
+    earnings layer and wrote the REAL cache on every run:
+      · test_position_signals.py — via PositionSignalEngine.compute()
+        (framework/position_signals.py:1130), from the _d018_env harness,
+        which redirected STATE_DIR/DATA_DIR/PUBLIC_DIR but not this module's
+        own CACHE_PATH.
+      · test_breaker_coverage.py — via signal_engine.run_engine()
+        (signal_engine.py:2581).
+    The second had a guard that was dead twice over: `sys.modules.get(...)`
+    returns None because the import is LAZY and inside the function, and it
+    stubbed two attributes that do not exist. A `hasattr` check made both
+    failures invisible.
+
+    This pin drives the REAL writer — no fixture — and asserts the tree
+    stays clean.
+    """
+    real = ec.CACHE_PATH
+    before = (os.path.exists(real),
+              os.path.getmtime(real) if os.path.exists(real) else None,
+              open(real, "rb").read() if os.path.exists(real) else None)
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    for f in ("test_position_signals.py", "test_breaker_coverage.py"):
+        p = subprocess.run([sys.executable, f], cwd=here,
+                           capture_output=True, text=True, timeout=600)
+        assert p.returncode == 0, f"{f} failed: {(p.stderr or '')[-300:]}"
+        after = (os.path.exists(real),
+                 os.path.getmtime(real) if os.path.exists(real) else None,
+                 open(real, "rb").read() if os.path.exists(real) else None)
+        assert after == before, (
+            f"{f} WROTE {os.path.relpath(real, here)} — a pin must not "
+            f"dirty a committed artifact. The harness that drives "
+            f"production code needs the get_earnings_map stub; see "
+            f"_d018_env in test_position_signals.py.")
+    print("  (d) the two files that drive the real writer leave "
+          "data/earnings_calendar.json untouched: OK")
+
+    # NON-VACUITY — the writer really does fire on that path, so the
+    # assertion above is not passing because nothing happened. Redirect
+    # CACHE_PATH and confirm an unstubbed call WRITES.
+    tmp = tempfile.mkdtemp()
+    saved_path, saved_fetch = ec.CACHE_PATH, ec._fetch_next_earnings
+    try:
+        ec.CACHE_PATH = os.path.join(tmp, "earnings_calendar.json")
+        ec._fetch_next_earnings = lambda t: datetime.date(2026, 12, 1)
+        assert not os.path.exists(ec.CACHE_PATH)
+        ec.get_earnings_map(["AAA"])
+        assert os.path.exists(ec.CACHE_PATH), \
+            "get_earnings_map did not write — this pin is testing nothing"
+        print("  (e) an unstubbed get_earnings_map DOES write, so (d) is "
+              "not vacuous — the leak is prevented, not absent: OK")
+    finally:
+        ec.CACHE_PATH, ec._fetch_next_earnings = saved_path, saved_fetch
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    assert (os.path.exists(real),
+            os.path.getmtime(real) if os.path.exists(real) else None,
+            open(real, "rb").read() if os.path.exists(real) else None) == before, \
+        "this pin itself dirtied the real cache"
+
+
 if __name__ == "__main__":
     print("\n=== Earnings calendar tests (PER-510) ===")
     test_days_to_earnings()
@@ -227,4 +292,5 @@ if __name__ == "__main__":
     test_needs_resolution_truth_table()
     test_stale_and_null_dates_are_re_resolved()
     test_failed_resolution_does_not_preserve_a_past_date()
+    test_pins_do_not_write_the_real_cache()
     print("\nAll earnings-calendar tests passed.\n")

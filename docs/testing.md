@@ -117,7 +117,30 @@ Corollaries:
   working tree** — a sweep regenerates artifacts, and a replay pin that
   reads the working tree becomes order-dependent. (Both position pins
   hit this; both were converted.)
-- Restore any artifact a test mutates before finishing.
+- Restore any artifact a test mutates before finishing — **inside the test,
+  in a `finally`**. Do NOT clean up afterwards with a wide
+  `git checkout -- <many paths>`.
+
+  **The post-sweep restore ritual is DEPRECATED (2026-08-11).** It was a
+  manual multi-path `git checkout --` run after every sweep. Two reasons it
+  is retired, and the second is the serious one:
+
+  1. It reverted eight to twelve paths. Measured across all 36 pin files,
+     the suite dirties **one** tracked path. The ritual was a fossil of
+     defects already fixed piecemeal — `test_pipeline._sandbox`, the
+     `MARKER_PATH` swaps in the notify pins, `test_snapshot_retention._env`,
+     the `path=` arguments in the grade pins — none of which anyone went
+     back and subtracted from the recipe.
+  2. **A wide `git checkout --` destroys a concurrent session's uncommitted
+     work.** More than one agent works in this tree; on 2026-08-11 there
+     were eleven legitimately-modified files in it that belonged to someone
+     else. A ritual whose blast radius is "every artifact path I can think
+     of" is a data-loss command wearing a tidy-up costume.
+
+  Use `python3 scripts/run_pins.py` instead. It reports what each file
+  dirtied — tracked paths AND writes into the gitignored caches that
+  `git status` cannot see — and **restores nothing**, so the decision to
+  revert stays yours, on paths you have actually looked at.
 - Era-aware pins: when a record gains fields, pin BOTH the new shape and
   the old one rendering as it always did. A fix must never retro-claim
   about data that was never measured.

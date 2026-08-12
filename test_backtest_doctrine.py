@@ -14,6 +14,8 @@ Run: python3 test_backtest_doctrine.py
 import datetime
 import json
 import os
+import shutil
+import tempfile
 import subprocess
 import sys
 
@@ -396,13 +398,26 @@ def test_determinism_smoke():
     produce the same dataframe hash."""
     if not HAVE_CACHE:
         raise AssertionError("doctrine price cache missing")
-    r1, df1 = bd.run(smoke=True, out_path="/tmp/doctrine_smoke1.json")
-    r2, df2 = bd.run(smoke=True, out_path="/tmp/doctrine_smoke2.json")
-    assert r1["input_hash"] == r2["input_hash"], "non-deterministic rerun"
-    for p in ("/tmp/doctrine_smoke1.json", "/tmp/doctrine_smoke2.json"):
-        os.unlink(p)
+    # frame_dir: keep the smoke frame OUT of data/doctrine_cache/. That
+    # directory holds the hash-pinned study inputs (PRICES, EARNINGS_PATH);
+    # a pin writing into it is benign only while the filenames do not
+    # collide, and `git status` cannot see it because the directory is
+    # gitignored. Both are reasons not to rely on luck.
+    frames = tempfile.mkdtemp(prefix="doctrine_smoke_")
+    try:
+        r1, df1 = bd.run(smoke=True, out_path="/tmp/doctrine_smoke1.json",
+                         frame_dir=frames)
+        r2, df2 = bd.run(smoke=True, out_path="/tmp/doctrine_smoke2.json",
+                         frame_dir=frames)
+        assert r1["input_hash"] == r2["input_hash"], "non-deterministic rerun"
+        for p in ("/tmp/doctrine_smoke1.json", "/tmp/doctrine_smoke2.json"):
+            os.unlink(p)
+        # the frame really was written — somewhere else
+        assert os.listdir(frames), "smoke run wrote no frame at all"
+    finally:
+        shutil.rmtree(frames, ignore_errors=True)
     print(f"  (9) determinism: two smoke runs hash identically "
-          f"({r1['input_hash']}): OK")
+          f"({r1['input_hash']}), frame written outside doctrine_cache: OK")
 
 
 def test_consec_parity_and_old_bug():

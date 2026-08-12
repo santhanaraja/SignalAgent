@@ -1256,8 +1256,19 @@ def _d018_env(positions, fetcher, ticker_group="Systems Software"):
                                        ("state", "data", "public"))
     for d in (state_dir, data_dir, public_dir):
         os.makedirs(d)
+    # compute() reaches the earnings layer (position_signals.py:1130), which
+    # WRITES data/earnings_calendar.json in the REAL repo — the three dir
+    # redirects below do not cover it, because earnings_calendar resolves
+    # CACHE_PATH from its own module constant, not from the engine's. This
+    # harness was added after the two stubs further up this file and never
+    # picked the pattern up, so both D-018 tests leaked a write on every run.
+    # Stubbing the function (rather than redirecting CACHE_PATH) also keeps
+    # the pin off the network, which is why the older sites stub it.
+    import earnings_calendar
     olds = (PositionSignalEngine.STATE_DIR, PositionSignalEngine.DATA_DIR,
-            PositionSignalEngine.PUBLIC_DIR)
+            PositionSignalEngine.PUBLIC_DIR,
+            earnings_calendar.get_earnings_map)
+    earnings_calendar.get_earnings_map = lambda ts: {t: None for t in ts}
     PositionSignalEngine.STATE_DIR = state_dir
     PositionSignalEngine.DATA_DIR = data_dir
     PositionSignalEngine.PUBLIC_DIR = public_dir
@@ -1275,8 +1286,10 @@ def _d018_env(positions, fetcher, ticker_group="Systems Software"):
 
 
 def _d018_restore(tmp, olds):
+    import earnings_calendar
     (PositionSignalEngine.STATE_DIR, PositionSignalEngine.DATA_DIR,
-     PositionSignalEngine.PUBLIC_DIR) = olds
+     PositionSignalEngine.PUBLIC_DIR,
+     earnings_calendar.get_earnings_map) = olds
     shutil.rmtree(tmp, ignore_errors=True)
 
 

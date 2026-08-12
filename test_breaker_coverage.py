@@ -511,16 +511,26 @@ def test_writer_half_records_and_writes():
         eng.get_industry_groups = fake_groups
         if real_fund:
             eng.fetch_fundamentals_yfinance = lambda t: {}
-        # no network in a pin: stub the earnings refresh too
-        for _mod in ("earnings_calendar",):
-            _m = sys.modules.get(_mod)
-            if _m and hasattr(_m, "refresh_for_tickers"):
-                _stubs.append((_m, "refresh_for_tickers",
-                               _m.refresh_for_tickers))
-                _m.refresh_for_tickers = lambda *a, **k: {}
-            if _m and hasattr(_m, "next_earnings_map"):
-                _stubs.append((_m, "next_earnings_map", _m.next_earnings_map))
-                _m.next_earnings_map = lambda *a, **k: {}
+        # No network in a pin, and no write into the real repo: run_engine
+        # reaches the earnings layer (signal_engine.py:2581), which WRITES
+        # data/earnings_calendar.json.
+        #
+        # The previous guard here was dead TWICE OVER and is kept in the
+        # history for the shape of the mistake: it did
+        # `sys.modules.get("earnings_calendar")`, which is None because
+        # signal_engine imports the module LAZILY INSIDE run_engine — so at
+        # guard time it is usually not in sys.modules at all; and it stubbed
+        # `refresh_for_tickers` / `next_earnings_map`, NEITHER OF WHICH
+        # EXISTS. The real writer is get_earnings_map. Two independent
+        # reasons for a guard that never fired once, and a `hasattr` check
+        # that silently made both invisible.
+        #
+        # `import earnings_calendar` forces it into sys.modules; patching the
+        # module attribute works because production does
+        # `from earnings_calendar import get_earnings_map` at CALL time.
+        import earnings_calendar as _ec
+        _stubs.append((_ec, "get_earnings_map", _ec.get_earnings_map))
+        _ec.get_earnings_map = lambda ts: {t: None for t in ts}
         # capture the artifact instead of writing over the repo's
         orig_open = open
 

@@ -594,7 +594,20 @@ def penalty_module(df):
 
 
 # ---------------------------------------------------------------- main
-def run(smoke=False, out_path=None):
+def run(smoke=False, out_path=None, frame_dir=None):
+    """`frame_dir` separates the WRITE root from the READ root.
+
+    CACHE is where the PINNED study inputs live — PRICES and
+    EARNINGS_PATH both hang off it, and scripts/study_inputs.py asserts
+    their content hashes. Writing the master frame there is fine for a
+    real study run (that IS the artifact), but a TEST run must not put
+    anything in that directory: it is benign only while the filenames
+    happen not to collide, and one rename away from a pin mutating a
+    study input, which is precisely what study_inputs.py exists to
+    prevent. Tests pass a tmp dir; production passes nothing and gets
+    CACHE exactly as before.
+    """
+    frame_dir = frame_dir or CACHE
     # pinned inputs, asserted BEFORE any work (2026-08-10 ruling): a
     # moved cache must fail loudly and NAME itself, not silently
     # produce a different study
@@ -701,7 +714,7 @@ def run(smoke=False, out_path=None):
     }
     results["input_hash"] = _df_hash(df)
     frame_path = os.path.join(
-        CACHE, "master_frame_smoke.parquet" if smoke
+        frame_dir, "master_frame_smoke.parquet" if smoke
         else "master_frame.parquet")
     try:
         df.to_parquet(frame_path)
