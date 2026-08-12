@@ -64,6 +64,7 @@ flowchart TD
 | [D-019](D-019-breaker-coverage.md) | Breaker coverage, not outcome — an outage never impersonates safety; three flavours of incomplete; trigger still wins | 2026-07-25 | Ruled | — |
 | [D-020a](D-020a-ytd-anchor-cap.md) | One honest YTD — real prior-year-close anchor on both paths; YTD component capped flat at the curve's peak above it; scorer versioned (v1 frozen with three pinned anchors) | 2026-08-09 | Ruled | — |
 | [D-022](D-022-unmeasurable-market-cap.md) | An unmeasurable market cap is not a small company — `mcap_unavailable` split from `failed_mcap_gate`, coverage record, and a rotation that refuses when missing caps change the book | 2026-08-11 | Ruled | — |
+| [D-023](D-023-classification-aliases.md) | A vendor label is a group nobody can reach — whole-pool sweep against a committed GICS vocabulary; 5 aliases added, 3 labels declared unmappable-by-alias; a local sweep under-reports vs CI | 2026-08-11 | **Proposed** — staged, held for push approval | — |
 
 Also in this directory: [CHAT-RULINGS](CHAT-RULINGS.md) — the living
 registry of operator rulings issued in session (scope calls,

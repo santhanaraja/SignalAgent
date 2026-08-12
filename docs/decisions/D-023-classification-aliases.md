@@ -9,6 +9,22 @@
 | **Shape** | D-021 ("Reachable vs merely present"), which found the first four and deliberately did not fix them |
 | **Touches** | what the system can trade → doctrine change, measured before staging |
 
+> ### Two findings that limit what this record proves — read these first
+>
+> **1. "The selected 15 do not change" is TRUE OF TODAY ONLY.** It is a
+> property of one Tuesday's data, not a property of the change. Applied to
+> the **last** rotation the same merge does not merely "risk" moving the
+> selected 15 — it moves it, **unconditionally**: Health Care REITs falls out
+> and Paper & Plastic Packaging Products & Materials takes the slot, and no
+> value of the incoming ticker's momentum could have prevented it. **§5a**.
+>
+> **2. A local sweep UNDER-REPORTS this class of defect.** The rotation's
+> environment and a developer's laptop classify some tickers *differently*,
+> and the laptop is the one that looks clean. Any future classification audit
+> must be run against **CI-equivalent labels**, never local ones. Worse, half
+> the divergence is invisible to a vocabulary check at all — `APP` and `DD`
+> classify into *different canonical groups* in the two environments. **§1b**.
+
 ## The mechanism
 
 `gics_classifier` resolves one string per ticker. `universe_builder` then
@@ -64,28 +80,120 @@ Every one is a group of its own; every one is `below_min_candidates`.
 | `Capital Markets` | HUT | — | **unmappable** |
 
 Four more than the brief's four. Two of those four are the reverse error and
-are **not** fixed here (§3); one was invisible to a local sweep entirely (§2).
+are **not** fixed here (§3); one was invisible to a local sweep entirely, for
+a reason that is a finding in its own right (§1b).
 
-### The one a live sweep could not see
+---
 
-`Electronic Gaming & Multimedia` does not appear in a local run. It appears in
-the **committed 2026-08-07 rotation artifact**, which carries *both*
-`Electronic Gaming & Multimedia` (EA, 1 member) and `Interactive Home
+## 1b — FINDING: a local sweep under-reports this defect
+
+**This is not an anecdote about EA. It is a method rule, and it invalidates
+the obvious way to run this audit.**
+
+`Electronic Gaming & Multimedia` appears in **no** local run of the sweep. It
+appears in the **committed 2026-08-07 rotation artifact**, which carries
+*both* `Electronic Gaming & Multimedia` (EA, 1 member) and `Interactive Home
 Entertainment` (TTWO, 1 member) — one GICS sub-industry split into two
-permanently ineligible groups.
+permanently ineligible groups, by a build that had no idea.
 
-The cause is worth stating because it generalises: **EA has left the S&P 500
-CSV.** It therefore no longer receives the authoritative seed and falls
-through to Yahoo. A local run still reads its pre-departure entry from
-`data/universe_cache/gics_cache.json`, which is **gitignored** — so the
-rotation's environment (a fresh CI checkout, no GICS cache) and a developer's
-laptop classify the same ticker differently, and the laptop is the one that
-looks clean.
+### Why the two environments disagree
 
-Measured: of 550 pool candidates, exactly **one** currently has a stale
-canonical seed of this kind, and it is EA. That is why the pin reads committed
-artifacts rather than a live sweep — the artifact is what the rotation
-actually produced.
+`GICSClassifier` resolves in the order: static legacy map → **on-disk cache** →
+live Yahoo lookup. The cache is *seeded from the S&P 500 CSV*, and
+`data/universe_cache/gics_cache.json` is **gitignored** — committed ETF caches
+exist, this one does not. So:
+
+- a ticker **in** today's CSV is seeded canonically in both environments and
+  never reaches Yahoo;
+- a ticker that has **left** the CSV keeps its pre-departure seed on a laptop
+  (30-day TTL) while a fresh CI checkout has no cache at all and falls through
+  to Yahoo, which answers with its own label.
+
+**A seed is only trustworthy while the ticker is still in the index — and an
+index departure is precisely the event that hands a name's classification from
+S&P to Yahoo.** The laptop is the environment that looks clean, which is the
+worst possible direction for the error to run.
+
+### The mechanism is broader than the instance, and the second half is invisible
+
+The root cause is one line: `GICSClassifier.seed()` **only fills gaps** —
+`if ... self._cache_get(tn) is None` — so it never overwrites a live entry
+with a fresher CSV answer. A laptop's seed therefore goes stale in **two**
+ways, and the sweep only catches one:
+
+| | pool tickers today | caught by the vendor-label sweep? |
+|---|---|---|
+| **A. ticker left the index** — seed keeps the last CSV answer, CI falls through to Yahoo | **1** — `EA` | **yes** — CI's label is a Yahoo string |
+| **B. ticker stayed, its CSV label CHANGED** — seed keeps the old answer, CI seeds the new one | **2** — `APP`, `DD` | **NO** |
+
+> `APP` — laptop `'Application Software'` (seeded 2026-07-25), CI
+> `'Advertising'`.
+> `DD` — laptop `'Specialty Chemicals'`, CI `'Industrial Conglomerates'`.
+
+**Both of those pairs are canonical GICS names on both sides**, so *no*
+vocabulary check can flag them — including the one this record adds. Case B
+puts a ticker in a different real group in the two environments and reports
+nothing, anywhere. `APP` and `DD` do not self-heal until their entries expire
+on 2026-08-24.
+
+So the correct statement of the finding is: **exactly one pool ticker has a
+stale seed from an index departure; three have an `sp500_csv` cache entry that
+no longer matches what a fresh CI checkout would produce.** The vendor-label
+sweep is a detector for case A only.
+
+### The rule, and the recipe that implements it
+
+**Any future classification audit must be run against CI-equivalent labels.**
+Concretely, before sweeping, re-resolve every pool ticker that is *not* in the
+current `sp500_gics_map` but *does* carry a cache entry with
+`source == "sp500_csv"`:
+
+```python
+stale = [t for t in pool
+         if t not in src.sp500_gics_map
+         and (cache.get(t) or {}).get("source") == "sp500_csv"]
+```
+
+Run live on 2026-08-11 that list is exactly `['EA']`, and re-resolving it
+reproduces the divergence:
+
+> EA — cache says `'Interactive Home Entertainment'` (source `sp500_csv`,
+> seeded 2026-07-25, expiring ~2026-08-24); CI resolves
+> `'Electronic Gaming & Multimedia'`.
+
+…and for case B, compare the cached label against the *current* CSV value
+rather than merely checking presence:
+
+```python
+relabelled = [t for t in pool
+              if (cache.get(t) or {}).get("source") == "sp500_csv"
+              and t in src.sp500_gics_map
+              and src.sp500_gics_map[t] != cache[t]["sub_industry"]]
+```
+
+**Three tickers today. The count is not the point** — the point is that it is
+not zero and nothing reports it. The mechanism fires on every future index
+departure and every GICS reclassification, silently, with a lag set by the
+30-day cache TTL.
+
+This is also why the pin reads **committed artifacts** rather than sweeping a
+live pool: the artifact is what the rotation actually produced, in the
+environment that actually produces it.
+
+### Two adjacent exposures, one real and one already closed
+
+- **Real, and untouched by this change:** 44 pool tickers have neither a
+  static-map entry nor a current-CSV classification, so a fresh CI checkout
+  makes 44 live `.info` calls every rotation (42 of which a laptop serves from
+  cache). A failed `.info` returns `None`, lands the ticker in
+  `_unclassified`, and it is dropped from `by_gics` contributing nothing —
+  and only names on the hand-maintained inclusion list get a degraded-coverage
+  warning for that. Yahoo *label drift* on those 42 is equally invisible
+  locally.
+- **Checked and closed:** the "S&P CSV fetch fails in CI but not locally" path
+  cannot cause a quiet mass-reclassification. CI has no `sp500.json` to fall
+  back on, so the pool would drop from 550 to 216 (−61%) and
+  `POOL_RETENTION_FLOOR = 0.90` raises `UniverseBuildError` first.
 
 ---
 
@@ -250,7 +358,7 @@ for the current pool. That is a different claim.
 
 ---
 
-## 5 — Impact, measured before staging
+## 5 — Impact, measured before staging — *a result about today*
 
 Two arms over **one shared price+cap fetch**, both calling the production
 `rank_and_select`. Not two live builds: the market moves between them and the
@@ -269,9 +377,11 @@ Arms use CI-equivalent classification (EA through Yahoo, per §1).
 | **A** — current aliases | 134 | 15 | 78 |
 | **B** — with the five | 129 | 15 | 78 |
 
-**The selected 15 and all 78 tickers are identical.** No group enters, none
-leaves, no ticker moves. The boundary is unchanged in both arms: 15th
-Pharmaceuticals 18.20, 16th Rail Transportation 17.66, gap 0.54.
+**The selected 15 and all 78 tickers are identical — on today's data.** No
+group enters, none leaves, no ticker moves. The boundary is unchanged in both
+arms: 15th Pharmaceuticals 18.20, 16th Rail Transportation 17.66, gap 0.54.
+**Do not read that as a property of the change; §5a is the same merge run
+against last week's rotation, where it decides a slot.**
 
 Five groups change — the five that receive members. Every other group's
 composite is identical to the cent (ranks renumber only because five phantom
@@ -291,18 +401,57 @@ PDD were four qualifying large caps in two groups of two, none of them
 reachable at any composite. That is the change's actual content — reachability,
 not today's selection.
 
-### "No selection change today" is a statement about today
+### 5a — At the last rotation this change DOES move the selected 15
 
-**At the last committed rotation this change would very likely have moved the
-selected 15.** Health Care REITs was the **15th of 15**, at composite 17.35,
-with a gap of **1.06** to 16th (Paper & Plastic Packaging Products &
-Materials, 16.29) — and with exactly **three members**, the minimum. Merging
-CTRE moves its median YTD from 27.62 to 24.92, i.e. **−1.35 on the composite
-through the YTD weight alone**, against that 1.06 gap. The full recompute is
-not available from committed data (the artifact carries median 3m/1m per
-group, not per ticker), but today's live measurement of the same merge is
-**−2.18**, consistent in sign and larger. WELL, VTR and DOC would have left
-the tradeable universe.
+Not "would plausibly have". **Recomputed exactly from the committed artifact
+(`fd83fa4`), it does — and no plausible market outcome prevents it.**
+
+At that rotation Health Care REITs was the **15th of the 15 selected**, at
+composite **17.35**, **1.06** ahead of the 16th eligible group (Paper &
+Plastic Packaging Products & Materials, **16.29**), holding DOC, VTR and WELL.
+`CTRE` sat alone in the phantom group at composite 8.12. Merging it moves
+**all three components**, not just YTD:
+
+| component | 3 members | + CTRE | weight | weighted Δ |
+|---|---|---|---|---|
+| median YTD | 27.62 | 24.92 | 0.50 | **−1.35** |
+| median 3M | 10.63 | 9.125 | 0.30 | **−0.45** |
+| median 1M | 1.77 | 1.325 | 0.20 | **−0.09** |
+| **composite** | **17.35** | **15.46** | | **−1.89** |
+
+Re-run through the production selection rule, the merged 4-member group lands
+at **18th eligible**. **Health Care REITs leaves the tradeable universe —
+WELL, VTR and DOC with it — and Paper & Plastic Packaging Products & Materials
+takes the slot.** Exactly one group changes.
+
+**The adversarial bound closes it.** CTRE's 3M and 1M returns cannot touch the
+YTD median, which is pinned at 24.92 — the merged YTD set is
+{15.86, 22.22, 27.62, 37.38} and CTRE is the low member. Driving CTRE's 3M and
+1M to **+∞** therefore caps the other two medians at 10.695 and 1.92, for a
+best-possible merged composite of **16.05** — still below the **16.29** needed
+to hold the slot (16.29 exactly would suffice: at a tie the `(-composite,
+name)` sort puts "Health Care REITs" ahead of "Paper & Plastic…"), and below
+Pharmaceuticals' 16.27. **No value of the incoming ticker's momentum could
+have saved the slot.**
+
+> **Two corrections to the first version of this record**, both found by
+> re-deriving the arithmetic rather than re-reading it:
+> - The move is **−1.89**, not −1.35. The −1.35 figure was the YTD component
+>   alone. Comparing one weighted component against the boundary gap is an
+>   **unsound argument form** — it silently assumes the other two components
+>   hold still. Here they happened to move the same way, so the conclusion
+>   survived; in general a merge that lifts 3M/1M can offset a YTD drop. Do
+>   not reuse it as a decision rule.
+> - "The full recompute is not available from committed data" was **wrong**.
+>   The artifact publishes `r3m` and `r1m` per ticker inside each group's
+>   `qualifiers` array; it is only the `tickers` audit rows that carry `ytd`
+>   alone. The gap is real but bites only for DISQUALIFIED tickers, and both
+>   groups here have none.
+
+One thing this is *not*: a `min_candidates` effect. The merge raises Health
+Care REITs from 3 members to 4, so it stays **eligible** — it is **outranked**,
+not gated out. `min_candidates` is what imprisoned the phantom, not what
+costs Health Care REITs its slot.
 
 D-021's caveat applies unchanged and is the honest frame: the one-day
 distribution of |Δcomposite| across groups has median 1.46 and p90 3.73. Two
@@ -310,7 +459,18 @@ of the four composite moves here (Broadline Retail −8.21, Soft Drinks +3.55)
 exceed the median day's churn and one exceeds p90 — these are not noise-sized
 for the receiving group — but none of them reaches the selection boundary
 *this week*. Whether a merge decides a slot depends on where the receiving
-group happens to sit that Friday.
+group happens to sit that Friday. Last Friday it sat on the boundary; this
+Tuesday it does not. **Both facts are about the data, not about the change** —
+which is why the "no selection change" headline is scoped to today and why
+this record leads with that scope rather than burying it.
+
+The same sensitivity is visible elsewhere in that rotation and is worth
+carrying forward: the 15/16 gap was **1.06** while a single-ticker
+reclassification is worth **~1.9**, and `Data Center REITs` (DLR, EQIX) and
+`Self-Storage REITs` (PSA, EXR) both sat two members deep at ranks 31 and 42
+— one misplaced ticker from moving in either direction. **At that boundary,
+classification is not a cosmetic layer; it is an input to selection with more
+leverage than a day of price movement.**
 
 ### No live position is affected
 
@@ -320,6 +480,30 @@ NET (Systems Software), MET (Life & Health Insurance), BIIB and CGON
 (Biotechnology). All four groups have **identical membership and composite**
 in both arms and all four stay selected; their rank *numbers* shift by one or
 two purely because five phantom groups above them no longer exist.
+
+### Caveat: the arms ran on laptop labels, re-checked against CI-equivalent ones
+
+§1b applies to this measurement too. The arms were built from the local cache,
+which classifies three pool tickers differently from the rotation: `EA`
+(corrected by hand in the arms), and `APP` and `DD`, which were not.
+
+Re-run with **all three** at their CI-equivalent labels, the A-vs-B conclusion
+is unchanged — selected 15 identical, all 78 tickers identical, in both arms.
+It has to be: `APP` and `DD` sit in the same group in *both* arms, so they
+cancel out of the difference. What they do distort is the **absolute** ranking
+figures quoted for four groups that this change does not touch:
+
+| group | laptop rank / composite | CI-equivalent |
+|---|---|---|
+| Industrial Conglomerates | 34 / 16.08 | 51 / 12.50 |
+| Application Software | 122 / −8.14 | 116 / −5.01 |
+| Specialty Chemicals | 65 / 9.52 | 61 / 10.76 |
+| Advertising | 128 / −20.83 | 129 / −39.88 |
+
+None is a receiving group, none is selected in either arm, and the relocation
+does not move the selected 15. Recorded because "the arms ran on labels the
+rotation would not have produced" is exactly the kind of thing that should not
+be discovered later.
 
 ### Caveat on the cap input
 
