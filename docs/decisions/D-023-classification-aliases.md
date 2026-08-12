@@ -14,9 +14,9 @@
 > **1. "The selected 15 do not change" is TRUE OF TODAY ONLY.** It is a
 > property of one Tuesday's data, not a property of the change. Applied to
 > the **last** rotation the same merge does not merely "risk" moving the
-> selected 15 — it moves it, **unconditionally**: Health Care REITs falls out
-> and Paper & Plastic Packaging Products & Materials takes the slot, and no
-> value of the incoming ticker's momentum could have prevented it. **§5a**.
+> selected 15 — on that rotation's actual data **it moves it**: Health Care
+> REITs falls out and Paper & Plastic Packaging Products & Materials takes the
+> slot. **§5a**.
 >
 > **2. A local sweep UNDER-REPORTS this class of defect.** The rotation's
 > environment and a developer's laptop classify some tickers *differently*,
@@ -370,7 +370,10 @@ known misreading (`min_candidates` against *qualifiers* rather than
 membership) wrongly drops Construction & Engineering, the same name it dropped
 in D-021. The rule under test is the rule that ran.
 
-Arms use CI-equivalent classification (EA through Yahoo, per §1).
+Arms use the local cache with **EA corrected by hand** to its CI label; `APP`
+and `DD` are still on laptop labels **in both arms** — see the caveat below,
+which shows why that cancels out of the A/B difference and what it does
+distort.
 
 | | groups | selected | tickers |
 |---|---|---|---|
@@ -404,7 +407,9 @@ not today's selection.
 ### 5a — At the last rotation this change DOES move the selected 15
 
 Not "would plausibly have". **Recomputed exactly from the committed artifact
-(`fd83fa4`), it does — and no plausible market outcome prevents it.**
+(`fd83fa4`), on that rotation's real data it does.** How far that generalises
+is bounded below — carefully, because the first draft of this section
+overstated it.
 
 At that rotation Health Care REITs was the **15th of the 15 selected**, at
 composite **17.35**, **1.06** ahead of the 16th eligible group (Paper &
@@ -424,15 +429,30 @@ at **18th eligible**. **Health Care REITs leaves the tradeable universe —
 WELL, VTR and DOC with it — and Paper & Plastic Packaging Products & Materials
 takes the slot.** Exactly one group changes.
 
-**The adversarial bound closes it.** CTRE's 3M and 1M returns cannot touch the
-YTD median, which is pinned at 24.92 — the merged YTD set is
-{15.86, 22.22, 27.62, 37.38} and CTRE is the low member. Driving CTRE's 3M and
-1M to **+∞** therefore caps the other two medians at 10.695 and 1.92, for a
-best-possible merged composite of **16.05** — still below the **16.29** needed
-to hold the slot (16.29 exactly would suffice: at a tie the `(-composite,
-name)` sort puts "Health Care REITs" ahead of "Paper & Plastic…"), and below
-Pharmaceuticals' 16.27. **No value of the incoming ticker's momentum could
-have saved the slot.**
+**How robust is that? Bounded honestly, it is robust in one direction only.**
+Holding CTRE's actual YTD of 15.86, its 3M and 1M returns cannot touch the YTD
+median — the merged YTD set is {15.86, 22.22, 27.62, 37.38} and CTRE is the low
+member, so the median is pinned at 24.92 for **any** CTRE YTD ≤ 22.22. Driving
+its 3M and 1M to **+∞** therefore caps the other two medians at 10.695 and 1.92,
+for a best-possible merged composite of **16.05** — below the **16.29** needed
+to hold the slot (16.29 exactly would suffice: at a tie the `(-composite, name)`
+sort puts "Health Care REITs" ahead of "Paper & Plastic…").
+
+**That bound covers momentum, not the whole return profile, and it must not be
+read as "no CTRE could have failed to move the 15".** Two limits, both real:
+
+- It freezes YTD while sending 3M to +∞, which **no price path can do** — a
+  3M return of +∞ forces YTD to +∞. The region it explores is empty.
+- **Let CTRE's YTD vary and the slot is survivable.** At CTRE's actual 3M/1M, a
+  YTD of **25.53** lifts the merged composite to exactly 16.29 and Health Care
+  REITs *keeps* the slot; the unconstrained ceiling is 19.84. A CTRE YTD of ~25
+  is not exotic — its own would-be group-mates sat at 22.22 and 27.62.
+
+So the defensible claim is the one the artifact actually settles: **on that
+rotation's real data the merge moves the selected 15**, and it does so by a
+margin no plausible *momentum* revision closes. It is not a claim that the
+outcome was independent of the incoming ticker's returns — it plainly was not,
+which is the mechanism this record is about.
 
 > **Two corrections to the first version of this record**, both found by
 > re-deriving the arithmetic rather than re-reading it:
@@ -454,9 +474,10 @@ not gated out. `min_candidates` is what imprisoned the phantom, not what
 costs Health Care REITs its slot.
 
 D-021's caveat applies unchanged and is the honest frame: the one-day
-distribution of |Δcomposite| across groups has median 1.46 and p90 3.73. Two
-of the four composite moves here (Broadline Retail −8.21, Soft Drinks +3.55)
-exceed the median day's churn and one exceeds p90 — these are not noise-sized
+distribution of |Δcomposite| across groups has median 1.46 and p90 3.73.
+**Three** of the five composite moves here (Broadline Retail −8.21, Soft Drinks
++3.55, **Health Care REITs −2.18** — the very group §5a turns on) exceed the
+median day's churn and one exceeds p90 — these are not noise-sized
 for the receiving group — but none of them reaches the selection boundary
 *this week*. Whether a merge decides a slot depends on where the receiving
 group happens to sit that Friday. Last Friday it sat on the boundary; this
@@ -478,8 +499,10 @@ None of the nine stranded names is held, and no group holding a live position
 receives a member: HPQ and DELL (Technology Hardware, Storage & Peripherals),
 NET (Systems Software), MET (Life & Health Insurance), BIIB and CGON
 (Biotechnology). All four groups have **identical membership and composite**
-in both arms and all four stay selected; their rank *numbers* shift by one or
-two purely because five phantom groups above them no longer exist.
+in both arms and all four stay selected. Their rank *numbers* shift by at most
+one, purely because phantom groups above them no longer exist: Technology
+Hardware 1 → 1 (nothing above it to remove), Systems Software 13 → 12,
+Biotechnology 17 → 16, Life & Health Insurance 26 → 25.
 
 ### Caveat: the arms ran on laptop labels, re-checked against CI-equivalent ones
 
@@ -512,14 +535,28 @@ measurement (`fast_info` and `.info` both 401/429 across a six-step backoff;
 the chart endpoint serving prices was unaffected — 549/550). Market caps were
 therefore reconstructed from **committed evidence**, per ticker, with the
 provenance recorded: 389 exact values from the 2026-08-07 artifact, 1 exact
-value from that artifact's own gate-fail string, 142 "cleared the $5B floor
-then, value unknown" (a floor sentinel — `rank_and_select` only compares to
-the floor), and 14 covered by D-021's measured statement that the $5B gate
-removed exactly two names from the v2 pool, neither of them in this set.
+value from that artifact's own gate-fail string, 142 inferred from having been
+ranked there with no mcap fail, and 14 covered by D-021's measured statement
+that the $5B gate removed exactly two names from the v2 pool (`ARQQ`, `HQ`),
+neither of them in this set.
 
-Caps are **shared by both arms**, so this cannot bias the A/B comparison; it
-can only make the absolute qualifier counts slightly stale. The composite and
-rank figures — the substance of this record — do not depend on caps at all:
+> **The 142 rest on an unsound inference, and it is stated rather than
+> buried.** That rotation did **not** run a $5B floor:
+> `fd83fa4:framework/config.yaml` and the artifact's own `rotation_config`
+> both carry `min_market_cap: 500000000`, and the only mcap gate-fail string
+> in the entire artifact is `mcap $399M<$500M`. So "ranked there with no mcap
+> fail" proves the ticker cleared **$500M**, not $5B — yet the reconstruction
+> assigns those names a $5B sentinel, which today's gate passes by
+> construction. **Ten of the 78 selected tickers rest on a sentinel rather
+> than a measured cap** — ALAB, ARWR, DVN, EOG, FANG, FFIV, KLAC, MRNA, SNDK,
+> STX. All ten are in fact far above $5B, so nothing in this record changes;
+> but no selected group's qualifiers are *entirely* sentinel-backed, and the
+> recipe must not be reused on a week where a $0.5–5B name could slip through
+> it.
+
+Caps are **shared by both arms**, so none of this can bias the A/B comparison;
+it can only make the absolute qualifier counts stale. The composite and rank
+figures — the substance of this record — do not depend on caps at all:
 `rank_and_select` computes a group's composite from all valid members, never
 from its qualifiers.
 
