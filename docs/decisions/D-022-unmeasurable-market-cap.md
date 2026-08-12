@@ -18,10 +18,25 @@ artifact legend read *"market cap below min_market_cap USD (or
 unavailable)"* — the parenthesis doing the work of a distinction.
 
 So a company whose size the build failed to read was published as a
-company that is too small to trade. The name was dropped from its
-group's qualifier list with no distinguishable record. That is the
-D-019 shape exactly: an absent input arriving at a consumer as a
-finding.
+company that is too small to trade. That is the D-019 shape exactly: an
+absent input arriving at a consumer as a finding.
+
+**Correction to the original wording of this record** (found while
+auditing `fd83fa4` for D-023, and corrected here rather than left
+standing): this said the name was dropped "with no distinguishable
+record". That overstates it. What collapsed was the published `status`,
+the legend entry and the dashboard's visible annotation — all three of
+which said *small*. The `fails` string did NOT collapse: it read `mcap
+unavailable`, already distinct from `mcap $X<$Y`, and the near-miss
+strip rendered it in the hover tooltip. So the true defect was narrower
+and more insidious than "no record": the artifact carried the truth in
+one field while the label beside it, the legend explaining that label,
+and the status a consumer would branch on all asserted the opposite.
+A reader had to hover the right row to find the contradiction.
+
+That surviving field is not a footnote — it is what makes pre-D-022
+artifacts auditable after the fact, and it is how D-023's source
+artifact was cleared (see that record's interaction note).
 
 This was noticed while reviewing the ARWR inclusion — a reviewer's
 re-run displaced APGE where the original run displaced AMGN, and the
@@ -104,7 +119,7 @@ state is genuinely 527/527, so the gate below has no standing deadlock.
 
 | Option | Summary | Why (not) |
 |---|---|---|
-| A | Fail closed, silently (status quo) | The measured cost is 4 holdings and 34 mislabelled names per wave, with no trace. Rejected. |
+| A | Fail closed, silently (status quo) | The measured cost is 4 holdings and 34 mislabelled names per wave, with no trace in the status, the legend or the visible dashboard label — only in the raw `fails` string behind a hover tooltip. Rejected. |
 | B | Hold the previous rotation's cap | Invents an input. A carried cap is a measurement we did not take, its age is unbounded (a stale artifact can be weeks old after a failed rotation chain), and it would paper over a *systematic alphabetical bias* with plausible-looking numbers. It is the D-019 defect wearing the opposite mask. Rejected. |
 | C | Fail closed LOUDLY — distinct status + coverage record | Necessary, and adopted. Not sufficient alone: "loud" in a log nobody reads is silent for a system that runs on cron, and the book still narrows. |
 | D | **C, plus refuse to rotate when the missing caps CHANGE the book** | **Ruled.** |
@@ -200,6 +215,37 @@ knows how to fail safely; it should use that instead of inventing data.
   bigger problem.
 - **A cap source other than yfinance becomes available.** The whole
   class of failure here is one vendor's rate limiter.
+- **Any record reconstructs caps from a committed artifact.** See the
+  cross-record note below; the precondition is
+  `mcap_coverage.degraded == 0` on that artifact, and pre-D-022
+  artifacts must be audited through their `fails` strings instead.
+
+## Cross-record: D-023 reconstructs caps, and the two chips interact
+
+[D-023](D-023-classification-aliases.md) was built in parallel with this
+record, by a separate session, and its live cap fetch was blocked by the
+same rate limiter measured here. It therefore reconstructs caps from
+committed artifacts and, where the artifact only proves a name cleared
+the older $500M floor, assigns a **$5B sentinel** — ten of its 78
+selected tickers rest on one.
+
+**A sentinel resolves an unknown cap in the opposite direction to this
+record's gate.** The sentinel passes by construction; the live gate
+fails an unmeasured cap **closed**. Structurally the sentinel arm is
+this record's *optimistic* pass — the same object `mcap_materiality`
+builds — so on a wave-affected week a reconstruction and a real rotation
+would diverge by exactly the set that function reports, in the admitting
+direction.
+
+**Checked for that week: D-023 does not inherit this defect.** Its
+source artifact `fd83fa4` records zero unmeasured caps (389/389
+qualifiers carry one; the only mcap disqualification in the whole
+artifact is ARQQ's measured `mcap $399M<$500M`), and all ten
+sentinel-backed names are independently confirmed far above the floor.
+The conclusion stands; the recipe carries the precondition.
+
+Recorded because a dependency between two records written at the same
+time is exactly the kind that neither notices.
 
 ## Retest recipe
 

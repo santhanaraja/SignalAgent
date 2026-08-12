@@ -560,6 +560,47 @@ figures — the substance of this record — do not depend on caps at all:
 `rank_and_select` computes a group's composite from all valid members, never
 from its qualifiers.
 
+### Interaction with D-022 — checked, and this record does not inherit it
+
+*Added by the D-022 session. The two chips were built in parallel and share a
+root cause, which is exactly the kind of dependency that goes unnoticed when
+two records are written at the same time.*
+
+The rate limiting above is not incidental to this record — it is the same
+failure [D-022](D-022-unmeasurable-market-cap.md) measured, and D-022's
+finding is that the loss is **not a random sample**: `_fetch_market_caps`
+sorts its input, so a wave truncates a **contiguous alphabetical suffix** (48
+of 546, positions 498–545 with no gaps, in the measured run). A reconstruction
+drawn from a wave-affected artifact would therefore be reading a
+systematically thinned population, not a noisy one.
+
+**Verified, not assumed — the source artifact is clean.** `fd83fa4` records
+**zero** unmeasured caps: 389 of 389 qualifiers carry a `market_cap_usd`, and
+the only market-cap disqualification in the entire artifact is ARQQ's measured
+`mcap $399M<$500M`. The 142-inference therefore reads what it claims to read,
+and the ten sentinel-backed names are independently confirmed above the floor
+(cold fetch, 2026-08-11: KLAC $252B, SNDK $183B, STX $182B, EOG $75B, FANG
+$56B, ALAB $55B, DVN $50B, MRNA $24B, FFIV $23B, ARWR $12.6B).
+
+That audit is possible on a **pre-D-022** artifact because D-022's defect was
+in the published `status`, the legend and the dashboard annotation — the
+`fails` string already read `mcap unavailable`, distinct from `mcap $X<$Y`.
+The forensic trail survived even though the verdict a reader saw did not.
+
+**The one thing that genuinely carries over: a sentinel resolves an unknown
+cap in the OPPOSITE direction to the live gate.** A $5B sentinel passes the
+gate by construction; production fails an unmeasured cap **closed**. So the
+sentinel arm does not model what a rotation would have done with those caps
+missing — structurally it *is* D-022's optimistic pass, the same object
+`mcap_materiality` constructs to ask whether missing caps change the book. On
+a wave-affected week the reconstruction and production would diverge by
+precisely the set that function reports, and in the admitting direction.
+
+**Precondition for reusing this recipe:** `mcap_coverage.degraded == 0` on the
+source artifact. Artifacts baked before D-022 carry no such field — it reads
+`null`, which is *not* the same as healthy — and must be audited through the
+`fails` strings, as was done here.
+
 ---
 
 ## 6 — Pins
