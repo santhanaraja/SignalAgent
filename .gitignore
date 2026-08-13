@@ -43,3 +43,39 @@ data/universe_ranking.json
 # committed; the committed artifacts are the results JSON + report + charts.
 data/backtest_cache/
 data/doctrine_cache/
+
+# The Flask dev server's own search log. ticker_api writes it on every
+# /api/analyze and reads it back for the search page, but a missing file
+# degrades to {"searches": []} by design, so it is load-bearing for nobody.
+# Ignored rather than merely left untracked because update-signals.yml stages
+# the WHOLE data/ directory (`git add ... data/ ...`) — without an entry here,
+# one laptop's browsing record is one broad `git add` away from being committed
+# as if it were pipeline data.
+data/search_history.json
+
+# Smoke twins of the study results. backtest_carry.py and backtest_target.py
+# both redirect a --smoke run from <name>.json to <name>.smoke.json precisely
+# so a smoke run cannot clobber the committed artifact. The redirect is the
+# fix; this entry keeps its output from being read as a result. A FAMILY
+# pattern, not one filename, because there are already two such scripts.
+docs/*.smoke.json
+
+# The PUBLIC mirror of the position-events log — and ONLY the public one.
+#
+# THE ANCHORING IS THE POINT. data/position_events.json is TRACKED and is the
+# committed 74-event log the API serves; public/position_events.json is an
+# untracked local-run byproduct (position_signals writes both copies). A bare
+# `position_events.json` here would match the TRACKED file too, so the leading
+# slash anchors this to the repo root and to the public/ copy alone.
+#
+# Committing the public copy is the actively harmful option, not a tidy one:
+# history.html fetches the relative 'position_events.json' FIRST and labels it
+# 'live run artifact', falling through to the committed log only when the
+# public copy is empty. A committed local copy would therefore REPLACE the full
+# history on the live page with whatever one laptop last produced.
+/public/position_events.json
+
+# Claude Code project config. .claude/launch.json is portable (repo-relative
+# dev-server commands) and is committed; anything *.local.json is per-machine
+# state — the permission allowlist in particular — and must never be.
+.claude/*.local.json
