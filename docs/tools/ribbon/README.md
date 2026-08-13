@@ -22,8 +22,17 @@ preserves.
 reproducibility caveat below before assuming "rebuildable" means "the same."
 
 `v1`, `v3` and `v8` were already gone from the source folder before this backup
-was taken. `v9` — the current version — is committed one level up at
-`docs/tools/ribbon-lab-v9.html`.
+was taken. `ribbon-lab-v9.html` — the current version — sits here too; it landed
+in the repo earlier and was moved in beside the rest so all six versions live
+together.
+
+**v9 in this repo will ALWAYS show synthetic demo data.** It fetches
+`ribbon_data.json` relative to itself, that file is deliberately not committed
+(see above), and on failure it renders a full lab — equity curve, CAGR,
+drawdown, trade stats — on a seeded random walk. Two on-page warnings say so,
+but nothing else about the page changes. Its header comment explains this;
+treat every number this copy produces as fiction unless you have put a real
+`ribbon_data.json` beside it.
 
 ## The three things the scripts define
 
