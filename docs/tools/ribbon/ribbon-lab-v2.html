@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ribbon Probe Lab v2</title>
+<style>
+  :root{
+    --bg:#0B0F14; --panel:#121820; --panel2:#0E141B; --line:#223041;
+    --ink:#E6EDF3; --muted:#8B98A5; --dim:#5C6B7A;
+    --ok:#3FB950; --warn:#D4A72C; --bad:#F85149; --info:#58A6FF; --alt:#8957E5;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 20px 64px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  h1{font-size:clamp(22px,3.4vw,30px);letter-spacing:-.02em;margin:.3em 0 .15em;font-weight:750}
+  .lede{font-size:13.5px;color:var(--muted);max-width:76ch}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 18px 15px;margin-top:20px}
+  .panel h2{font-size:14px;margin:0 0 12px;font-weight:700;letter-spacing:.02em}
+  .panel h2 span{font-family:var(--mono);font-size:10.5px;color:var(--dim);font-weight:400;letter-spacing:.08em;margin-left:8px}
+  .grid{display:grid;gap:14px}
+  .g4{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+  label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+        color:var(--dim);margin-bottom:5px}
+  select,input{width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+               border-radius:6px;padding:7px 9px;font-family:var(--mono);font-size:12.5px}
+  select:focus,input:focus{outline:none;border-color:var(--info)}
+  .row{display:flex;gap:8px;align-items:flex-end}
+  .row>div{flex:1}
+  .chk{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink);margin:7px 0}
+  .chk input{width:auto;flex:none}
+  .chk select,.chk input[type=number]{width:auto;min-width:78px}
+  button{background:var(--info);color:#04121f;border:0;border-radius:7px;padding:10px 22px;
+         font-weight:750;font-size:13px;cursor:pointer;font-family:var(--sans)}
+  button:hover{filter:brightness(1.1)}
+  button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:600}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
+  th{text-align:right;font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+     color:var(--dim);font-weight:600;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:8px;border-bottom:1px solid var(--line);color:var(--muted);font-family:var(--mono);
+     font-size:12px;text-align:right;white-space:nowrap}
+  td.lab{color:var(--ink);font-weight:600;font-family:var(--sans);font-size:12.5px}
+  tr.sig td{background:rgba(88,166,255,.07)} tr.sig td.lab{color:var(--info)}
+  tr.bh td{background:rgba(139,152,165,.05)}
+  .pos{color:var(--ok)} .neg{color:var(--bad)} .zero{color:var(--dim)}
+  .note{font-size:12.5px;color:var(--muted);border-left:2px solid var(--line);padding-left:12px;margin-top:14px}
+  .note b{color:var(--ink);font-weight:600}
+  .note.hot{border-left-color:var(--bad)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin-top:4px}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:11px 13px}
+  .stat .k{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--ink)}
+  .stat .k.big{font-size:20px}
+  .stat .l{font-size:10.5px;color:var(--muted);margin-top:2px}
+  .banner{background:var(--panel2);border:1px solid var(--warn);border-radius:8px;padding:12px 15px;
+          margin-top:14px;font-size:12.5px;color:var(--muted)}
+  .banner b{color:var(--warn)}
+  .foot{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:18px}
+  .hidden{display:none}
+  #status{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:10px}
+  svg{width:100%;height:auto;display:block}
+  .legend{display:flex;gap:18px;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px}
+  .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">exploratory · standalone · not production</div>
+  <h1>Ribbon Probe Lab <span style="color:var(--dim);font-weight:400">v2</span></h1>
+  <p class="lede">Define the moving averages, pick an entry trigger and an exit rule, and see what $10,000 would
+  have become — alongside the signal-quality view. Every result is split in half by time, because a rule that only
+  works in one half of the record is noise.</p>
+
+  <!-- DATA -->
+  <div class="panel">
+    <h2>Data <span>drop ribbon_data.json beside this file</span></h2>
+    <div class="row">
+      <div><label>Symbol</label><select id="sym"></select></div>
+      <div style="flex:0 0 auto"><button class="ghost" id="reload">Reload data</button></div>
+    </div>
+    <div id="status">checking for data…</div>
+  </div>
+
+  <!-- MAs -->
+  <div class="panel">
+    <h2>Moving averages <span>EMA seeded with SMA(n) — matches TradingView</span></h2>
+    <div class="grid g4">
+      <div><label>MA A</label><div class="row">
+        <select id="tA"><option>EMA</option><option>SMA</option></select>
+        <input id="nA" type="number" value="21" min="2" max="4000"></div></div>
+      <div><label>MA B</label><div class="row">
+        <select id="tB"><option>EMA</option><option>SMA</option></select>
+        <input id="nB" type="number" value="105" min="2" max="4000"></div></div>
+      <div><label>MA C</label><div class="row">
+        <select id="tC"><option>EMA</option><option>SMA</option></select>
+        <input id="nC" type="number" value="465" min="2" max="4000"></div></div>
+      <div><label>MA D</label><div class="row">
+        <select id="tD"><option selected>SMA</option><option>EMA</option></select>
+        <input id="nD" type="number" value="200" min="2" max="4000"></div></div>
+    </div>
+  </div>
+
+  <!-- ENTRY -->
+  <div class="panel">
+    <h2>Entry</h2>
+    <div class="grid g2">
+      <div>
+        <label>Trend filter — optional, applied before the trigger</label>
+        <div class="chk"><input type="checkbox" id="f1on" checked><span>stacked:</span>
+          <select id="f1a"></select><span>&gt;</span><select id="f1b"></select></div>
+        <div class="chk"><input type="checkbox" id="f2on"><span>close &gt;</span><select id="f2a"></select></div>
+        <div class="note" style="margin-top:10px;font-size:11.5px">Leave both off to test the trigger with no trend
+        filter at all.</div>
+      </div>
+      <div>
+        <label>Trigger</label>
+        <select id="trig">
+          <option value="dip">Dip &amp; reclaim — pull back to an MA, then turn up</option>
+          <option value="cross">Crossover — one MA crosses above another</option>
+          <option value="reclaim">Price reclaim — close crosses above an MA</option>
+        </select>
+        <div id="dipBox" style="margin-top:12px">
+          <div class="grid g4">
+            <div><label>Dip to</label><select id="dipMA"></select></div>
+            <div><label>Tolerance %</label><input id="tol" type="number" value="0.5" step="0.1"></div>
+            <div><label>Within k bars</label><input id="kbar" type="number" value="5" min="1" max="60"></div>
+            <div><label>Reclaim above</label><select id="recMA"></select></div>
+          </div>
+          <div class="chk"><input type="checkbox" id="upclose" checked><span>also require an up-close</span></div>
+        </div>
+        <div id="crossBox" class="hidden" style="margin-top:12px"><div class="grid g4">
+          <div><label>Fast MA</label><select id="cxA"></select></div>
+          <div><label>crosses above</label><select id="cxB"></select></div></div></div>
+        <div id="recBox" class="hidden" style="margin-top:12px"><div class="grid g4">
+          <div><label>Close crosses above</label><select id="rcMA"></select></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXIT -->
+  <div class="panel">
+    <h2>Exit <span>evaluated on the close, filled at the next open</span></h2>
+    <div class="chk"><input type="checkbox" id="xMAon" checked><span>close below</span>
+      <select id="xMA"></select><span>— the primary stop</span></div>
+    <div class="chk"><input type="checkbox" id="xBarOn"><span>or force out after</span>
+      <input id="xBars" type="number" value="60" min="1" max="500"><span>bars, whichever comes first</span></div>
+    <div class="note" style="font-size:11.5px">With no exit checked, a trade is held to the end of the record.
+    Re-entry is allowed the moment a new signal fires after an exit; positions never overlap.</div>
+    <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button id="run">Run</button>
+      <button class="ghost" id="resetTrials">Reset trial counter</button>
+      <span id="trials" style="font-family:var(--mono);font-size:11.5px;color:var(--muted)"></span>
+    </div>
+  </div>
+
+  <!-- STRATEGY -->
+  <div class="panel">
+    <h2>What $10,000 would have become <span id="cfgLine"></span></h2>
+    <div class="stats" id="eqStats"></div>
+    <div style="margin-top:16px" id="chartBox"></div>
+    <div style="overflow-x:auto"><table id="tradeTbl"></table></div>
+    <div id="splitBox"></div>
+  </div>
+
+  <!-- SIGNAL QUALITY -->
+  <div class="panel">
+    <h2>Signal quality <span>a different question — what follows a signal, regardless of exit</span></h2>
+    <div style="overflow-x:auto"><table id="tbl"></table></div>
+    <div id="gapBox"></div>
+    <div id="warnBox"></div>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+// ---------- indicators ----------
+function ema(a,n){const o=new Array(a.length).fill(NaN);if(a.length<n)return o;
+  let s=0;for(let i=0;i<n;i++)s+=a[i];o[n-1]=s/n;const k=2/(n+1);
+  for(let i=n;i<a.length;i++)o[i]=a[i]*k+o[i-1]*(1-k);return o;}
+function sma(a,n){const o=new Array(a.length).fill(NaN);let s=0;
+  for(let i=0;i<a.length;i++){s+=a[i];if(i>=n)s-=a[i-n];if(i>=n-1)o[i]=s/n;}return o;}
+function mk(t,a,n){return t==="EMA"?ema(a,n):sma(a,n);}
+
+// ---------- demo data ----------
+function demoData(){
+  const out={};let seed=7;
+  const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;};
+  [["DEMO-A",.0004,.011],["DEMO-B",.0006,.017],["DEMO-C",.0002,.008]].forEach(([nm,mu,sg])=>{
+    const N=5200,c=[],o=[],h=[],l=[],d=[];let p=100;const t0=new Date(2004,0,2);
+    for(let i=0;i<N;i++){
+      const r=mu+sg*((rnd()+rnd()+rnd()+rnd()+rnd()+rnd())-3);
+      const op=p;p=p*(1+r);
+      o.push(+op.toFixed(2));c.push(+p.toFixed(2));
+      h.push(+(Math.max(op,p)*(1+sg*.4*rnd())).toFixed(2));
+      l.push(+(Math.min(op,p)*(1-sg*.4*rnd())).toFixed(2));
+      d.push(new Date(t0.getTime()+i*86400000*1.42).toISOString().slice(0,10));
+    }
+    out[nm]={dates:d,o,h,l,c};
+  });
+  return {generated:"synthetic demo",symbols:out,demo:true};
+}
+
+let DATA=null;
+async function loadData(){
+  const st=document.getElementById("status");
+  try{
+    const r=await fetch("ribbon_data.json",{cache:"no-store"});
+    if(!r.ok) throw 0;
+    DATA=await r.json();
+    st.innerHTML=`<span style="color:var(--ok)">✓ ribbon_data.json loaded</span> — ${Object.keys(DATA.symbols).length} symbols · generated ${DATA.generated||"?"}`;
+  }catch(e){
+    DATA=demoData();
+    st.innerHTML=`<span style="color:var(--warn)">⚠ ribbon_data.json not found — SYNTHETIC DEMO DATA.</span> Numbers are meaningless until the real file is here.`;
+  }
+  document.getElementById("sym").innerHTML=Object.keys(DATA.symbols).map(s=>`<option>${s}</option>`).join("");
+  run();
+}
+
+// ---------- MA selects ----------
+const MAKEYS=["A","B","C","D"];
+const g=id=>document.getElementById(id).value;
+function maLabel(k){return `${k}: ${g("t"+k)}${g("n"+k)}`;}
+function fillMASelects(){
+  const opts=MAKEYS.map(k=>`<option value="${k}">${maLabel(k)}</option>`).join("");
+  [["f1a","B"],["f1b","C"],["f2a","D"],["dipMA","B"],["recMA","A"],
+   ["cxA","A"],["cxB","B"],["rcMA","B"],["xMA","A"]].forEach(([id,def])=>{
+    const el=document.getElementById(id);const cur=el.value||def;
+    el.innerHTML=opts;el.value=cur||def;
+  });
+}
+
+const HOR=[5,10,20,40];
+let trialCount=0,seenCfgs=new Set();
+
+// ---------- core ----------
+function compute(){
+  const sym=g("sym"),s=DATA.symbols[sym],N=s.c.length;
+  const MA={};let maxN=0;
+  MAKEYS.forEach(k=>{const n=Math.max(2,parseInt(g("n"+k))||2);MA[k]=mk(g("t"+k),s.c,n);maxN=Math.max(maxN,n);});
+
+  const f1on=document.getElementById("f1on").checked, f2on=document.getElementById("f2on").checked;
+  const f1a=MA[g("f1a")],f1b=MA[g("f1b")],f2a=MA[g("f2a")];
+  const trig=g("trig"), tol=(parseFloat(g("tol"))||0)/100, kb=Math.max(1,parseInt(g("kbar"))||1);
+  const dipMA=MA[g("dipMA")],recMA=MA[g("recMA")],cxA=MA[g("cxA")],cxB=MA[g("cxB")],rcMA=MA[g("rcMA")];
+  const needUp=document.getElementById("upclose").checked;
+  const xMAon=document.getElementById("xMAon").checked, xMA=MA[g("xMA")];
+  const xBarOn=document.getElementById("xBarOn").checked, xBars=Math.max(1,parseInt(g("xBars"))||1);
+
+  const setup=new Array(N).fill(false),sig=new Array(N).fill(false),ok=new Array(N).fill(false);
+  const dipRaw=new Array(N).fill(false);
+  for(let i=0;i<N;i++) if(!isNaN(dipMA[i])) dipRaw[i]= s.l[i] <= dipMA[i]*(1+tol);
+
+  for(let i=Math.max(maxN,1);i<N;i++){
+    let valid=true;MAKEYS.forEach(k=>{if(isNaN(MA[k][i]))valid=false;});
+    if(!valid) continue; ok[i]=true;
+    let st=true;
+    if(f1on) st=st&&(f1a[i]>f1b[i]);
+    if(f2on) st=st&&(s.c[i]>f2a[i]);
+    setup[i]=st; if(!st) continue;
+    let tg=false;
+    if(trig==="dip"){
+      let dipped=false;
+      for(let j=Math.max(0,i-kb+1);j<=i;j++) if(dipRaw[j]){dipped=true;break;}
+      tg=dipped && s.c[i]>recMA[i] && (!needUp || s.c[i]>s.c[i-1]);
+    } else if(trig==="cross"){ tg = cxA[i]>cxB[i] && cxA[i-1]<=cxB[i-1]; }
+    else { tg = s.c[i]>rcMA[i] && s.c[i-1]<=rcMA[i-1]; }
+    sig[i]=tg;
+  }
+
+  // forward returns (signal-quality view)
+  const fwd={},mae=new Array(N).fill(NaN),mfe=new Array(N).fill(NaN);
+  HOR.forEach(h=>fwd[h]=new Array(N).fill(NaN));
+  for(let i=0;i+1<N;i++){
+    const e=s.o[i+1];
+    HOR.forEach(h=>{if(i+1+h<N)fwd[h][i]=(s.o[i+1+h]/e-1)*100;});
+    const end=Math.min(N-1,i+20);let lo=Infinity,hi=-Infinity;
+    for(let j=i+1;j<=end;j++){lo=Math.min(lo,s.l[j]);hi=Math.max(hi,s.h[j]);}
+    if(lo<Infinity){mae[i]=(lo/e-1)*100;mfe[i]=(hi/e-1)*100;}
+  }
+  const idx=[];for(let i=0;i<N;i++) if(ok[i]) idx.push(i);
+  const A=idx[0], Z=idx[idx.length-1], mid=idx[Math.floor(idx.length/2)];
+
+  // ---------- trade simulation ----------
+  function exitCond(i,barsHeld){
+    let e=false;
+    if(xMAon && !isNaN(xMA[i])) e = e || (s.c[i] < xMA[i]);
+    if(xBarOn) e = e || (barsHeld >= xBars);
+    return e;
+  }
+  function sim(lo,hi){
+    let cash=10000,pos=0,pending=null,entryPx=0,entryIdx=-1,heldBars=0;
+    const eq=new Array(N).fill(NaN),trades=[];let inBars=0,tot=0;
+    for(let i=lo;i<=hi;i++){
+      if(pending==="buy"&&pos===0){pos=cash/s.o[i];entryPx=s.o[i];entryIdx=i;cash=0;heldBars=0;}
+      else if(pending==="sell"&&pos>0){
+        cash=pos*s.o[i];
+        trades.push({ei:entryIdx,xi:i,ret:s.o[i]/entryPx-1,bars:i-entryIdx});
+        pos=0;entryIdx=-1;
+      }
+      pending=null;
+      eq[i]=cash+pos*s.c[i]; tot++; if(pos>0){inBars++;heldBars++;}
+      if(pos>0){ if(exitCond(i,heldBars)) pending="sell"; }
+      else if(sig[i]) pending="buy";
+    }
+    if(pos>0){ cash=pos*s.c[hi];trades.push({ei:entryIdx,xi:hi,ret:s.c[hi]/entryPx-1,bars:hi-entryIdx});pos=0;eq[hi]=cash; }
+    // metrics
+    const series=[];for(let i=lo;i<=hi;i++) if(!isNaN(eq[i])) series.push(eq[i]);
+    const fin=series[series.length-1]||10000;
+    const yrs=(hi-lo+1)/252;
+    const cagr=yrs>0?(Math.pow(fin/10000,1/yrs)-1)*100:NaN;
+    let peak=-Infinity,mdd=0;const uw=new Array(N).fill(NaN);
+    for(let i=lo;i<=hi;i++){ if(isNaN(eq[i]))continue; peak=Math.max(peak,eq[i]);
+      const d=(eq[i]/peak-1)*100; uw[i]=d; mdd=Math.min(mdd,d); }
+    const wins=trades.filter(t=>t.ret>0),losses=trades.filter(t=>t.ret<=0);
+    const gp=wins.reduce((a,t)=>a+t.ret,0),gl=Math.abs(losses.reduce((a,t)=>a+t.ret,0));
+    return {eq,uw,fin,cagr,mdd,yrs,trades,
+      win: trades.length? wins.length/trades.length : NaN,
+      avgW: wins.length? gp/wins.length*100 : NaN,
+      avgL: losses.length? -gl/losses.length*100 : NaN,
+      pf: gl>0? gp/gl : NaN,
+      avgBars: trades.length? trades.reduce((a,t)=>a+t.bars,0)/trades.length : NaN,
+      inMkt: tot? inBars/tot : NaN};
+  }
+  function bh(lo,hi){
+    const eq=new Array(N).fill(NaN);const base=s.o[lo];
+    for(let i=lo;i<=hi;i++) eq[i]=10000*s.c[i]/base;
+    const fin=eq[hi],yrs=(hi-lo+1)/252;
+    let peak=-Infinity,mdd=0;const uw=new Array(N).fill(NaN);
+    for(let i=lo;i<=hi;i++){peak=Math.max(peak,eq[i]);uw[i]=(eq[i]/peak-1)*100;mdd=Math.min(mdd,uw[i]);}
+    return {eq,uw,fin,cagr:(Math.pow(fin/10000,1/yrs)-1)*100,mdd,yrs};
+  }
+
+  const S=sim(A,Z), B=bh(A,Z), S1=sim(A,mid), S2=sim(mid+1,Z), B1=bh(A,mid), B2=bh(mid+1,Z);
+
+  // cohort aggregation (signal quality)
+  const fidx=idx.filter(i=>!isNaN(fwd[20][i]));
+  function agg(f){
+    const rows=fidx.filter(f);const r={n:rows.length};
+    HOR.forEach(h=>{const v=rows.map(i=>fwd[h][i]).filter(x=>!isNaN(x));
+      r["f"+h]=v.length?v.reduce((a,b)=>a+b,0)/v.length:NaN;});
+    const v=rows.map(i=>fwd[20][i]).filter(x=>!isNaN(x));
+    r.hit=v.length?v.filter(x=>x>0).length/v.length:NaN;
+    const ma=rows.map(i=>mae[i]).filter(x=>!isNaN(x)).sort((a,b)=>a-b);
+    r.mae=ma.length?ma.reduce((a,b)=>a+b,0)/ma.length:NaN;
+    r.mae10=ma.length?ma[Math.floor(ma.length*0.10)]:NaN;
+    const mf=rows.map(i=>mfe[i]).filter(x=>!isNaN(x));
+    r.mfe=mf.length?mf.reduce((a,b)=>a+b,0)/mf.length:NaN;
+    return r;
+  }
+  const coh={"all days":agg(()=>true),"filter only":agg(i=>setup[i]),"SIGNAL":agg(i=>sig[i])};
+
+  let indep=0,last=-999;idx.forEach(i=>{if(sig[i]&&i-last>=20){indep++;last=i;}});
+  const nsig=idx.filter(i=>sig[i]).length;
+
+  return {sym,s,S,B,S1,S2,B1,B2,coh,A,Z,mid,idx,nsig,indep,
+    anyFilter:f1on||f2on,
+    span:[s.dates?s.dates[A]:A, s.dates?s.dates[Z]:Z], midDate:s.dates?s.dates[mid]:mid};
+}
+
+// ---------- charts ----------
+function chart(R){
+  const W=920,H=300,PL=62,PR=14,PT=14,PB=26;
+  const {A,Z,s}=R;
+  const step=Math.max(1,Math.ceil((Z-A+1)/900));
+  const pts=[];for(let i=A;i<=Z;i+=step) pts.push(i);
+  if(pts[pts.length-1]!==Z) pts.push(Z);
+  let lo=Infinity,hi=-Infinity;
+  pts.forEach(i=>{[R.S.eq[i],R.B.eq[i]].forEach(v=>{if(!isNaN(v)&&v>0){lo=Math.min(lo,v);hi=Math.max(hi,v);}});});
+  lo=Math.max(lo,100); const L=Math.log(lo),Hh=Math.log(hi);
+  const x=i=>PL+(i-A)/(Z-A)*(W-PL-PR);
+  const y=v=>PT+(1-(Math.log(Math.max(v,lo))-L)/(Hh-L))*(H-PT-PB);
+  const path=arr=>pts.map((i,k)=>`${k?"L":"M"}${x(i).toFixed(1)},${y(arr[i]).toFixed(1)}`).join("");
+  // gridlines
+  const ticks=[];for(let p=2;p<=8;p++){const v=Math.pow(10,p);if(v>=lo&&v<=hi)ticks.push(v);
+    const v5=5*Math.pow(10,p-1);if(v5>=lo&&v5<=hi)ticks.push(v5);}
+  ticks.push(10000);
+  const fmt=v=>v>=1e6?"$"+(v/1e6).toFixed(1)+"M":"$"+Math.round(v/1000)+"k";
+  const grid=[...new Set(ticks)].sort((a,b)=>a-b).map(v=>
+    `<line x1="${PL}" y1="${y(v).toFixed(1)}" x2="${W-PR}" y2="${y(v).toFixed(1)}" stroke="#223041" stroke-width="1" opacity="${v===10000?".9":".4"}"/>
+     <text x="${PL-8}" y="${(y(v)+4).toFixed(1)}" text-anchor="end" font-size="10" font-family="monospace" fill="#5C6B7A">${fmt(v)}</text>`).join("");
+  // year labels
+  const lab=[];const nlab=6;
+  for(let k=0;k<=nlab;k++){const i=Math.round(A+(Z-A)*k/nlab);
+    const d=s.dates?s.dates[i].slice(0,4):i;
+    lab.push(`<text x="${x(i).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="10" font-family="monospace" fill="#5C6B7A">${d}</text>`);}
+
+  // underwater
+  const UH=110,UPT=10,UPB=22;
+  let umin=0;pts.forEach(i=>{[R.S.uw[i],R.B.uw[i]].forEach(v=>{if(!isNaN(v))umin=Math.min(umin,v);});});
+  const uy=v=>UPT+(-Math.max(v,umin)/-umin)*(UH-UPT-UPB);
+  const upath=arr=>pts.map((i,k)=>`${k?"L":"M"}${x(i).toFixed(1)},${uy(arr[i]).toFixed(1)}`).join("");
+  const uticks=[0,umin/2,umin].map(v=>
+    `<line x1="${PL}" y1="${uy(v).toFixed(1)}" x2="${W-PR}" y2="${uy(v).toFixed(1)}" stroke="#223041" stroke-width="1" opacity=".5"/>
+     <text x="${PL-8}" y="${(uy(v)+4).toFixed(1)}" text-anchor="end" font-size="10" font-family="monospace" fill="#5C6B7A">${v.toFixed(0)}%</text>`).join("");
+
+  return `
+  <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Equity curve: strategy versus buy and hold, log scale">
+    ${grid}${lab.join("")}
+    <path d="${path(R.B.eq)}" fill="none" stroke="#8B98A5" stroke-width="1.6" opacity=".8"/>
+    <path d="${path(R.S.eq)}" fill="none" stroke="#58A6FF" stroke-width="2"/>
+    <line x1="${x(R.mid)}" y1="${PT}" x2="${x(R.mid)}" y2="${H-PB}" stroke="#D4A72C" stroke-width="1" stroke-dasharray="4 4" opacity=".7"/>
+    <text x="${x(R.mid)+5}" y="${PT+12}" font-size="9.5" font-family="monospace" fill="#D4A72C">split</text>
+  </svg>
+  <div class="legend">
+    <span><i style="background:#58A6FF"></i>strategy</span>
+    <span><i style="background:#8B98A5"></i>buy &amp; hold</span>
+    <span style="color:var(--dim)">log scale</span>
+  </div>
+  <svg viewBox="0 0 ${W} ${UH}" style="margin-top:6px" role="img" aria-label="Drawdown, underwater curve">
+    ${uticks}
+    <path d="${upath(R.B.uw)}" fill="none" stroke="#8B98A5" stroke-width="1.3" opacity=".7"/>
+    <path d="${upath(R.S.uw)}" fill="none" stroke="#F85149" stroke-width="1.6"/>
+    <text x="${PL}" y="${UH-6}" font-size="10" font-family="monospace" fill="#5C6B7A">drawdown — strategy in red, buy &amp; hold in grey</text>
+  </svg>`;
+}
+
+// ---------- render ----------
+const f2=(x,d=2)=>isNaN(x)?"—":x.toFixed(d);
+const money=v=>isNaN(v)?"—":(v>=1e6?"$"+(v/1e6).toFixed(2)+"M":"$"+Math.round(v).toLocaleString());
+const cls=x=>isNaN(x)?"zero":(x>0?"pos":(x<0?"neg":"zero"));
+
+function render(R){
+  document.getElementById("cfgLine").textContent=`${R.sym} · ${R.span[0]} → ${R.span[1]} · ${R.S.yrs.toFixed(1)}y`;
+
+  const beat=R.S.fin>R.B.fin;
+  document.getElementById("eqStats").innerHTML=`
+    <div class="stat"><div class="k big ${beat?"pos":"neg"}">${money(R.S.fin)}</div><div class="l">strategy from $10,000</div></div>
+    <div class="stat"><div class="k big">${money(R.B.fin)}</div><div class="l">buy &amp; hold</div></div>
+    <div class="stat"><div class="k ${cls(R.S.cagr)}">${f2(R.S.cagr,1)}%</div><div class="l">CAGR (B&amp;H ${f2(R.B.cagr,1)}%)</div></div>
+    <div class="stat"><div class="k neg">${f2(R.S.mdd,1)}%</div><div class="l">max DD (B&amp;H ${f2(R.B.mdd,1)}%)</div></div>
+    <div class="stat"><div class="k">${R.S.trades.length}</div><div class="l">trades</div></div>
+    <div class="stat"><div class="k">${isNaN(R.S.inMkt)?"—":(R.S.inMkt*100).toFixed(0)+"%"}</div><div class="l">time in market</div></div>`;
+
+  document.getElementById("chartBox").innerHTML=chart(R);
+
+  document.getElementById("tradeTbl").innerHTML=`
+    <tr><th>trade stats</th><th>win rate</th><th>avg win</th><th>avg loss</th><th>profit factor</th><th>avg bars held</th><th>trades/yr</th></tr>
+    <tr class="sig"><td class="lab">strategy</td>
+      <td>${isNaN(R.S.win)?"—":(R.S.win*100).toFixed(0)+"%"}</td>
+      <td class="pos">${f2(R.S.avgW)}%</td><td class="neg">${f2(R.S.avgL)}%</td>
+      <td class="${R.S.pf>1?"pos":"neg"}">${f2(R.S.pf)}</td>
+      <td>${f2(R.S.avgBars,0)}</td><td>${f2(R.S.trades.length/Math.max(R.S.yrs,.01),1)}</td></tr>`;
+
+  const d1=R.S1.cagr-R.B1.cagr, d2=R.S2.cagr-R.B2.cagr;
+  const agree=Math.sign(d1)===Math.sign(d2);
+  document.getElementById("splitBox").innerHTML=`
+    <div class="note ${agree?"":"hot"}">
+      <b>Split sample.</b> First half (to ${R.midDate}): strategy ${f2(R.S1.cagr,1)}% vs buy &amp; hold ${f2(R.B1.cagr,1)}%
+      (<b class="${cls(d1)}">${d1>0?"+":""}${f2(d1,1)}</b>). Second half: ${f2(R.S2.cagr,1)}% vs ${f2(R.B2.cagr,1)}%
+      (<b class="${cls(d2)}">${d2>0?"+":""}${f2(d2,1)}</b>).
+      ${agree?"Edge points the same way in both halves.":"<b style='color:var(--bad)'>The edge flips sign between halves — treat this configuration as noise.</b>"}
+    </div>`;
+
+  let h=`<tr><th>cohort</th><th>n</th>`+HOR.map(x=>`<th>fwd${x}</th>`).join("")+
+        `<th>hit20</th><th>MAE</th><th>MAE p10</th><th>MFE</th></tr>`;
+  Object.entries(R.coh).forEach(([k,r])=>{
+    h+=`<tr class="${k==="SIGNAL"?"sig":""}"><td class="lab">${k}</td><td>${r.n}</td>`+
+       HOR.map(x=>`<td class="${cls(r["f"+x])}">${f2(r["f"+x])}%</td>`).join("")+
+       `<td>${isNaN(r.hit)?"—":(r.hit*100).toFixed(0)+"%"}</td>`+
+       `<td class="neg">${f2(r.mae)}%</td><td class="neg">${f2(r.mae10)}%</td><td class="pos">${f2(r.mfe)}%</td></tr>`;
+  });
+  document.getElementById("tbl").innerHTML=h;
+
+  const gT=R.coh["filter only"].f20-R.coh["all days"].f20, gS=R.coh["SIGNAL"].f20-R.coh["filter only"].f20,
+        gN=R.coh["SIGNAL"].f20-R.coh["all days"].f20;
+  document.getElementById("gapBox").innerHTML=`
+    <div class="note"><b>Decomposition (fwd20, exit-independent).</b>
+      trend filter <b class="${cls(gT)}">${gT>0?"+":""}${f2(gT)}</b> ·
+      trigger on top <b class="${cls(gS)}">${gS>0?"+":""}${f2(gS)}</b> ·
+      net vs doing nothing <b class="${cls(gN)}">${gN>0?"+":""}${f2(gN)}</b>.
+      ${R.anyFilter?"":"No trend filter active, so “filter only” equals “all days”."}</div>`;
+
+  let w=`<div class="banner"><b>Read before believing this.</b>
+    Signals cluster: ${R.nsig} raw signals ≈ <b>${R.indep}</b> non-overlapping episodes.
+    Costs and slippage are <b>zero</b> here — a high-turnover configuration is flattered.
+    Cash earns nothing between trades.`;
+  if(R.S.trades.length<25) w+=` <b style="color:var(--bad)">Only ${R.S.trades.length} trades — too few to conclude anything.</b>`;
+  if(trialCount>=8) w+=` You have tested <b>${trialCount}</b> configurations this session; at that count something will look good by chance.`;
+  w+=`</div>`;
+  if(DATA.demo) w=`<div class="banner"><b>SYNTHETIC DEMO DATA</b> — a random walk, not a market. Generate ribbon_data.json.</div>`+w;
+  document.getElementById("warnBox").innerHTML=w;
+
+  document.getElementById("foot").textContent="config: "+cfgString()+
+    "  ·  entries and exits fill at the next open  ·  fwd = open-to-open T+1 → T+1+h  ·  no costs modelled";
+}
+
+function cfgString(){
+  const t=g("trig");
+  let s=`${g("sym")} | A=${g("tA")}${g("nA")} B=${g("tB")}${g("nB")} C=${g("tC")}${g("nC")} D=${g("tD")}${g("nD")}`;
+  s+=` | filter:${document.getElementById("f1on").checked?g("f1a")+">"+g("f1b"):"-"},${document.getElementById("f2on").checked?"c>"+g("f2a"):"-"}`;
+  if(t==="dip") s+=` | dip→${g("dipMA")} tol${g("tol")} k${g("kbar")} rec>${g("recMA")}${document.getElementById("upclose").checked?" +up":""}`;
+  else if(t==="cross") s+=` | cross ${g("cxA")}>${g("cxB")}`;
+  else s+=` | reclaim c>${g("rcMA")}`;
+  s+=` | exit:${document.getElementById("xMAon").checked?"c<"+g("xMA"):"-"}${document.getElementById("xBarOn").checked?"/"+g("xBars")+"bars":""}`;
+  return s;
+}
+
+function run(){
+  if(!DATA) return;
+  fillMASelects();
+  const cfg=cfgString();
+  if(!seenCfgs.has(cfg)){seenCfgs.add(cfg);trialCount++;}
+  document.getElementById("trials").textContent=`${trialCount} distinct configuration${trialCount===1?"":"s"} tested this session`;
+  render(compute());
+}
+
+document.getElementById("trig").addEventListener("change",e=>{
+  const v=e.target.value;
+  document.getElementById("dipBox").classList.toggle("hidden",v!=="dip");
+  document.getElementById("crossBox").classList.toggle("hidden",v!=="cross");
+  document.getElementById("recBox").classList.toggle("hidden",v!=="reclaim");
+});
+document.getElementById("run").addEventListener("click",run);
+document.getElementById("sym").addEventListener("change",run);
+document.getElementById("reload").addEventListener("click",loadData);
+document.getElementById("resetTrials").addEventListener("click",()=>{
+  trialCount=0;seenCfgs.clear();
+  document.getElementById("trials").textContent="0 distinct configurations tested this session";
+});
+MAKEYS.forEach(k=>{
+  document.getElementById("t"+k).addEventListener("change",fillMASelects);
+  document.getElementById("n"+k).addEventListener("change",fillMASelects);
+});
+fillMASelects();loadData();
+</script>
+</body>
+</html>

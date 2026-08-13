@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ribbon Probe Lab v5</title>
+<style>
+  :root{
+    --bg:#0B0F14; --panel:#121820; --panel2:#0E141B; --line:#223041;
+    --ink:#E6EDF3; --muted:#8B98A5; --dim:#5C6B7A;
+    --ok:#3FB950; --warn:#D4A72C; --bad:#F85149; --info:#58A6FF; --alt:#8957E5;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5}
+  .wrap{max-width:1220px;margin:0 auto;padding:30px 18px 64px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  h1{font-size:clamp(22px,3.4vw,30px);letter-spacing:-.02em;margin:.3em 0 .15em;font-weight:750}
+  .lede{font-size:13.5px;color:var(--muted);max-width:78ch}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 16px 13px;margin-top:18px}
+  .panel h2{font-size:14px;margin:0 0 11px;font-weight:700;letter-spacing:.02em;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .panel h2 .sub{font-family:var(--mono);font-size:10.5px;color:var(--dim);font-weight:400;letter-spacing:.07em}
+  .logic{background:var(--panel2);border:1px solid var(--info);color:var(--info);border-radius:5px;
+         padding:3px 7px;font-family:var(--mono);font-size:11px;font-weight:700;width:auto;min-width:64px}
+  .grid{display:grid;gap:11px}
+  .g4{grid-template-columns:repeat(auto-fit,minmax(158px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+  label{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;
+        color:var(--dim);margin-bottom:4px}
+  select,input{width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+               border-radius:6px;padding:6px 8px;font-family:var(--mono);font-size:12px}
+  select:focus,input:focus{outline:none;border-color:var(--info)}
+  .row{display:flex;gap:6px;align-items:center}
+  .row>div{flex:1}
+  .chk{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink);margin:6px 0;flex-wrap:wrap}
+  .chk input[type=checkbox]{width:auto;flex:none}
+  .chk select,.chk input[type=number]{width:auto;min-width:74px;flex:none}
+  .maslot{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 10px}
+  .maslot .hd{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+  .maslot .dot{width:9px;height:9px;border-radius:2px;flex:none}
+  .maslot .nm{font-family:var(--mono);font-size:11.5px;font-weight:700}
+  .trigblk{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:11px 12px}
+  button{background:var(--info);color:#04121f;border:0;border-radius:7px;padding:10px 22px;
+         font-weight:750;font-size:13px;cursor:pointer;font-family:var(--sans)}
+  button:hover{filter:brightness(1.1)}
+  button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:600}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
+  th{text-align:right;font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+     color:var(--dim);font-weight:600;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:8px;border-bottom:1px solid var(--line);color:var(--muted);font-family:var(--mono);
+     font-size:12px;text-align:right;white-space:nowrap}
+  td.lab{color:var(--ink);font-weight:600;font-family:var(--sans);font-size:12.5px}
+  tr.sig td{background:rgba(88,166,255,.07)} tr.sig td.lab{color:var(--info)}
+  .pos{color:var(--ok)} .neg{color:var(--bad)} .zero{color:var(--dim)}
+  .note{font-size:12.5px;color:var(--muted);border-left:2px solid var(--line);padding-left:12px;margin-top:13px}
+  .note b{color:var(--ink);font-weight:600}
+  .note.hot{border-left-color:var(--bad)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(116px,1fr));gap:9px;margin-top:4px}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+  .stat .k{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--ink)}
+  .stat .k.big{font-size:19px}
+  .stat .l{font-size:10px;color:var(--muted);margin-top:2px}
+  .banner{background:var(--panel2);border:1px solid var(--warn);border-radius:8px;padding:11px 14px;
+          margin-top:13px;font-size:12.5px;color:var(--muted)}
+  .banner b{color:var(--warn)}
+  .banner.err{border-color:var(--bad)} .banner.err b{color:var(--bad)}
+  .foot{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:16px;word-break:break-all}
+  .hidden{display:none!important}
+  #status{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:9px}
+  svg{width:100%;height:auto;display:block}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:7px}
+  .legend i{display:inline-block;width:13px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  .plotchk{display:flex;gap:12px;flex-wrap:wrap;margin-top:9px;font-family:var(--mono);font-size:11px}
+  .plotchk label{display:inline-flex;align-items:center;gap:5px;text-transform:none;letter-spacing:0;
+                 font-size:11px;color:var(--muted);margin:0;cursor:pointer}
+  .plotchk input{width:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">exploratory · standalone · not production</div>
+  <h1>Ribbon Probe Lab <span style="color:var(--dim);font-weight:400">v5</span></h1>
+  <p class="lede">Eight MA slots, nine trigger types, three trigger slots — and every group now combines with
+  <b style="color:var(--info)">AND</b> or <b style="color:var(--info)">OR</b>. Filters still gate the triggers;
+  everything splits in half by time, because a rule that only works in one half of the record is noise.</p>
+
+  <div class="panel">
+    <h2>Data <span class="sub">serve the folder — file:// blocks the JSON fetch</span></h2>
+    <div class="row">
+      <div><label>Symbol</label><select id="sym"></select></div>
+      <div style="flex:0 0 auto"><button class="ghost" id="reload">Reload</button></div>
+    </div>
+    <div id="status">checking for data…</div>
+  </div>
+
+  <div class="panel">
+    <h2>Moving averages <span class="sub">uncheck a slot to exclude it — an unused long MA still costs warmup</span></h2>
+    <div class="grid g4" id="maGrid"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Entry — trend filter
+      <select class="logic" id="fLogic"><option value="AND">ALL (and)</option><option value="OR">ANY (or)</option></select>
+      <span class="sub">checked rows combine with this logic · leave all unchecked for no filter</span></h2>
+    <div class="chk"><input type="checkbox" id="f1on" checked><select id="f1a"></select><span>&gt;</span><select id="f1b"></select></div>
+    <div class="chk"><input type="checkbox" id="f3on"><select id="f3a"></select><span>&gt;</span><select id="f3b"></select></div>
+    <div class="chk"><input type="checkbox" id="f2on"><span>close &gt;</span><select id="f2a"></select></div>
+  </div>
+
+  <div class="panel">
+    <h2>Entry — triggers
+      <select class="logic" id="tLogic"><option value="AND">ALL (and)</option><option value="OR">ANY (or)</option></select>
+      <span class="sub">active slots combine with this logic, then are ANDed with the filter</span></h2>
+    <div class="grid g3" id="trigWrap"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Exit
+      <select class="logic" id="xLogic"><option value="OR">ANY (or)</option><option value="AND">ALL (and)</option></select>
+      <span class="sub">evaluated on the close, filled at the next open</span></h2>
+    <div class="chk"><input type="checkbox" id="xMAon" checked><span>close below</span><select id="xMA"></select></div>
+    <div class="chk"><input type="checkbox" id="xCXon"><span>MA cross:</span><select id="xcA"></select>
+      <span>crosses below</span><select id="xcB"></select></div>
+    <div class="chk"><input type="checkbox" id="xStackOn"><span>stack breaks:</span><select id="xsA"></select>
+      <span>falls under</span><select id="xsB"></select><span>(no cross required)</span></div>
+    <div class="chk" style="border-top:1px solid var(--line);padding-top:9px;margin-top:9px">
+      <input type="checkbox" id="xBarOn"><span>backstop — always OR: force out after</span>
+      <input id="xBars" type="number" value="60" min="1" max="500"><span>bars</span></div>
+    <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button id="run">Run</button>
+      <button class="ghost" id="resetTrials">Reset counter</button>
+      <span id="trials" style="font-family:var(--mono);font-size:11.5px;color:var(--muted)"></span>
+    </div>
+  </div>
+
+  <div id="errBox"></div>
+
+  <div class="panel">
+    <h2>What $10,000 would have become <span class="sub" id="cfgLine"></span></h2>
+    <div class="stats" id="eqStats"></div>
+    <div style="margin-top:14px" id="chartBox"></div>
+    <div style="overflow-x:auto"><table id="tradeTbl"></table></div>
+    <div id="splitBox"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Price &amp; moving averages <span class="sub">green ▲ entries · red ▼ exits</span></h2>
+    <div class="row" style="max-width:250px"><div><label>Range</label><select id="zoom">
+      <option value="0">All history</option><option value="20">Last 20 years</option>
+      <option value="10" selected>Last 10 years</option><option value="5">Last 5 years</option>
+      <option value="3">Last 3 years</option><option value="1">Last 1 year</option></select></div></div>
+    <div class="plotchk" id="plotChk"></div>
+    <div style="margin-top:10px" id="priceBox"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Signal quality <span class="sub">a different question — what follows a signal, regardless of exit</span></h2>
+    <div style="overflow-x:auto"><table id="tbl"></table></div>
+    <div id="gapBox"></div>
+    <div id="warnBox"></div>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+// ================= indicators =================
+function ema(a,n){const L=a.length,o=new Array(L).fill(NaN);if(L<n)return o;
+  let s=0;for(let i=0;i<n;i++)s+=a[i];o[n-1]=s/n;const k=2/(n+1);
+  for(let i=n;i<L;i++)o[i]=a[i]*k+o[i-1]*(1-k);return o;}
+function sma(a,n){const L=a.length,o=new Array(L).fill(NaN);let s=0;
+  for(let i=0;i<L;i++){s+=a[i];if(i>=n)s-=a[i-n];if(i>=n-1)o[i]=s/n;}return o;}
+function wma(a,n){const L=a.length,o=new Array(L).fill(NaN);
+  let f=0;while(f<L&&isNaN(a[f]))f++;if(L-f<n)return o;
+  const den=n*(n+1)/2;let num=0,sum=0;
+  for(let i=0;i<n;i++){num+=a[f+i]*(i+1);sum+=a[f+i];}
+  o[f+n-1]=num/den;
+  for(let i=f+n;i<L;i++){num=num+n*a[i]-sum;sum=sum+a[i]-a[i-n];o[i]=num/den;}return o;}
+function hma(a,n){const half=Math.max(1,Math.round(n/2)),sq=Math.max(1,Math.round(Math.sqrt(n)));
+  const w1=wma(a,half),w2=wma(a,n),raw=new Array(a.length).fill(NaN);
+  for(let i=0;i<a.length;i++) if(!isNaN(w1[i])&&!isNaN(w2[i])) raw[i]=2*w1[i]-w2[i];
+  return wma(raw,sq);}
+function mk(t,a,n){return t==="EMA"?ema(a,n):t==="SMA"?sma(a,n):t==="WMA"?wma(a,n):hma(a,n);}
+function warmupOf(t,n){return t==="HMA"? n+Math.round(Math.sqrt(n)) : n;}
+
+// ================= MA slots =================
+const SLOTS=[
+  {k:"A",t:"EMA",n:21,c:"#58A6FF"},{k:"B",t:"EMA",n:105,c:"#3FB950"},
+  {k:"C",t:"EMA",n:465,c:"#D4A72C"},{k:"D",t:"SMA",n:200,c:"#8B98A5"},
+  {k:"E",t:"HMA",n:45,c:"#8957E5"},{k:"F",t:"HMA",n:200,c:"#F85149"},
+  {k:"G",t:"HMA",n:990,c:"#DB6D28"},{k:"H",t:"HMA",n:4650,c:"#39C5CF"}];
+const COL={};SLOTS.forEach(s=>COL[s.k]=s.c);
+const g=id=>document.getElementById(id).value;
+const ck=id=>document.getElementById(id).checked;
+const el=id=>document.getElementById(id);
+
+el("maGrid").innerHTML=SLOTS.map(s=>`
+  <div class="maslot"><div class="hd"><input type="checkbox" id="on${s.k}" ${s.k==="H"?"":"checked"}>
+    <span class="dot" style="background:${s.c}"></span><span class="nm" id="lb${s.k}">${s.k}</span></div>
+  <div class="row"><select id="t${s.k}">${["EMA","SMA","WMA","HMA"].map(x=>`<option${x===s.t?" selected":""}>${x}</option>`).join("")}</select>
+  <input id="n${s.k}" type="number" value="${s.n}" min="2" max="6000"></div></div>`).join("");
+el("plotChk").innerHTML=SLOTS.map(s=>
+  `<label><input type="checkbox" id="pl${s.k}" ${["A","B","C"].includes(s.k)?"checked":""}>
+   <span style="display:inline-block;width:9px;height:3px;background:${s.c};border-radius:2px"></span>
+   <span id="pn${s.k}">${s.k}</span></label>`).join("");
+
+// ================= triggers =================
+const TRIGS=[
+  ["dip","Dip &amp; reclaim — pull back to an MA, then turn up"],
+  ["cxup","MA crosses ABOVE MA"],["cxdn","MA crosses BELOW MA"],
+  ["pxup","Close crosses ABOVE MA"],["pxdn","Close crosses BELOW MA"],
+  ["stack","Stack FORMS — A &gt; B &gt; C becomes true"],
+  ["unstack","Stack BREAKS — A &gt; B &gt; C becomes false"],
+  ["slope","MA slope TURNS UP"],
+  ["touch","Close touches MA (within tolerance, no cross needed)"]];
+const TPFX=["t1","t2","t3"];
+function trigHTML(p,i){
+  return `<div class="trigblk">
+    <label>Trigger ${i+1}${i?" — optional":""}</label>
+    <select id="${p}type">${i?'<option value="none">— none —</option>':""}
+      ${TRIGS.map(([v,t],j)=>`<option value="${v}"${(!i&&j===0)?" selected":""}>${t}</option>`).join("")}</select>
+    <div class="grid g4" style="margin-top:9px">
+      <div id="${p}wa"><label id="${p}la">MA</label><select id="${p}a"></select></div>
+      <div id="${p}wb"><label id="${p}lb">vs</label><select id="${p}b"></select></div>
+      <div id="${p}wc"><label>and</label><select id="${p}c"></select></div>
+      <div id="${p}wtol"><label>Tolerance %</label><input id="${p}tol" type="number" value="0.5" step="0.1"></div>
+      <div id="${p}wk"><label>Dip within k bars</label><input id="${p}k" type="number" value="5" min="1" max="60"></div>
+      <div id="${p}wrec"><label>Reclaim above</label><select id="${p}rec"></select></div>
+      <div id="${p}wsl"><label>Slope over n bars</label><input id="${p}sl" type="number" value="5" min="1" max="200"></div>
+      <div id="${p}wlk"><label>Event valid N bars</label><input id="${p}lk" type="number" value="1" min="1" max="60"></div>
+    </div>
+    <div class="chk" id="${p}wup"><input type="checkbox" id="${p}up" checked><span>also require an up-close</span></div>
+  </div>`;}
+el("trigWrap").innerHTML=TPFX.map((p,i)=>trigHTML(p,i)).join("");
+
+const VIS={none:[],dip:["wa","wtol","wk","wrec","wup"],
+  cxup:["wa","wb","wlk"],cxdn:["wa","wb","wlk"],
+  pxup:["wa","wlk"],pxdn:["wa","wlk"],
+  stack:["wa","wb","wc","wlk"],unstack:["wa","wb","wc","wlk"],
+  slope:["wa","wsl","wlk"],touch:["wa","wtol","wlk"]};
+const LBL={dip:["Dip to",""],cxup:["Fast MA","crosses above"],cxdn:["Fast MA","crosses below"],
+  pxup:["Close crosses above",""],pxdn:["Close crosses below",""],
+  stack:["Fastest","then"],unstack:["Fastest","then"],slope:["MA",""],touch:["Touches",""]};
+function syncTrig(p){const t=g(p+"type"),vis=VIS[t]||[];
+  ["wa","wb","wc","wtol","wk","wrec","wsl","wlk","wup"].forEach(w=>
+    el(p+w).classList.toggle("hidden",!vis.includes(w)));
+  if(LBL[t]){el(p+"la").textContent=LBL[t][0];if(LBL[t][1])el(p+"lb").textContent=LBL[t][1];}}
+
+function activeKeys(){return SLOTS.map(s=>s.k).filter(k=>ck("on"+k));}
+function maLabel(k){return `${k}: ${g("t"+k)}${g("n"+k)}`;}
+function fillSelects(){
+  const ak=activeKeys(),opts=ak.map(k=>`<option value="${k}">${maLabel(k)}</option>`).join("");
+  SLOTS.forEach(s=>{el("lb"+s.k).textContent=maLabel(s.k);el("pn"+s.k).textContent=maLabel(s.k);});
+  const defs=[["f1a","B"],["f1b","C"],["f3a","C"],["f3b","D"],["f2a","D"],
+    ["xMA","A"],["xcA","A"],["xcB","B"],["xsA","B"],["xsB","C"]];
+  TPFX.forEach((p,i)=>defs.push([p+"a",["B","A","E"][i]],[p+"b",["C","B","F"][i]],
+    [p+"c",["D","C","G"][i]],[p+"rec","A"]));
+  defs.forEach(([id,def])=>{const e=el(id);const cur=e.value;e.innerHTML=opts;
+    e.value=ak.includes(cur)?cur:(ak.includes(def)?def:ak[0]);});
+  TPFX.forEach(syncTrig);}
+
+// ================= data =================
+function demoData(){
+  const out={};let seed=7;const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;};
+  [["DEMO-A",.0004,.011],["DEMO-B",.0006,.017]].forEach(([nm,mu,sg])=>{
+    const N=7000,c=[],o=[],h=[],l=[],d=[];let p=100;const t0=new Date(1998,0,2);
+    for(let i=0;i<N;i++){const r=mu+sg*((rnd()+rnd()+rnd()+rnd()+rnd()+rnd())-3);
+      const op=p;p=p*(1+r);o.push(+op.toFixed(2));c.push(+p.toFixed(2));
+      h.push(+(Math.max(op,p)*(1+sg*.4*rnd())).toFixed(2));
+      l.push(+(Math.min(op,p)*(1-sg*.4*rnd())).toFixed(2));
+      d.push(new Date(t0.getTime()+i*86400000*1.42).toISOString().slice(0,10));}
+    out[nm]={dates:d,o,h,l,c};});
+  return {generated:"synthetic demo",symbols:out,demo:true};}
+let DATA=null;
+async function loadData(){
+  const st=el("status");
+  try{const r=await fetch("ribbon_data.json",{cache:"no-store"});if(!r.ok)throw 0;DATA=await r.json();
+    st.innerHTML=`<span style="color:var(--ok)">✓ ribbon_data.json</span> — ${Object.keys(DATA.symbols).length} symbols · ${DATA.generated||"?"}`;}
+  catch(e){DATA=demoData();
+    st.innerHTML=`<span style="color:var(--warn)">⚠ not found — SYNTHETIC DEMO DATA.</span> Serve the folder (python3 -m http.server) rather than opening file://`;}
+  el("sym").innerHTML=Object.keys(DATA.symbols).map(s=>`<option>${s}</option>`).join("");
+  run();}
+
+const HOR=[5,10,20,40];
+let trialCount=0,seenCfgs=new Set();
+
+function buildTrig(p,s,MA,N){
+  const type=g(p+"type");if(type==="none")return null;
+  const NA=new Array(N).fill(NaN);
+  const A=MA[g(p+"a")]||NA,B=MA[g(p+"b")]||NA,C=MA[g(p+"c")]||NA,REC=MA[g(p+"rec")]||NA;
+  const tol=(parseFloat(g(p+"tol"))||0)/100,kb=Math.max(1,parseInt(g(p+"k"))||1);
+  const sl=Math.max(1,parseInt(g(p+"sl"))||1),lk=Math.max(1,parseInt(g(p+"lk"))||1);
+  const ev=new Array(N).fill(false);
+  if(type==="dip"){
+    const dr=new Array(N).fill(false),up=ck(p+"up");
+    for(let i=0;i<N;i++) if(!isNaN(A[i])) dr[i]= s.l[i]<=A[i]*(1+tol);
+    for(let i=1;i<N;i++){let d=false;for(let j=Math.max(0,i-kb+1);j<=i;j++) if(dr[j]){d=true;break;}
+      ev[i]= d && !isNaN(REC[i]) && s.c[i]>REC[i] && (!up||s.c[i]>s.c[i-1]);}
+    return ev;}
+  const raw=new Array(N).fill(false);
+  for(let i=sl+1;i<N;i++){
+    if(isNaN(A[i])||isNaN(A[i-1]))continue;
+    switch(type){
+      case "cxup":raw[i]=!isNaN(B[i])&&A[i]>B[i]&&A[i-1]<=B[i-1];break;
+      case "cxdn":raw[i]=!isNaN(B[i])&&A[i]<B[i]&&A[i-1]>=B[i-1];break;
+      case "pxup":raw[i]=s.c[i]>A[i]&&s.c[i-1]<=A[i-1];break;
+      case "pxdn":raw[i]=s.c[i]<A[i]&&s.c[i-1]>=A[i-1];break;
+      case "stack":{if(isNaN(B[i])||isNaN(C[i]))break;
+        const n=A[i]>B[i]&&B[i]>C[i],v=A[i-1]>B[i-1]&&B[i-1]>C[i-1];raw[i]=n&&!v;break;}
+      case "unstack":{if(isNaN(B[i])||isNaN(C[i]))break;
+        const n=A[i]>B[i]&&B[i]>C[i],v=A[i-1]>B[i-1]&&B[i-1]>C[i-1];raw[i]=!n&&v;break;}
+      case "slope":if(!isNaN(A[i-sl])&&!isNaN(A[i-1-sl]))raw[i]=A[i]>A[i-sl]&&A[i-1]<=A[i-1-sl];break;
+      case "touch":raw[i]= s.l[i]<=A[i]*(1+tol) && s.c[i]>A[i]*(1-tol);break;}}
+  for(let i=0;i<N;i++){for(let j=Math.max(0,i-lk+1);j<=i;j++) if(raw[j]){ev[i]=true;break;}}
+  return ev;}
+
+// ================= core =================
+function compute(){
+  const sym=g("sym"),s=DATA.symbols[sym],N=s.c.length,ak=activeKeys();
+  const MA={};let warm=1;
+  ak.forEach(k=>{const t=g("t"+k),n=Math.max(2,parseInt(g("n"+k))||2);
+    MA[k]=mk(t,s.c,n);warm=Math.max(warm,warmupOf(t,n));});
+  if(N<=warm+40) return {err:`${sym} has ${N} bars; the active MAs need about ${warm}. Uncheck the longest slot or pick a deeper symbol.`};
+  const M=k=>MA[k]||new Array(N).fill(NaN);
+  const f1a=M(g("f1a")),f1b=M(g("f1b")),f3a=M(g("f3a")),f3b=M(g("f3b")),f2a=M(g("f2a"));
+  const xMA=M(g("xMA")),xcA=M(g("xcA")),xcB=M(g("xcB")),xsA=M(g("xsA")),xsB=M(g("xsB"));
+  const xBars=Math.max(1,parseInt(g("xBars"))||1);
+  const fL=g("fLogic"),tL=g("tLogic"),xL=g("xLogic");
+  const evs=TPFX.map(p=>buildTrig(p,s,MA,N)).filter(e=>e!==null);
+  if(!evs.length) return {err:`No trigger is active — set at least Trigger 1.`};
+
+  const setup=new Array(N).fill(false),sig=new Array(N).fill(false),ok=new Array(N).fill(false);
+  for(let i=1;i<N;i++){
+    let valid=true;ak.forEach(k=>{if(isNaN(MA[k][i])||isNaN(MA[k][i-1]))valid=false;});
+    if(!valid)continue; ok[i]=true;
+    const F=[];
+    if(ck("f1on")) F.push(f1a[i]>f1b[i]);
+    if(ck("f3on")) F.push(f3a[i]>f3b[i]);
+    if(ck("f2on")) F.push(s.c[i]>f2a[i]);
+    setup[i] = F.length===0 ? true : (fL==="AND" ? F.every(Boolean) : F.some(Boolean));
+    if(!setup[i]) continue;
+    const T=evs.map(e=>e[i]);
+    sig[i] = tL==="AND" ? T.every(Boolean) : T.some(Boolean);
+  }
+
+  const fwd={},mae=new Array(N).fill(NaN),mfe=new Array(N).fill(NaN);
+  HOR.forEach(h=>fwd[h]=new Array(N).fill(NaN));
+  for(let i=0;i+1<N;i++){const e=s.o[i+1];
+    HOR.forEach(h=>{if(i+1+h<N)fwd[h][i]=(s.o[i+1+h]/e-1)*100;});
+    const end=Math.min(N-1,i+20);let lo=Infinity,hi=-Infinity;
+    for(let j=i+1;j<=end;j++){lo=Math.min(lo,s.l[j]);hi=Math.max(hi,s.h[j]);}
+    if(lo<Infinity){mae[i]=(lo/e-1)*100;mfe[i]=(hi/e-1)*100;}}
+
+  const idx=[];for(let i=0;i<N;i++) if(ok[i]) idx.push(i);
+  if(idx.length<120) return {err:`Only ${idx.length} usable bars after warmup on ${sym}.`};
+  const A=idx[0],Z=idx[idx.length-1],mid=idx[Math.floor(idx.length/2)];
+
+  function exitCond(i,held){
+    const X=[];
+    if(ck("xMAon")&&!isNaN(xMA[i])) X.push(s.c[i]<xMA[i]);
+    if(ck("xCXon")&&!isNaN(xcA[i])&&!isNaN(xcB[i])&&!isNaN(xcA[i-1])) X.push(xcA[i]<xcB[i]&&xcA[i-1]>=xcB[i-1]);
+    if(ck("xStackOn")&&!isNaN(xsA[i])&&!isNaN(xsB[i])) X.push(xsA[i]<xsB[i]);
+    let e = X.length===0 ? false : (xL==="AND" ? X.every(Boolean) : X.some(Boolean));
+    if(ck("xBarOn")) e = e || (held>=xBars);   // backstop always ORs
+    return e;}
+  function sim(lo,hi){
+    let cash=10000,pos=0,pend=null,epx=0,eidx=-1,held=0,inB=0,tot=0;
+    const eq=new Array(N).fill(NaN),trades=[];
+    for(let i=lo;i<=hi;i++){
+      if(pend==="buy"&&pos===0){pos=cash/s.o[i];epx=s.o[i];eidx=i;cash=0;held=0;}
+      else if(pend==="sell"&&pos>0){cash=pos*s.o[i];
+        trades.push({ei:eidx,xi:i,ret:s.o[i]/epx-1,bars:i-eidx});pos=0;eidx=-1;}
+      pend=null;eq[i]=cash+pos*s.c[i];tot++;if(pos>0){inB++;held++;}
+      if(pos>0){if(exitCond(i,held))pend="sell";}else if(sig[i])pend="buy";}
+    if(pos>0){cash=pos*s.c[hi];trades.push({ei:eidx,xi:hi,ret:s.c[hi]/epx-1,bars:hi-eidx});eq[hi]=cash;pos=0;}
+    const fin=eq[hi],yrs=(hi-lo+1)/252;
+    let peak=-Infinity,mdd=0;const uw=new Array(N).fill(NaN);
+    for(let i=lo;i<=hi;i++){if(isNaN(eq[i]))continue;peak=Math.max(peak,eq[i]);
+      uw[i]=(eq[i]/peak-1)*100;mdd=Math.min(mdd,uw[i]);}
+    const W=trades.filter(t=>t.ret>0),L=trades.filter(t=>t.ret<=0);
+    const gp=W.reduce((a,t)=>a+t.ret,0),gl=Math.abs(L.reduce((a,t)=>a+t.ret,0));
+    return {eq,uw,fin,yrs,mdd,trades,cagr:yrs>0?(Math.pow(fin/10000,1/yrs)-1)*100:NaN,
+      win:trades.length?W.length/trades.length:NaN,avgW:W.length?gp/W.length*100:NaN,
+      avgL:L.length?-gl/L.length*100:NaN,pf:gl>0?gp/gl:NaN,
+      avgBars:trades.length?trades.reduce((a,t)=>a+t.bars,0)/trades.length:NaN,
+      inMkt:tot?inB/tot:NaN};}
+  function bh(lo,hi){const eq=new Array(N).fill(NaN),base=s.o[lo];
+    for(let i=lo;i<=hi;i++)eq[i]=10000*s.c[i]/base;
+    const fin=eq[hi],yrs=(hi-lo+1)/252;let peak=-Infinity,mdd=0;const uw=new Array(N).fill(NaN);
+    for(let i=lo;i<=hi;i++){peak=Math.max(peak,eq[i]);uw[i]=(eq[i]/peak-1)*100;mdd=Math.min(mdd,uw[i]);}
+    return {eq,uw,fin,yrs,mdd,cagr:(Math.pow(fin/10000,1/yrs)-1)*100};}
+
+  const S=sim(A,Z),B=bh(A,Z),S1=sim(A,mid),S2=sim(mid+1,Z),B1=bh(A,mid),B2=bh(mid+1,Z);
+  const fidx=idx.filter(i=>!isNaN(fwd[20][i]));
+  function agg(f){const rows=fidx.filter(f),r={n:rows.length};
+    HOR.forEach(h=>{const v=rows.map(i=>fwd[h][i]).filter(x=>!isNaN(x));
+      r["f"+h]=v.length?v.reduce((a,b)=>a+b,0)/v.length:NaN;});
+    const v=rows.map(i=>fwd[20][i]).filter(x=>!isNaN(x));
+    r.hit=v.length?v.filter(x=>x>0).length/v.length:NaN;
+    const ma=rows.map(i=>mae[i]).filter(x=>!isNaN(x)).sort((a,b)=>a-b);
+    r.mae=ma.length?ma.reduce((a,b)=>a+b,0)/ma.length:NaN;
+    r.mae10=ma.length?ma[Math.floor(ma.length*.1)]:NaN;
+    const mf=rows.map(i=>mfe[i]).filter(x=>!isNaN(x));
+    r.mfe=mf.length?mf.reduce((a,b)=>a+b,0)/mf.length:NaN;return r;}
+  const coh={"all days":agg(()=>true),"filter only":agg(i=>setup[i]),"SIGNAL":agg(i=>sig[i])};
+  let indep=0,last=-999;idx.forEach(i=>{if(sig[i]&&i-last>=20){indep++;last=i;}});
+  return {sym,s,N,MA,ak,S,B,S1,S2,B1,B2,coh,A,Z,mid,idx,indep,warm,
+    nsig:idx.filter(i=>sig[i]).length,anyFilter:ck("f1on")||ck("f3on")||ck("f2on"),
+    span:[s.dates?s.dates[A]:A,s.dates?s.dates[Z]:Z],midDate:s.dates?s.dates[mid]:mid};}
+
+// ================= charts =================
+function equityChart(R){
+  const W=920,H=290,PL=62,PR=12,PT=12,PB=24,{A,Z,s}=R;
+  const step=Math.max(1,Math.ceil((Z-A+1)/900)),pts=[];
+  for(let i=A;i<=Z;i+=step)pts.push(i);if(pts[pts.length-1]!==Z)pts.push(Z);
+  let lo=Infinity,hi=-Infinity;
+  pts.forEach(i=>[R.S.eq[i],R.B.eq[i]].forEach(v=>{if(!isNaN(v)&&v>0){lo=Math.min(lo,v);hi=Math.max(hi,v);}}));
+  lo=Math.max(lo,100);const L=Math.log(lo),Hh=Math.log(hi);
+  const x=i=>PL+(i-A)/(Z-A)*(W-PL-PR),y=v=>PT+(1-(Math.log(Math.max(v,lo))-L)/(Hh-L))*(H-PT-PB);
+  const path=a=>pts.map((i,k)=>`${k?"L":"M"}${x(i).toFixed(1)},${y(a[i]).toFixed(1)}`).join("");
+  const tk=[];for(let p=2;p<=8;p++)[1,5].forEach(m=>{const v=m*Math.pow(10,p);if(v>=lo&&v<=hi)tk.push(v);});
+  tk.push(10000);const fm=v=>v>=1e6?"$"+(v/1e6).toFixed(1)+"M":"$"+Math.round(v/1000)+"k";
+  const grid=[...new Set(tk)].sort((a,b)=>a-b).map(v=>
+    `<line x1="${PL}" y1="${y(v).toFixed(1)}" x2="${W-PR}" y2="${y(v).toFixed(1)}" stroke="#223041" opacity="${v===10000?".9":".4"}"/>
+     <text x="${PL-7}" y="${(y(v)+4).toFixed(1)}" text-anchor="end" font-size="10" font-family="monospace" fill="#5C6B7A">${fm(v)}</text>`).join("");
+  const lab=[];for(let k=0;k<=6;k++){const i=Math.round(A+(Z-A)*k/6);
+    lab.push(`<text x="${x(i).toFixed(1)}" y="${H-7}" text-anchor="middle" font-size="10" font-family="monospace" fill="#5C6B7A">${s.dates?s.dates[i].slice(0,4):i}</text>`);}
+  const UH=100,UPT=8,UPB=20;let um=0;
+  pts.forEach(i=>[R.S.uw[i],R.B.uw[i]].forEach(v=>{if(!isNaN(v))um=Math.min(um,v);}));
+  const uy=v=>UPT+(-Math.max(v,um)/-um)*(UH-UPT-UPB);
+  const up=a=>pts.map((i,k)=>`${k?"L":"M"}${x(i).toFixed(1)},${uy(a[i]).toFixed(1)}`).join("");
+  const ut=[0,um/2,um].map(v=>`<line x1="${PL}" y1="${uy(v).toFixed(1)}" x2="${W-PR}" y2="${uy(v).toFixed(1)}" stroke="#223041" opacity=".5"/>
+    <text x="${PL-7}" y="${(uy(v)+4).toFixed(1)}" text-anchor="end" font-size="10" font-family="monospace" fill="#5C6B7A">${v.toFixed(0)}%</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Equity curve versus buy and hold">
+    ${grid}${lab.join("")}
+    <path d="${path(R.B.eq)}" fill="none" stroke="#8B98A5" stroke-width="1.6" opacity=".8"/>
+    <path d="${path(R.S.eq)}" fill="none" stroke="#58A6FF" stroke-width="2"/>
+    <line x1="${x(R.mid)}" y1="${PT}" x2="${x(R.mid)}" y2="${H-PB}" stroke="#D4A72C" stroke-dasharray="4 4" opacity=".7"/>
+    <text x="${x(R.mid)+5}" y="${PT+11}" font-size="9.5" font-family="monospace" fill="#D4A72C">split</text></svg>
+  <div class="legend"><span><i style="background:#58A6FF"></i>strategy</span>
+    <span><i style="background:#8B98A5"></i>buy &amp; hold</span><span style="color:var(--dim)">log scale</span></div>
+  <svg viewBox="0 0 ${W} ${UH}" style="margin-top:5px" role="img" aria-label="Drawdown curves">${ut}
+    <path d="${up(R.B.uw)}" fill="none" stroke="#8B98A5" stroke-width="1.3" opacity=".7"/>
+    <path d="${up(R.S.uw)}" fill="none" stroke="#F85149" stroke-width="1.6"/>
+    <text x="${PL}" y="${UH-5}" font-size="10" font-family="monospace" fill="#5C6B7A">drawdown — strategy red, buy &amp; hold grey</text></svg>`;}
+function priceChart(R){
+  const W=920,H=340,PL=58,PR=12,PT=12,PB=24,{s,Z}=R;
+  const yrs=parseInt(g("zoom"))||0,A=yrs?Math.max(R.A,Z-Math.round(yrs*252)):R.A;
+  if(Z-A<20) return `<div class="note">Range too short to plot.</div>`;
+  const step=Math.max(1,Math.ceil((Z-A+1)/900)),pts=[];
+  for(let i=A;i<=Z;i+=step)pts.push(i);if(pts[pts.length-1]!==Z)pts.push(Z);
+  const show=R.ak.filter(k=>ck("pl"+k));
+  let lo=Infinity,hi=-Infinity;
+  pts.forEach(i=>{lo=Math.min(lo,s.l[i]);hi=Math.max(hi,s.h[i]);
+    show.forEach(k=>{const v=R.MA[k][i];if(!isNaN(v)&&v>0){lo=Math.min(lo,v);hi=Math.max(hi,v);}});});
+  lo=Math.max(lo*.98,.01);hi*=1.02;const L=Math.log(lo),Hh=Math.log(hi);
+  const x=i=>PL+(i-A)/(Z-A)*(W-PL-PR),y=v=>PT+(1-(Math.log(Math.max(v,lo))-L)/(Hh-L))*(H-PT-PB);
+  const path=a=>{let d="",pen=false;pts.forEach(i=>{const v=a[i];if(isNaN(v)){pen=false;return;}
+    d+=`${pen?"L":"M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`;pen=true;});return d;};
+  const pr=pts.map((i,k)=>`${k?"L":"M"}${x(i).toFixed(1)},${y(s.c[i]).toFixed(1)}`).join("");
+  const gl=[];const dec=Math.pow(10,Math.floor(Math.log10(hi)));
+  for(let m=1;m<=100;m++){const v=m*dec/2;if(v>=lo&&v<=hi)gl.push(v);}
+  const grid=gl.slice(0,9).map(v=>`<line x1="${PL}" y1="${y(v).toFixed(1)}" x2="${W-PR}" y2="${y(v).toFixed(1)}" stroke="#223041" opacity=".35"/>
+    <text x="${PL-7}" y="${(y(v)+4).toFixed(1)}" text-anchor="end" font-size="9.5" font-family="monospace" fill="#5C6B7A">${v>=1000?(v/1000).toFixed(0)+"k":v.toFixed(v<20?1:0)}</text>`).join("");
+  const lab=[];for(let k=0;k<=6;k++){const i=Math.round(A+(Z-A)*k/6);
+    lab.push(`<text x="${x(i).toFixed(1)}" y="${H-7}" text-anchor="middle" font-size="10" font-family="monospace" fill="#5C6B7A">${s.dates?s.dates[i].slice(0,7):i}</text>`);}
+  let mkr="";
+  R.S.trades.forEach(t=>{
+    if(t.ei>=A&&t.ei<=Z){const px=x(t.ei),py=y(s.l[t.ei])+9;
+      mkr+=`<path d="M${px-4},${py+6} L${px+4},${py+6} L${px},${py} Z" fill="#3FB950" opacity=".9"/>`;}
+    if(t.xi>=A&&t.xi<=Z){const px=x(t.xi),py=y(s.h[t.xi])-9;
+      mkr+=`<path d="M${px-4},${py-6} L${px+4},${py-6} L${px},${py} Z" fill="#F85149" opacity=".9"/>`;}});
+  const mas=show.map(k=>`<path d="${path(R.MA[k])}" fill="none" stroke="${COL[k]}" stroke-width="1.5" opacity=".95"/>`).join("");
+  const leg=show.map(k=>`<span><i style="background:${COL[k]}"></i>${maLabel(k)}</span>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Price with moving averages and trade markers">
+    ${grid}${lab.join("")}<path d="${pr}" fill="none" stroke="#E6EDF3" stroke-width="1.1" opacity=".55"/>
+    ${mas}${mkr}</svg>
+  <div class="legend"><span><i style="background:#E6EDF3"></i>close</span>${leg}
+    <span style="color:var(--ok)">▲ entry</span><span style="color:var(--bad)">▼ exit</span>
+    <span style="color:var(--dim)">log scale</span></div>`;}
+
+// ================= render =================
+const f2=(x,d=2)=>isNaN(x)?"—":x.toFixed(d);
+const money=v=>isNaN(v)?"—":(v>=1e6?"$"+(v/1e6).toFixed(2)+"M":"$"+Math.round(v).toLocaleString());
+const cls=x=>isNaN(x)?"zero":(x>0?"pos":(x<0?"neg":"zero"));
+function render(R){
+  el("errBox").innerHTML="";
+  el("cfgLine").textContent=`${R.sym} · ${R.span[0]} → ${R.span[1]} · ${R.S.yrs.toFixed(1)}y · warmup ${R.warm}`;
+  el("eqStats").innerHTML=`
+    <div class="stat"><div class="k big ${R.S.fin>R.B.fin?"pos":"neg"}">${money(R.S.fin)}</div><div class="l">strategy from $10,000</div></div>
+    <div class="stat"><div class="k big">${money(R.B.fin)}</div><div class="l">buy &amp; hold</div></div>
+    <div class="stat"><div class="k ${cls(R.S.cagr)}">${f2(R.S.cagr,1)}%</div><div class="l">CAGR (B&amp;H ${f2(R.B.cagr,1)}%)</div></div>
+    <div class="stat"><div class="k neg">${f2(R.S.mdd,1)}%</div><div class="l">max DD (B&amp;H ${f2(R.B.mdd,1)}%)</div></div>
+    <div class="stat"><div class="k">${R.S.trades.length}</div><div class="l">trades</div></div>
+    <div class="stat"><div class="k">${isNaN(R.S.inMkt)?"—":(R.S.inMkt*100).toFixed(0)+"%"}</div><div class="l">time in market</div></div>`;
+  el("chartBox").innerHTML=equityChart(R);
+  el("priceBox").innerHTML=priceChart(R);
+  el("tradeTbl").innerHTML=`<tr><th>trade stats</th><th>win rate</th><th>avg win</th><th>avg loss</th><th>profit factor</th><th>avg bars</th><th>trades/yr</th></tr>
+    <tr class="sig"><td class="lab">strategy</td><td>${isNaN(R.S.win)?"—":(R.S.win*100).toFixed(0)+"%"}</td>
+    <td class="pos">${f2(R.S.avgW)}%</td><td class="neg">${f2(R.S.avgL)}%</td>
+    <td class="${R.S.pf>1?"pos":"neg"}">${f2(R.S.pf)}</td><td>${f2(R.S.avgBars,0)}</td>
+    <td>${f2(R.S.trades.length/Math.max(R.S.yrs,.01),1)}</td></tr>`;
+  const d1=R.S1.cagr-R.B1.cagr,d2=R.S2.cagr-R.B2.cagr,ag=Math.sign(d1)===Math.sign(d2);
+  el("splitBox").innerHTML=`<div class="note ${ag?"":"hot"}"><b>Split sample.</b> First half (to ${R.midDate}):
+    ${f2(R.S1.cagr,1)}% vs B&amp;H ${f2(R.B1.cagr,1)}% (<b class="${cls(d1)}">${d1>0?"+":""}${f2(d1,1)}</b>).
+    Second half: ${f2(R.S2.cagr,1)}% vs ${f2(R.B2.cagr,1)}% (<b class="${cls(d2)}">${d2>0?"+":""}${f2(d2,1)}</b>).
+    ${ag?"Edge points the same way in both halves.":"<b style='color:var(--bad)'>The edge flips sign between halves — treat this configuration as noise.</b>"}</div>`;
+  let h=`<tr><th>cohort</th><th>n</th>`+HOR.map(x=>`<th>fwd${x}</th>`).join("")+`<th>hit20</th><th>MAE</th><th>MAE p10</th><th>MFE</th></tr>`;
+  Object.entries(R.coh).forEach(([k,r])=>{h+=`<tr class="${k==="SIGNAL"?"sig":""}"><td class="lab">${k}</td><td>${r.n}</td>`+
+    HOR.map(x=>`<td class="${cls(r["f"+x])}">${f2(r["f"+x])}%</td>`).join("")+
+    `<td>${isNaN(r.hit)?"—":(r.hit*100).toFixed(0)+"%"}</td><td class="neg">${f2(r.mae)}%</td>
+     <td class="neg">${f2(r.mae10)}%</td><td class="pos">${f2(r.mfe)}%</td></tr>`;});
+  el("tbl").innerHTML=h;
+  const gT=R.coh["filter only"].f20-R.coh["all days"].f20,gS=R.coh["SIGNAL"].f20-R.coh["filter only"].f20,
+        gN=R.coh["SIGNAL"].f20-R.coh["all days"].f20;
+  el("gapBox").innerHTML=`<div class="note"><b>Decomposition (fwd20, exit-independent).</b>
+    trend filter <b class="${cls(gT)}">${gT>0?"+":""}${f2(gT)}</b> · triggers on top <b class="${cls(gS)}">${gS>0?"+":""}${f2(gS)}</b>
+    · net vs doing nothing <b class="${cls(gN)}">${gN>0?"+":""}${f2(gN)}</b>.
+    ${R.anyFilter?"":"No trend filter active, so “filter only” equals “all days”."}</div>`;
+  let w=`<div class="banner"><b>Read before believing this.</b> Signals cluster: ${R.nsig} raw signals ≈ <b>${R.indep}</b>
+    non-overlapping episodes. Costs and slippage are <b>zero</b>, so high-turnover configurations are flattered. Cash earns nothing.`;
+  if(R.S.trades.length<25) w+=` <b style="color:var(--bad)">Only ${R.S.trades.length} trades — too few to conclude anything.</b>`;
+  if(trialCount>=8) w+=` <b>${trialCount}</b> configurations tested; at that count something looks good by chance.`;
+  w+=`</div>`;
+  if(DATA.demo) w=`<div class="banner"><b>SYNTHETIC DEMO DATA</b> — a random walk, not a market.</div>`+w;
+  el("warnBox").innerHTML=w;
+  el("foot").textContent="config: "+cfgString()+"  ·  fills at the next open  ·  no costs modelled";}
+function trigStr(p){const t=g(p+"type");if(t==="none")return "";
+  const a=g(p+"a"),b=g(p+"b"),c=g(p+"c"),lk=g(p+"lk");
+  if(t==="dip")return `dip→${a} tol${g(p+"tol")} k${g(p+"k")} rec>${g(p+"rec")}${ck(p+"up")?"+up":""}`;
+  if(t==="cxup")return `${a}x↑${b}/${lk}`;if(t==="cxdn")return `${a}x↓${b}/${lk}`;
+  if(t==="pxup")return `c x↑${a}/${lk}`;if(t==="pxdn")return `c x↓${a}/${lk}`;
+  if(t==="stack")return `stack+${a}>${b}>${c}/${lk}`;
+  if(t==="unstack")return `stack−${a}>${b}>${c}/${lk}`;
+  if(t==="slope")return `${a}slope↑${g(p+"sl")}/${lk}`;
+  return `touch ${a}±${g(p+"tol")}/${lk}`;}
+function cfgString(){
+  const F=[];if(ck("f1on"))F.push(g("f1a")+">"+g("f1b"));if(ck("f3on"))F.push(g("f3a")+">"+g("f3b"));
+  if(ck("f2on"))F.push("c>"+g("f2a"));
+  const T=TPFX.map(trigStr).filter(Boolean);
+  const X=[];if(ck("xMAon"))X.push("c<"+g("xMA"));if(ck("xCXon"))X.push(g("xcA")+"x↓"+g("xcB"));
+  if(ck("xStackOn"))X.push(g("xsA")+"<"+g("xsB"));
+  let s=g("sym")+" | "+activeKeys().map(maLabel).join(" ");
+  s+=" | filter["+g("fLogic")+"]:"+(F.length?F.join(" "+g("fLogic")+" "):"none");
+  s+=" | trig["+g("tLogic")+"]:"+T.join(" "+g("tLogic")+" ");
+  s+=" | exit["+g("xLogic")+"]:"+(X.length?X.join(" "+g("xLogic")+" "):"none")+(ck("xBarOn")?" OR "+g("xBars")+"bars":"");
+  return s;}
+function run(){
+  if(!DATA)return;fillSelects();
+  const cfg=cfgString();
+  if(!seenCfgs.has(cfg)){seenCfgs.add(cfg);trialCount++;}
+  el("trials").textContent=`${trialCount} distinct configuration${trialCount===1?"":"s"} tested`;
+  const R=compute();
+  if(R.err){el("errBox").innerHTML=`<div class="banner err"><b>Cannot run.</b> ${R.err}</div>`;return;}
+  render(R);}
+TPFX.forEach(p=>el(p+"type").addEventListener("change",()=>syncTrig(p)));
+["run"].forEach(id=>el(id).addEventListener("click",run));
+["sym","zoom","fLogic","tLogic","xLogic"].forEach(id=>el(id).addEventListener("change",run));
+el("reload").addEventListener("click",loadData);
+el("resetTrials").addEventListener("click",()=>{trialCount=0;seenCfgs.clear();
+  el("trials").textContent="0 distinct configurations tested";});
+SLOTS.forEach(s=>{["t"+s.k,"n"+s.k,"on"+s.k].forEach(id=>el(id).addEventListener("change",fillSelects));
+  el("pl"+s.k).addEventListener("change",run);});
+el("t2type").value="none";el("t3type").value="none";
+fillSelects();loadData();
+</script>
+</body>
+</html>
