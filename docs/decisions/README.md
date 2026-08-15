@@ -88,10 +88,21 @@ post-hoc — so anyone grepping for an old SHA lands here:
 | `6bbca06` | `e223204` | Build 6A implementation declarations |
 | `a319b45` | `ecd3e0e` | Build 6A profit-target sweep |
 | `4dd5929` | `5771878` | D-020a scorer change |
+| `cdcfa19` | `b02ccb5` | Build 5.2 pre-registration (2026-08-14 rebase; prereg blob byte-identical across the pair) |
 
 The re-anchoring commit is `75a19ef`; the immutability pins compare
 against the post-rebase SHAs, and the pinned CONTENT is identical
 across the mapping.
+
+The `cdcfa19` row is the 2026-08-14 instance of the same class: the
+Build 5.2 script, results JSON and report cite `cdcfa19`, which the
+push-day rebase rewrote to `b02ccb5` — the cited SHA exists only in
+the authoring machine's reflog. Unlike the rows above, the citing
+artifacts have NOT been re-anchored (75a19ef's precedent edits them;
+that is its own change, not made here), and 5.2 has no standing pin
+file yet, so nothing currently FAILS on a clone — the citation is a
+dangling breadcrumb, not a broken pin. This table is the resolution
+path for anyone who greps it.
 
 Status meanings: **Proposed** (deliberation open or parked with its
 retest recipe) · **Ruled** (in force) · **Superseded-by-D-xxx** (kept for
