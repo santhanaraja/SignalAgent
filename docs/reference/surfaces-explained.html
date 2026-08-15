@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard vs Framework — what each surface computes</title>
+<style>
+  :root{
+    --bg:#0B0F14; --panel:#121820; --panel2:#0E141B; --line:#223041;
+    --ink:#E6EDF3; --muted:#8B98A5; --dim:#5C6B7A;
+    --ok:#3FB950; --warn:#D4A72C; --bad:#F85149; --info:#58A6FF; --alt:#8957E5;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  .wrap{max-width:1040px;margin:0 auto;padding:38px 22px 76px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  h1{font-size:clamp(24px,3.8vw,33px);letter-spacing:-.02em;margin:.35em 0 .2em;font-weight:750}
+  .lede{font-size:14.5px;color:var(--muted);max-width:80ch}
+  .src{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:12px}
+  .src b{color:var(--muted);font-weight:600}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 22px 18px;margin-top:24px}
+  .panel h2{font-size:17px;margin:0 0 3px;font-weight:700;letter-spacing:-.01em}
+  .panel .sub{font-size:13px;color:var(--muted);margin:0 0 16px;max-width:88ch}
+  .panel p{font-size:13.5px;color:var(--muted);max-width:88ch}
+  .panel p b{color:var(--ink);font-weight:600}
+  svg{width:100%;height:auto;display:block}
+  code{font-family:var(--mono);font-size:11.5px;color:#9FD5FF}
+  pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:13px 15px;
+      overflow-x:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink);margin:12px 0 0;line-height:1.65}
+  pre .kw{color:#FF7B72} pre .st{color:#A5D6FF} pre .cm{color:#5C6B7A} pre .nu{color:#79C0FF}
+  .note{font-size:13px;color:var(--muted);margin-top:14px;border-left:2px solid var(--line);padding-left:14px}
+  .note b{color:var(--ink);font-weight:600}
+  .note.hot{border-left-color:var(--bad)} .note.good{border-left-color:var(--ok)}
+  .note.warn{border-left-color:var(--warn)}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:12.5px}
+  th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;
+     color:var(--dim);font-weight:600;padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:bottom}
+  td{padding:9px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted)}
+  td.n{color:var(--ink);font-weight:600;font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+  td.m{font-family:var(--mono);font-size:11.5px}
+  tr.hot td{background:rgba(248,81,73,.06)}
+  tr.hl td{background:rgba(88,166,255,.07)}
+  .caveats{margin-top:28px;border-top:1px solid var(--line);padding-top:18px}
+  .caveats h3{font-size:12px;margin:0 0 10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+              font-family:var(--mono);font-weight:600}
+  .caveats p{font-size:12.5px;color:var(--muted);margin:8px 0;max-width:90ch}
+  .caveats b{color:var(--ink);font-weight:600}
+  .foot{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">SignalAgent · reference · what each surface computes</div>
+  <h1>Dashboard vs Framework — YTD, score, signal, trade signal</h1>
+  <p class="lede">Two pages show overlapping numbers for the same tickers, computed by different paths from
+  different artifacts. This is what each one calculates, in what order, from which constants — and the nine places
+  where they disagree. Read from source reports, not inferred.</p>
+  <div class="src">score <b>signal_engine.py:1157–1266</b> · YTD <b>:835</b> · grade
+  <b>position_signals.py:433</b> · row thresholds <b>config.yaml:200–217</b></div>
+
+  <!-- 1 · THE TWO SURFACES -->
+  <div class="panel">
+    <h2>1 · What each surface reads</h2>
+    <p class="sub">This is the root of every divergence below: they do not read the same file, and one of them
+    reads both.</p>
+
+    <svg viewBox="0 0 960 230" role="img" aria-label="index.html reads only signals.json; framework.html reads both signals.json and the framework artifact">
+      <rect x="30" y="20" width="250" height="70" rx="8" fill="#0E141B" stroke="#58A6FF" stroke-width="1.6"/>
+      <text x="155" y="46" text-anchor="middle" font-size="13" font-weight="700" fill="#58A6FF">index.html</text>
+      <text x="155" y="68" text-anchor="middle" font-size="11.5" fill="#8B98A5">the dashboard</text>
+
+      <rect x="680" y="20" width="250" height="70" rx="8" fill="#0E141B" stroke="#8957E5" stroke-width="1.6"/>
+      <text x="805" y="46" text-anchor="middle" font-size="13" font-weight="700" fill="#8957E5">framework.html</text>
+      <text x="805" y="68" text-anchor="middle" font-size="11.5" fill="#8B98A5">the framework tab</text>
+
+      <rect x="300" y="20" width="160" height="70" rx="8" fill="#121820" stroke="#223041"/>
+      <text x="380" y="46" text-anchor="middle" font-size="12" font-family="monospace" fill="#E6EDF3">signals.json</text>
+      <text x="380" y="68" text-anchor="middle" font-size="10.5" fill="#5C6B7A">signal_engine</text>
+
+      <rect x="490" y="20" width="160" height="70" rx="8" fill="#121820" stroke="#223041"/>
+      <text x="570" y="46" text-anchor="middle" font-size="12" font-family="monospace" fill="#E6EDF3">framework.json</text>
+      <text x="570" y="68" text-anchor="middle" font-size="10.5" fill="#5C6B7A">framework_runner</text>
+
+      <path d="M280 55 H 298" stroke="#58A6FF" stroke-width="1.8"/>
+      <path d="M680 55 H 652" stroke="#8957E5" stroke-width="1.8"/>
+      <path d="M700 90 V 118 H 380 V 92" fill="none" stroke="#8957E5" stroke-width="1.6" stroke-dasharray="4 4"/>
+      <text x="540" y="134" text-anchor="middle" font-size="11" fill="#8957E5">framework.html reads signals.json TOO</text>
+
+      <rect x="30" y="156" width="900" height="56" rx="8" fill="#121820" stroke="#D4A72C" stroke-width="1.5"/>
+      <text x="480" y="180" text-anchor="middle" font-size="12.5" font-weight="700" fill="#D4A72C">The dashboard reads ONE artifact. The framework tab reads TWO.</text>
+      <text x="480" y="200" text-anchor="middle" font-size="11.5" fill="#8B98A5">So if the two artifacts ever skew, the dashboard stays self-consistent and the framework tab contradicts itself.</text>
+    </svg>
+
+    <div class="note"><b>The skew window is real but currently shut.</b> <code>POST /api/framework/run</code>
+    re-bakes framework.json <i>without</i> re-running signal_engine. After a deploy carrying a rotated universe, the
+    two sides could carry different group names — and row 6 is a string join between them (§6).</div>
+  </div>
+
+  <!-- 2 · YTD -->
+  <div class="panel">
+    <h2>2 · YTD — how it works now</h2>
+    <p class="sub"><code>compute_ytd_return</code> (signal_engine.py:835). <b>Since D-020a shipped on
+    2026-08-09, both paths compute real calendar year-to-date, anchored on the last close of the prior calendar
+    year.</b> The historical defect below is what that change fixed — it no longer describes the system.</p>
+
+    <table>
+      <tr><th style="width:22%">path</th><th style="width:26%">frame it uses NOW</th><th style="width:52%">anchor</th></tr>
+      <tr><td class="n">UNIVERSE<br><span style="font-weight:400;font-size:11px">score ≥ 50 gate</span></td>
+          <td class="m">period="1y"</td>
+          <td>prior-year last close ✓</td></tr>
+      <tr><td class="n">GRADING<br><span style="font-weight:400;font-size:11px">row 5, score ≥ 75</span></td>
+          <td class="m">indicators still period="6mo"<br><b style="color:var(--ink)">YTD on a separate 1y fetch</b></td>
+          <td>prior-year last close ✓</td></tr>
+    </table>
+
+    <div class="note good"><b>The 6-month frame was deliberately NOT widened.</b> It still serves RSI, MACD and the
+    moving averages byte-untouched; only YTD was moved to its own 1-year fetch. That is why the change was safe —
+    v1 versus v2 differed in the <code>ytd</code> component and nothing else, across all 533 names, pinned.</div>
+
+    <div class="note"><b>How to confirm it live:</b> every grade payload carries
+    <code>"ytd_basis": "prior_year_close"</code>. That field exists because of this fix and reports the anchor
+    actually used. If it ever reads anything else, the fix has regressed.</div>
+
+    <p style="margin-top:20px; font-size:13.5px; color:var(--muted)"><b style="color:var(--ink)">What it used to
+    do, and why it mattered.</b> The same function was called on two frames. The universe path's 1-year window
+    reached back to the previous August, so it contained January and anchored correctly. <b>The grading path's
+    6-month window did not — after early July, "the first close of the current year" became simply the oldest bar
+    in the window, so the number silently became a rolling six-month return wearing a YTD label.</b></p>
+
+    <div class="note hot"><b>The defect was seasonal and perfectly predictable: exactly zero divergence from January
+    to early July, then growing every day to year-end.</b> At discovery, <b>529 of 533 names disagreed</b> — ERAS
+    read 412.81% on one path and 53.29% on the other, and twelve names sat on opposite sides of the score penalty
+    boundary on the same day.</div>
+
+    <p style="margin-top:16px"><b>The scorer was versioned rather than replaced.</b> <code>v1</code> is frozen so the
+    committed studies still reproduce; <code>v2</code> has been in production since 2026-08-09. D-020a also removed
+    the over-extension penalty, capping the YTD component flat above 100% — see §3.</p>
+  </div>
+
+  <!-- 3 · THE SCORE -->
+  <div class="panel">
+    <h2>3 · The composite score — the whole formula</h2>
+    <p class="sub">Five components summed onto a base of 50, then clamped. Nothing else feeds it. This one number
+    drives the universe gate, row 5 of the grade, and the "signal" band.</p>
+
+<pre>score = clamp(<span class="nu">0</span>, <span class="nu">100</span>, <span class="nu">50</span> + rsi + macd + ma + ytd + vol)</pre>
+
+    <p style="margin-top:14px">Raw values span <b>−5 to +107</b>, so both clamps bind. Every component returns an
+    integer.</p>
+
+    <table style="margin-top:16px">
+      <tr><th style="width:14%">component</th><th style="width:44%">ladder</th><th style="width:42%">operator trap</th></tr>
+      <tr><td class="n">RSI</td>
+        <td class="m">&lt;30 → +15 · &lt;40 → +8 · &lt;60 → +3<br>&lt;70 → −3 · &lt;80 → −8 · else −15</td>
+        <td>Strict <code>&lt;</code>, so <b>each boundary falls to the lower-scoring band</b>: 30 → +8, 60 → −3,
+            70 → −8.</td></tr>
+      <tr><td class="n">MACD</td>
+        <td class="m">bullish_rising +13 · bullish +8<br>bearish −8 · bearish_falling −13</td>
+        <td><b>0 is unreachable.</b> "Confirms" magnifies whichever side you are on — confirming while bearish gives
+            −13, not a credit. <code>macd == signal</code> counts as bearish.</td></tr>
+      <tr><td class="n">MA</td>
+        <td class="m">(±4 above SMA20) + (±6 above SMA50)<br>+ (±4 for SMA20 &gt; SMA50)</td>
+        <td>Eight input combinations, <b>only six distinct values</b> {−14, −6, −2, +2, +6, +14}. 0 and ±10 are
+            unreachable; ±6 is two-way ambiguous.</td></tr>
+      <tr><td class="n">Volume</td>
+        <td class="m">&gt;1.5 → +3 · &lt;0.7 → −3 · else 0</td>
+        <td>Asymmetric, so <b>both boundaries score 0</b> — the zero band is the closed interval [0.7, 1.5].</td></tr>
+      <tr class="hl"><td class="n">YTD</td>
+        <td class="m">≤−10 → −10 · (−10,0] → −4 · (0,5] → +2<br>(5,20] → +6 · (20,50] → +12<br>
+            <b style="color:var(--ink)">v2: everything above 50 → +12</b><br>
+            <span style="color:var(--dim)">v1 was: (50,100] +8 · (100,150] −2 · &gt;150 −7</span></td>
+        <td>The component D-020a capped. <b>Any worked example showing <code>ytd: −7</code> is a v1 score and does
+            not describe production.</b></td></tr>
+    </table>
+
+    <div class="note hot"><b>Degradation defaults are not neutral.</b> A missing RSI scores <b>+3</b>, a missing
+    MACD scores <b>−8</b>, missing moving averages score <b>−14</b>. A data outage does not produce a neutral
+    score — it produces a bad one, silently.</div>
+
+    <div class="note warn"><b>Two conventions, one number.</b> The score <i>bands</i> use inclusive <code>&gt;=</code>
+    (75 / 60 / 45 / 30) while every point <i>ladder</i> above uses strict comparisons that push boundaries downward.
+    <b>And none of the ladders live in config</b> — they are module constants and inline literals, so changing a
+    band is a code change.</div>
+  </div>
+
+  <!-- 4 · SIX SIGNALS -->
+  <div class="panel">
+    <h2>4 · Six different things are called "signal"</h2>
+    <p class="sub">They are computed by different functions, from different inputs, and rendered on different
+    surfaces. Only two of the six appear in <code>signals.json</code> at all.</p>
+
+    <table>
+      <tr><th style="width:20%">name</th><th style="width:26%">what it bands</th><th style="width:28%">values</th><th style="width:26%">rendered by</th></tr>
+      <tr class="hl"><td class="n">signal</td><td>the composite score, <b>only</b></td>
+        <td class="m">5 · strong-buy, buy,<br>hold, sell, strong-sell</td><td>every page</td></tr>
+      <tr class="hl"><td class="n">trade_signal</td><td>breaker + 8-block tally + the band</td>
+        <td class="m">7 · incl. SIGNAL WITHHELD</td><td>every page</td></tr>
+      <tr><td class="n">group_signal</td><td><b>the arithmetic MEAN</b> of the selected members' scores</td>
+        <td class="m">4 · no strong-sell</td><td>index, history</td></tr>
+      <tr><td class="n">swing_signal</td><td>a 5-block swing tally</td>
+        <td class="m">6 · BUY SWING, WAIT FOR DIP,<br>FADE THE RALLY, EXIT SWING,<br>HOLD SWING, NO SETUP</td>
+        <td><b>search only</b> — /api/ticker,<br>not in signals.json</td></tr>
+      <tr><td class="n">intraday_signal</td><td>a 6-block intraday tally</td>
+        <td class="m">6 · LONG/SHORT ENTRY, RANGE BOUND,<br>WAIT FOR BREAKOUT,<br>BREAKDOWN WATCH, NO SETUP</td>
+        <td><b>search only</b></td></tr>
+      <tr><td class="n">gauge signal</td><td>one macro input, three ways</td>
+        <td class="m">4 · risk_on, caution,<br>risk_off, unavailable</td><td>framework, history</td></tr>
+    </table>
+  </div>
+
+  <!-- 5 · THE BAND -->
+  <div class="panel">
+    <h2>5 · <code>signal</code> — the score band</h2>
+    <p class="sub"><code>score_signal_band</code>, signal_engine.py:1297. Four inclusive tests and a fallthrough.
+    It takes the score and nothing else — no breaker, no timing, no grade — and has <b>no withheld state</b>.</p>
+
+<pre><span class="kw">def</span> score_signal_band(score):
+    <span class="kw">if</span> score &gt;= <span class="nu">75</span>: <span class="kw">return</span> <span class="st">"strong-buy"</span>
+    <span class="kw">if</span> score &gt;= <span class="nu">60</span>: <span class="kw">return</span> <span class="st">"buy"</span>
+    <span class="kw">if</span> score &gt;= <span class="nu">45</span>: <span class="kw">return</span> <span class="st">"hold"</span>
+    <span class="kw">if</span> score &gt;= <span class="nu">30</span>: <span class="kw">return</span> <span class="st">"sell"</span>
+    <span class="kw">return</span> <span class="st">"strong-sell"</span></pre>
+
+    <div class="note hot"><b>A NaN score returns "strong-sell."</b> Every comparison against NaN is False, so it
+    falls through to the terminal return. <b>That is the only way this function reports a bearish extreme without a
+    bearish input</b> — and the score's own degradation defaults (NaN RSI +3, NaN MACD −8, NaN MA −14) mean partial
+    data already biases it downward before this point.</div>
+  </div>
+
+  <!-- 6 · TRADE SIGNAL -->
+  <div class="panel">
+    <h2>6 · <code>trade_signal</code> — the full ladder</h2>
+    <p class="sub"><code>compute_trade_signal</code>, signal_engine.py:1614. A breaker block, then eight scoring
+    blocks, then <code>net = bullish − bearish</code>, then a sixteen-step first-match ladder.</p>
+
+    <p style="margin-top:14px"><b>The eight blocks.</b> Every condition and weight, in evaluation order.</p>
+    <table>
+      <tr><th style="width:6%">#</th><th style="width:20%">block</th><th style="width:44%">condition</th><th style="width:15%">side</th><th style="width:15%">amount</th></tr>
+      <tr><td class="m">1</td><td class="n">Breaker</td><td class="m">status == "degraded"</td><td>—</td><td class="m">0 (reason only)</td></tr>
+      <tr class="hot"><td class="m"></td><td></td><td class="m">status in (critical, warning)</td><td>bearish</td><td class="m">+3</td></tr>
+      <tr><td class="m">2</td><td class="n">Trend structure</td><td class="m">above_ma50 <b>and</b> ma20 &gt; ma50</td><td>bullish</td><td class="m">+2</td></tr>
+      <tr><td class="m"></td><td></td><td class="m">above_ma50 only</td><td>bullish</td><td class="m">+1</td></tr>
+      <tr><td class="m"></td><td></td><td class="m">else</td><td>bearish</td><td class="m">+2</td></tr>
+      <tr><td class="m"></td><td></td><td class="m">above_ma200 · else ma200 present</td><td>bull · bear</td><td class="m">+1 · +1</td></tr>
+      <tr><td class="m">3</td><td class="n">RSI</td><td class="m">≥75 · ≥65 · 40–60 · ≤35</td><td>bear · bear · bull · bull</td><td class="m">+2 · +1 · +1 · +2</td></tr>
+      <tr><td class="m">4</td><td class="n">MACD</td><td class="m">macd &gt; sig <b>and</b> hist &gt; 0</td><td>bullish</td><td class="m">+2</td></tr>
+      <tr><td class="m"></td><td></td><td class="m">macd &gt; sig only · no cross and hist &lt; 0</td><td>bull · bear</td><td class="m">+1 · +2</td></tr>
+      <tr><td class="m">5</td><td class="n">Volume</td><td class="m">vol_ratio ≥ 1.5 · ≤ 0.7</td><td>bull · bear</td><td class="m">+1 · +1</td></tr>
+      <tr><td class="m">6</td><td class="n">52w high</td><td class="m">&gt; −3% · &lt; −20% · −15% to −5%</td><td>bear · bear · bull</td><td class="m">+1 · +1 · +1</td></tr>
+      <tr><td class="m">7</td><td class="n">Trend strength</td><td class="m">≥ 16 · ≤ 5</td><td>bull · bear</td><td class="m">+1 · +1</td></tr>
+      <tr><td class="m">8</td><td class="n">1M return</td><td class="m">&gt; +15% · &lt; −10%</td><td>bear · —</td><td class="m">+1 · 0 (reason only)</td></tr>
+    </table>
+
+    <p style="margin-top:18px"><b>The ladder.</b> First match wins.</p>
+    <table>
+      <tr><th style="width:6%">#</th><th style="width:64%">condition</th><th style="width:30%">result</th></tr>
+      <tr class="hot"><td class="m">1</td><td class="m">breaker == "degraded"</td><td class="n">SIGNAL WITHHELD</td></tr>
+      <tr class="hot"><td class="m">2</td><td class="m">breaker == "critical"</td><td class="n">AVOID</td></tr>
+      <tr class="hot"><td class="m">3</td><td class="m">breaker == "warning" <b>and</b> net ≤ 0</td><td class="n">AVOID</td></tr>
+      <tr class="hot"><td class="m">4</td><td class="m">signal in (sell, strong-sell) <b>and</b> net ≤ −2</td><td class="n">AVOID</td></tr>
+      <tr><td class="m">5</td><td class="m">signal in (sell, strong-sell), else</td><td class="n">REDUCE/EXIT</td></tr>
+      <tr><td class="m">6</td><td class="m">hold <b>and</b> net ≥ 2</td><td class="n">ACCUMULATE ON DIP</td></tr>
+      <tr><td class="m">7</td><td class="m">hold <b>and</b> net ≤ −1</td><td class="n">REDUCE/EXIT</td></tr>
+      <tr><td class="m">8</td><td class="m">hold, else</td><td class="n">HOLD POSITION</td></tr>
+      <tr><td class="m">9</td><td class="m">buy: rsi ≥ 70 <b>and</b> pct_from_high &gt; −5</td><td class="n">WAIT FOR PULLBACK</td></tr>
+      <tr><td class="m">10</td><td class="m">buy: rsi ≤ 60, macd cross, above_ma50</td><td class="n">BUY NOW</td></tr>
+      <tr><td class="m">11</td><td class="m">buy: rsi ≤ 65, hist_increasing, above_ma50</td><td class="n">BUY NOW</td></tr>
+      <tr><td class="m">12</td><td class="m">buy: vol_ratio ≥ 1.5 <b>and</b> macd cross</td><td class="n">BUY NOW</td></tr>
+      <tr><td class="m">13</td><td class="m">buy: net ≥ 3</td><td class="n">BUY NOW</td></tr>
+      <tr><td class="m">14</td><td class="m">buy: rsi ≥ 65</td><td class="n">WAIT FOR PULLBACK</td></tr>
+      <tr><td class="m">15</td><td class="m">buy, else</td><td class="n">ACCUMULATE ON DIP</td></tr>
+      <tr><td class="m">16</td><td class="m">terminal else</td><td class="n" style="color:var(--dim)">unreachable</td></tr>
+    </table>
+
+    <div class="note hot"><b>Five confirmed defects in this function.</b>
+    <b>(1)</b> <code>hist_increasing = macd_hist &gt; 0</code> — that is the <i>sign</i>, not the slope, yet the
+    reason strings say "histogram expanding" and "histogram fading", which the test cannot tell apart. The swing
+    function next door <i>does</i> compute a true three-bar turn.
+    <b>(2)</b> A warning breaker is <b>double-counted</b>: it adds +3 bearish, and then the same condition is
+    re-tested against the already-penalised net — so <b>a warning name with a raw tally of +3 nets 0 and is forced
+    to AVOID.</b>
+    <b>(3)</b> The terminal <code>else</code> is unreachable — the branches cover exactly the five values the band
+    can return.
+    <b>(4)</b> <code>score</code>, <code>ytd</code> and <code>rs_vs_ma50</code> are read and never used. The
+    composite score is fetched and discarded; the ladder branches on the band instead.
+    <b>(5)</b> RSI in <b>(35,40)</b> or <b>(60,65)</b> matches nothing — no credit to either side.</div>
+
+    <div class="note warn"><b>Docstring drift:</b> the function's own docstring lists six outputs. There are seven —
+    it omits <code>SIGNAL WITHHELD</code>, the D-019 state added later.</div>
+  </div>
+
+  <!-- 7 · GROUP SIGNAL -->
+  <div class="panel">
+    <h2>7 · <code>group_signal</code> — a different statistic over a different population</h2>
+    <p class="sub">signal_engine.py:2643. Easy to assume this is the universe composite. It is not.</p>
+
+<pre>avg_score = round(np.mean([s[<span class="st">"score"</span>] <span class="kw">for</span> s <span class="kw">in</span> stocks_in_group]), <span class="nu">1</span>)
+<span class="kw">if</span> avg_score &gt;= <span class="nu">70</span>: strong-buy
+<span class="kw">elif</span> avg_score &gt;= <span class="nu">58</span>: buy
+<span class="kw">elif</span> avg_score &gt;= <span class="nu">45</span>: hold
+<span class="kw">else</span>:                sell</pre>
+
+    <table style="margin-top:14px">
+      <tr><td class="n" style="width:26%">what it averages</td>
+          <td class="txt">the <b>arithmetic mean</b> of member <code>score</code>, over the <b>selected</b> members
+              only (≤ 7 per group), rounded to 1dp</td></tr>
+      <tr><td class="n">what it is NOT</td>
+          <td class="txt">the universe composite — <code>0.50·median(YTD) + 0.30·median(3M) + 0.20·median(1M)</code>,
+              computed over <b>all valid members</b>. Different statistic, different population.</td></tr>
+    </table>
+
+    <div class="note hot"><b>The same word means two different things.</b> The chain ends in a bare
+    <code>else</code>, so everything below 45 collapses into "sell" — there is no fourth cut at 30. So <b>"sell" at
+    group level means score &lt; 45, while "sell" at ticker level means 30 ≤ score &lt; 45.</b></div>
+  </div>
+
+  <!-- 8 · SWING -->
+  <div class="panel">
+    <h2>8 · <code>swing_signal</code> — and what actually produces WAIT FOR DIP</h2>
+    <p class="sub"><code>compute_swing_trade_signal</code>, signal_engine.py:1800. Returns a dict — signal,
+    reasoning, entry, stop, target, risk-reward. Guard: fewer than 10 bars → NO SETUP.</p>
+
+    <table>
+      <tr><th style="width:22%">block</th><th style="width:50%">condition</th><th style="width:28%">effect</th></tr>
+      <tr><td class="n">MA20</td><td class="m">price &gt; ma20 · else</td><td class="m">bull +1 · bear +1</td></tr>
+      <tr><td class="n">MA20 proximity</td><td class="m">dist &lt; 2% <b>and</b> above</td><td class="m">bull +1</td></tr>
+      <tr><td class="n">RSI</td><td class="m">≤35 · ≤45 · ≥75 · ≥65</td><td class="m">bull +3 · +2 · bear +3 · +1</td></tr>
+      <tr class="hl"><td class="n">MACD</td><td class="m"><b>a true 3-bar turn</b> — hist today &gt; yesterday <b>and</b> yesterday &lt; the bar before</td><td class="m">bull +2 / bear +2</td></tr>
+      <tr><td class="n"></td><td class="m">else macd &gt; signal · else</td><td class="m">bull +1 · bear +1</td></tr>
+      <tr><td class="n">Volume</td><td class="m">vol_ratio ≥ 1.5</td><td class="m">bull +1</td></tr>
+    </table>
+
+    <p style="margin-top:16px"><b>The ladder</b> — first match wins.</p>
+    <table>
+      <tr><th style="width:70%">condition</th><th style="width:30%">value</th></tr>
+      <tr><td class="m">net ≥ 4 <b>and</b> rsi ≤ 45</td><td class="n">BUY SWING</td></tr>
+      <tr><td class="m">net ≥ 3 <b>and</b> hist turning up</td><td class="n">BUY SWING</td></tr>
+      <tr class="hl"><td class="m">net ≥ 2 <b>and</b> price &gt; ma20</td><td class="n">WAIT FOR DIP</td></tr>
+      <tr><td class="m">net ≤ −3 <b>and</b> rsi ≥ 70</td><td class="n">FADE THE RALLY</td></tr>
+      <tr><td class="m">net ≤ −2 · net ≥ 1 · net ≤ −1 · else</td><td class="n">EXIT · HOLD · EXIT · NO SETUP</td></tr>
+    </table>
+
+    <div class="note"><b>WAIT FOR DIP has exactly one producer: net ≥ 2 AND price above the MA20</b> — reached only
+    after both BUY SWING tests have failed, so in practice net is 2–3 with either RSI above 45 or no histogram turn.
+    It means "bullish enough, but already extended above the MA20." It takes the same long entry/stop/target block
+    as BUY SWING.</div>
+
+    <div class="note good"><b>Note the contrast with §6.</b> This function computes a genuine three-bar histogram
+    turn. The trade-signal function's <code>hist_increasing</code> only tests the sign. Two functions in the same
+    file, one right and one not.</div>
+  </div>
+
+  <!-- 9 · INTRADAY -->
+  <div class="panel">
+    <h2>9 · <code>intraday_signal</code> — and the forming-bar problem</h2>
+    <p class="sub"><code>compute_intraday_trade_signal</code>, signal_engine.py:1993. Guard: fewer than 15 bars →
+    NO SETUP. Six blocks: gap, previous-day levels, RSI, MACD, volume, and a volatility check that is
+    <b>reason-only and never scored</b>.</p>
+
+    <table>
+      <tr><th style="width:70%">condition</th><th style="width:30%">value</th></tr>
+      <tr class="hot"><td class="m"><b>vol_ratio ≤ 0.5</b> — checked FIRST, before anything else</td><td class="n">RANGE BOUND</td></tr>
+      <tr><td class="m">net ≥ 3 <b>and</b> price &gt; prev_high</td><td class="n">LONG ENTRY</td></tr>
+      <tr><td class="m">net ≥ 2, macd bullish, price &gt; prev_close</td><td class="n">LONG ENTRY</td></tr>
+      <tr><td class="m">net ≥ 2 <b>and</b> price ≤ prev_close</td><td class="n">WAIT FOR BREAKOUT</td></tr>
+      <tr><td class="m">net ≤ −3 <b>and</b> price &lt; prev_low</td><td class="n">SHORT ENTRY</td></tr>
+      <tr><td class="m">net ≤ −2, not macd bullish, price &lt; prev_close</td><td class="n">SHORT ENTRY</td></tr>
+      <tr><td class="m">net ≤ −2 <b>and</b> price ≥ prev_close</td><td class="n">BREAKDOWN WATCH</td></tr>
+      <tr class="hot"><td class="m">|net| ≤ 1 <b>and</b> yesterday's range &lt; 0.8×ATR</td><td class="n">RANGE BOUND</td></tr>
+      <tr><td class="m">net ≥ 1 · net ≤ −1 · else</td><td class="n">WAIT · BREAKDOWN WATCH · NO SETUP</td></tr>
+    </table>
+
+    <div class="note hot"><b>RANGE BOUND has two unrelated producers and the label does not distinguish them.</b> One
+    is a <b>thin-volume veto</b> checked before everything — it overrides even a clean breakout. The other is a
+    genuine coil. Reading "RANGE BOUND" tells you nothing about which.</div>
+
+    <div class="note hot"><b>The forming bar is used unconditionally and is not gated.</b>
+    <code>iloc[-1]</code> is labelled "today" with no check that it <i>is</i> today. <code>_is_market_hours()</code>
+    exists in the codebase but never gates this function.
+    <b>So outside market hours every label silently shifts by one session</b> — "today's" open, high and low are the
+    last completed session's, "prev" is the session before that, and the gap shown is yesterday's gap. The signal
+    still renders with full confidence. During market hours <code>iloc[-1]</code> is a genuine partial bar, so the
+    high and low drift through the session.</div>
+
+    <div class="note"><b>BREAKDOWN WATCH</b> was renamed from WAIT FOR PULLBACK (PER-509) because it collided with
+    the position ladder's long-side signal of the same name.</div>
+  </div>
+
+  <!-- 10 · GAUGE -->
+  <div class="panel">
+    <h2>10 · The regime gauge's signal — and why <code>caution</code> does nothing</h2>
+    <p class="sub">framework/regime_calculator.py:90–135. Three-way per gauge, plus <code>unavailable</code> on
+    non-finite input.</p>
+
+    <table>
+      <tr><th style="width:34%">gauge</th><th style="width:16%">risk_on</th><th style="width:16%">caution</th><th style="width:16%">risk_off</th><th style="width:18%">cuts live in</th></tr>
+      <tr><td class="n">VIX (5d avg)</td><td class="m">≤ 18</td><td class="m">≤ 22</td><td class="m">&gt; 22</td><td class="m">config</td></tr>
+      <tr><td class="n">HY (FRED OAS %)</td><td class="m">≤ 3.0</td><td class="m">≤ 4.0</td><td class="m">&gt; 4.0</td><td class="m">config</td></tr>
+      <tr><td class="n">HY (pctile fallback)</td><td class="m">≥ 60</td><td class="m">≥ 40</td><td class="m">&lt; 40</td><td class="m">function default</td></tr>
+      <tr><td class="n">Breadth (S5FI)</td><td class="m">≥ 60</td><td class="m">≥ 50</td><td class="m">&lt; 50</td><td class="m">config</td></tr>
+      <tr class="hl"><td class="n">Breadth (RSP/SPY) — <b>the live path</b></td><td class="m">&gt; +0.5</td><td class="m">&gt; −0.5</td><td class="m">≤ −0.5</td><td class="m"><b>function default</b></td></tr>
+    </table>
+
+    <div class="note hot"><b><code>caution</code> is a real threshold consumed by nothing.</b>
+    <code>ladder_state</code> takes only risk_on, risk_off and unavailable — caution is the residual, acting solely
+    by not being risk_on. It is computed, written to the artifact, and rendered. <b>And under the live engine even
+    that is decorative:</b> the chassis uses boolean stress tests, not the three-way vote, and
+    regime_calculator.py:459 says so outright — <i>"the voter tally above is still computed for display/back-compat
+    but does NOT decide the state."</i></div>
+
+    <div class="note warn"><b>The config value for breadth is for a path that cannot run.</b> Config carries the
+    S5FI thresholds (60/50/30); the live path is RSP/SPY, whose ±0.5 band is a <b>Python default</b>. So the one
+    quantity here that <i>looks</i> configurable is not the one in use.</div>
+  </div>
+
+  <!-- 6 · THE COMPARISON -->
+  <div class="panel">
+    <h2>6 · Where the two surfaces diverge</h2>
+    <p class="sub">Nine named divergences were found tracing both paths. These are the ones that change what a
+    reader sees.</p>
+
+    <table>
+      <tr><th style="width:30%">divergence</th><th style="width:70%">consequence</th></tr>
+      <tr class="hot"><td class="n">The 20-bar boundary</td>
+        <td>The engine tests <code>&gt; 20</code>; the API tests <code>&lt; 20</code>. <b>A ticker with exactly 20
+            bars passes one and fails the other.</b></td></tr>
+      <tr class="hot"><td class="n">Grade vs trade signal</td>
+        <td><b>They are independent.</b> The only connection runs one way, through <code>signal</code>. And even the
+            shared score differs — <b>the grade uses the confirmed-close frame, the signal row uses the live
+            frame</b>, so they can disagree mid-session.</td></tr>
+      <tr class="hot"><td class="n">Multi-group tickers</td>
+        <td>A ticker appearing in two groups can render <b>AVOID and BUY NOW simultaneously</b> on the
+            dashboard.</td></tr>
+      <tr class="hot"><td class="n">Row 6's cross-artifact join</td>
+        <td><code>breaker_by_group</code> is keyed from signals.json's <b>15 selected groups</b>, but the lookup key
+            comes from the universe artifact, which <b>deliberately maps names outside the 15</b>. A miss returns
+            None → "group breaker unknown" → capped at B, never A+. Live on 5 of 14 watchers.</td></tr>
+      <tr class="hot"><td class="n">Display order ≠ selection order</td>
+        <td>Display sorts <code>(score, ticker)</code>; selection sorts <code>(score, ytd, ticker)</code>. <b>And the
+            dashboard shows LIVE scores against a FROZEN selection</b> — so reading the live top-7 off the table
+            names a different set than was actually selected.</td></tr>
+      <tr><td class="n">The empty meta segment</td>
+        <td><code>GROUP_METADATA</code> has 12 entries for 131 sub-industries, so <b>11 of 15 group cards</b> render
+            an empty segment: "Sector · · 3/5…".</td></tr>
+      <tr><td class="n">Two clocks</td>
+        <td>signals.json's embedded timestamp and its HTTP Last-Modified disagree by ~95s, because framework_runner
+            writes candidate_grades <i>back</i> into it. <b>Last-Modified is a write clock; generated_at is a bake
+            clock.</b></td></tr>
+      <tr><td class="n">No shared run ID</td>
+        <td><code>candidate_signals_timestamp</code> exists, guards the write-back, and is then <b>discarded</b>. So
+            a consumer cannot <i>detect</i> a two-artifact mismatch — only infer one from clock skew, which the row
+            above shows is misleading. One-line fix.</td></tr>
+      <tr><td class="n">Chip mappers</td>
+        <td>Three of them, and they disagreed. index.html had the withheld branch; framework.html fell through to
+            "hold" and had no style for it; search.html had no branch. Fixed 2026-08-11.</td></tr>
+    </table>
+  </div>
+
+  <!-- 7 · WHERE THE NUMBERS LIVE -->
+  <div class="panel">
+    <h2>7 · Where the thresholds live</h2>
+    <p class="sub">This is why changing a number is harder than it looks.</p>
+
+    <svg viewBox="0 0 960 150" role="img" aria-label="52 inline literals, 13 JS literals, 7 module constants, 2 defaults, and exactly one config key">
+      <rect x="30" y="24" width="470" height="44" rx="6" fill="#F85149" opacity=".85"/>
+      <text x="265" y="52" text-anchor="middle" font-size="13" font-weight="700" fill="#0B0F14">52 inline literals</text>
+
+      <rect x="508" y="24" width="130" height="44" rx="6" fill="#D4A72C" opacity=".85"/>
+      <text x="573" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#0B0F14">13 in JS</text>
+
+      <rect x="646" y="24" width="90" height="44" rx="6" fill="#8957E5" opacity=".85"/>
+      <text x="691" y="52" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0B0F14">7 const</text>
+
+      <rect x="744" y="24" width="60" height="44" rx="6" fill="#5C6B7A"/>
+      <text x="774" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#0B0F14">2 def</text>
+
+      <rect x="812" y="24" width="118" height="44" rx="6" fill="#3FB950" opacity=".85"/>
+      <text x="871" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#0B0F14">1 config</text>
+
+      <text x="480" y="98" text-anchor="middle" font-size="12.5" fill="#8B98A5">…and the single config key gates <tspan font-weight="700" fill="#E6EDF3">neither</tspan> of the two values you would most want to change.</text>
+      <text x="480" y="124" text-anchor="middle" font-size="11.5" fill="#5C6B7A">The band ladder is hand-copied into JS twice. The qualifier gate of 50 exists in five separate places.</text>
+    </svg>
+
+    <div class="note"><b>The seven A+ row thresholds ARE in config</b> (config.yaml:200–217) — extension 1.8, RSI
+    45–70, score 75, runway 15. It is the <i>score ladders</i> that are not.</div>
+  </div>
+
+  <!-- CAVEATS -->
+  <div class="caveats">
+    <h3>What this page does not cover, and what to distrust</h3>
+    <p><b>The 8-block evidence tally is not enumerated here.</b> The block count, the named defects inside it, and
+    the three AVOID routes are all confirmed — but the complete block-by-block list was not captured, so this page
+    describes the tally's shape and its faults rather than reproducing it. Anyone needing the exact blocks should
+    read <code>compute_trade_signal</code> directly.</p>
+    <p><b>Stale prose exists elsewhere and contradicts this.</b> <code>architecture.html:414</code> still describes
+    the removed YTD over-extension penalties. The A+ doctrine brief carries the pre-amendment grade rule with no
+    superseded banner. The <code>grade_setup</code> docstring omits row 7 from its B list and omits the row-3
+    availability carve-out. <b>Where those disagree with this page, they are the ones that are wrong</b> — but the
+    D-011 decision record itself is correct.</p>
+    <p><b>Every number here is a mechanism, not an endorsement.</b> Whether the score or the grade predicts anything
+    is answered at length elsewhere, and the answer is that the grade does not rank forward returns. The evidence for
+    keeping the apparatus rests on the stop and the regime chassis, not on the chip.</p>
+  </div>
+
+  <div class="foot">dashboard vs framework · compiled from source-level investigations, 2026-08 · mechanisms only</div>
+
+</div>
+</body>
+</html>

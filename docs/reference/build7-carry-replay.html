@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build 7 — the guard question closes, and the constraint turns out to be capacity</title>
+<style>
+  :root{
+    --bg:#0B0F14; --panel:#121820; --panel2:#0E141B; --line:#223041;
+    --ink:#E6EDF3; --muted:#8B98A5; --dim:#5C6B7A;
+    --ok:#3FB950; --warn:#D4A72C; --bad:#F85149; --info:#58A6FF; --alt:#8957E5;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  .wrap{max-width:1020px;margin:0 auto;padding:40px 22px 76px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  h1{font-size:clamp(25px,4vw,35px);letter-spacing:-.02em;margin:.35em 0 .2em;font-weight:750}
+  .lede{font-size:14.5px;color:var(--muted);max-width:78ch}
+  .src{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:12px}
+  .src b{color:var(--muted);font-weight:600}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 22px 18px;margin-top:26px}
+  .panel h2{font-size:17px;margin:0 0 3px;font-weight:700;letter-spacing:-.01em}
+  .panel .sub{font-size:13px;color:var(--muted);margin:0 0 16px;max-width:84ch}
+  .panel p{font-size:13.5px;color:var(--muted);max-width:84ch}
+  .panel p b{color:var(--ink);font-weight:600}
+  svg{width:100%;height:auto;display:block}
+  .note{font-size:13px;color:var(--muted);margin-top:15px;border-left:2px solid var(--line);padding-left:14px}
+  .note b{color:var(--ink);font-weight:600}
+  .note.hot{border-left-color:var(--bad)} .note.good{border-left-color:var(--ok)}
+  .note.warn{border-left-color:var(--warn)}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:12.5px}
+  th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+     color:var(--dim);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:bottom}
+  td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted)}
+  td.n{color:var(--ink);font-weight:600;font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+  tr.hit td{background:rgba(248,81,73,.06)}
+  tr.ok td{background:rgba(63,185,80,.06)}
+  .caveats{margin-top:30px;border-top:1px solid var(--line);padding-top:18px}
+  .caveats h3{font-size:12px;margin:0 0 10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+              font-family:var(--mono);font-weight:600}
+  .caveats p{font-size:12.5px;color:var(--muted);margin:8px 0;max-width:88ch}
+  .caveats b{color:var(--ink);font-weight:600}
+  .foot{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:16px}
+  ol{font-size:13.5px;color:var(--muted);padding-left:20px} ol li{margin:9px 0} ol b{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">SignalAgent · Build 7 · extension-guard carry replay</div>
+  <h1>The guard question closes — and the binding constraint turns out to be capacity, not selection</h1>
+  <p class="lede">Build 5.1 named the extension guard as the doctrine's most expensive row: the days it excluded
+  earned 1.43% against A+'s 0.83%. This study asked whether that survives once real stops, sizing and ceilings are
+  applied. It does not — and the reason is more interesting than the verdict.</p>
+  <div class="src">prereg <b>a6bfd58</b> · declarations <b>6330dcc</b> + amendment <b>0ac94cb</b> · study
+  <b>5e295ad</b> · prereg amendment <b>701e347</b> · package <b>678375b</b> · sweep 30/30 · 8 pins</div>
+
+  <!-- 1 · THE VERDICT -->
+  <div class="panel">
+    <h2>1 · Two verdicts, read mechanically against the pre-written table</h2>
+    <p class="sub">Four arms in a 2×2 — guard on/off crossed with fixed 6.5% sizing versus risk-parity. Everything
+    else held identical: the same stop, the same fills, the same costs, the same caps, the same score-order
+    selection.</p>
+
+    <svg viewBox="0 0 940 250" role="img" aria-label="Two verdict panels: the guard is not distinguishable, and risk-parity loses">
+      <rect x="20" y="18" width="440" height="212" rx="9" fill="#0E141B" stroke="#8B98A5" stroke-width="1.6"/>
+      <text x="240" y="48" text-anchor="middle" font-size="12" font-family="monospace" letter-spacing="1.5" fill="#8B98A5">THE GUARD</text>
+      <text x="240" y="82" text-anchor="middle" font-size="26" font-weight="700" fill="#E6EDF3">BRANCH 4</text>
+      <text x="240" y="106" text-anchor="middle" font-size="13" fill="#8B98A5">not distinguishable</text>
+      <line x1="60" y1="126" x2="420" y2="126" stroke="#223041"/>
+      <text x="240" y="150" text-anchor="middle" font-size="12.5" fill="#E6EDF3">guard-off beats guard-on by <tspan font-family="monospace" font-weight="700">+0.40</tspan> CAGR pts</text>
+      <text x="240" y="172" text-anchor="middle" font-size="12.5" fill="#8B98A5">inside a band of [−6.57, +6.73]</text>
+      <text x="240" y="194" text-anchor="middle" font-size="12.5" fill="#8B98A5">54% of seeds positive — a coin flip</text>
+      <text x="240" y="218" text-anchor="middle" font-size="12" font-weight="700" fill="#3FB950">the guard stays · question closes</text>
+
+      <rect x="480" y="18" width="440" height="212" rx="9" fill="#0E141B" stroke="#F85149" stroke-width="1.6"/>
+      <text x="700" y="48" text-anchor="middle" font-size="12" font-family="monospace" letter-spacing="1.5" fill="#F85149">SIZING</text>
+      <text x="700" y="82" text-anchor="middle" font-size="26" font-weight="700" fill="#E6EDF3">INVERTED</text>
+      <text x="700" y="106" text-anchor="middle" font-size="13" fill="#8B98A5">risk-parity <tspan fill="#F85149" font-weight="700">loses</tspan></text>
+      <line x1="520" y1="126" x2="880" y2="126" stroke="#223041"/>
+      <text x="700" y="150" text-anchor="middle" font-size="12.5" fill="#E6EDF3"><tspan font-family="monospace" font-weight="700">−4.41</tspan> CAGR pts · CI [−8.24, −1.14]</text>
+      <text x="700" y="172" text-anchor="middle" font-size="12.5" fill="#8B98A5">CI excludes zero · −$53,152 terminal</text>
+      <text x="700" y="194" text-anchor="middle" font-size="12.5" fill="#8B98A5">outside the table's branches — reported uncovered</text>
+      <text x="700" y="218" text-anchor="middle" font-size="12" font-weight="700" fill="#3FB950">fixed sizing stays</text>
+    </svg>
+
+    <div class="note"><b>The prediction made before the run was half right.</b> Branch 4 for the guard — correct.
+    And branch 5, sizing, was named in advance as where the real chance of a finding lay. There is one. It is the
+    exact negative of the one expected: risk-parity, proposed in deliberation as the fix for the accidental risk
+    spread, is measurably worse than the fixed sizing already in production.</div>
+  </div>
+
+  <!-- 2 · THE MECHANISM -->
+  <div class="panel">
+    <h2>2 · Why the guard couldn't matter — the capacity finding</h2>
+    <p class="sub">Removing the guard was expected to admit a much larger population. It admitted a much larger
+    population and produced <b>fewer trades</b>. That contradiction is the study's real result.</p>
+
+    <svg viewBox="0 0 940 300" role="img" aria-label="Removing the guard raises A plus days by 1.81 times but ceiling denials more than double and trades fall">
+      <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0 L9,4.5 L0,9 Z" fill="#5C6B7A"/></marker></defs>
+
+      <text x="30" y="28" font-size="12.5" font-weight="700" fill="#E6EDF3">Remove the extension guard, and three things happen:</text>
+
+      <rect x="30" y="48" width="270" height="92" rx="8" fill="#0E141B" stroke="#3FB950" stroke-width="1.6"/>
+      <text x="165" y="74" text-anchor="middle" font-size="11.5" fill="#8B98A5">A+ DAYS</text>
+      <text x="165" y="106" text-anchor="middle" font-size="19" font-weight="700" font-family="monospace" fill="#3FB950">29,777 → 53,979</text>
+      <text x="165" y="128" text-anchor="middle" font-size="12" fill="#E6EDF3">1.81× more candidates</text>
+
+      <line x1="300" y1="94" x2="338" y2="94" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#ar)"/>
+
+      <rect x="346" y="48" width="270" height="92" rx="8" fill="#0E141B" stroke="#D4A72C" stroke-width="1.6"/>
+      <text x="481" y="74" text-anchor="middle" font-size="11.5" fill="#8B98A5">CEILING DENIALS</text>
+      <text x="481" y="106" text-anchor="middle" font-size="19" font-weight="700" font-family="monospace" fill="#D4A72C">58,085 → 122,717</text>
+      <text x="481" y="128" text-anchor="middle" font-size="12" fill="#E6EDF3">more than double</text>
+
+      <line x1="616" y1="94" x2="654" y2="94" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#ar)"/>
+
+      <rect x="662" y="48" width="258" height="92" rx="8" fill="#0E141B" stroke="#F85149" stroke-width="1.6"/>
+      <text x="791" y="74" text-anchor="middle" font-size="11.5" fill="#8B98A5">TRADES TAKEN</text>
+      <text x="791" y="106" text-anchor="middle" font-size="19" font-weight="700" font-family="monospace" fill="#F85149">1,068 → 1,012</text>
+      <text x="791" y="128" text-anchor="middle" font-size="12" fill="#E6EDF3">fewer, not more</text>
+
+      <rect x="30" y="166" width="890" height="62" rx="8" fill="#121820" stroke="#58A6FF" stroke-width="1.7"/>
+      <text x="475" y="194" text-anchor="middle" font-size="15" font-weight="700" fill="#58A6FF">At 6.5% under a 90% ceiling, the book is CAPACITY-bound, not CANDIDATE-bound.</text>
+      <text x="475" y="216" text-anchor="middle" font-size="12.5" fill="#8B98A5">The extra candidates compete for slots that are already full. They displace each other rather than adding positions.</text>
+
+      <text x="475" y="256" text-anchor="middle" font-size="13.5" font-weight="700" fill="#E6EDF3">A selection row cannot move a system whose binding constraint is capacity.</text>
+      <text x="475" y="280" text-anchor="middle" font-size="12" fill="#5C6B7A">That is why branch 4 landed — mechanically, not for want of statistical power.</text>
+    </svg>
+
+    <div class="note good"><b>This is a better answer than "inconclusive."</b> A null result normally leaves you
+    wondering whether the effect is absent or merely unmeasurable. Here the trade counts explain it: the guard
+    <i>could not</i> have mattered, because the constraint it operates on was never the one binding. Populations do
+    genuinely differ — Jaccard overlap 0.523 — they simply are not larger where it counts.</div>
+
+    <div class="note"><b>And it redirects the whole programme.</b> The open question stops being "which entry rows
+    should gate?" and becomes "what should sizing and the ceiling be?" That is Build 6B's territory, and it now has
+    a measured reason to exist rather than an intuition.</div>
+  </div>
+
+  <!-- 3 · THE STOP -->
+  <div class="panel">
+    <h2>3 · The study stopped itself first — and found two committed results were already false</h2>
+    <p class="sub">Before any performance number was read, the integrity gate failed. The pre-registration said
+    "cent-exact, or stop." It stopped.</p>
+
+    <table>
+      <tr><th style="width:22%">what</th><th style="width:78%">finding</th></tr>
+      <tr class="hit">
+        <td class="n">The gate failure</td>
+        <td>S1 returned <b style="color:var(--ink)">14.11% / $235,787.28</b> against 5B's committed
+            <b style="color:var(--ink)">14.06% / $235,200.09</b> — same 1,068 trades, same drawdown, $587 apart.</td>
+      </tr>
+      <tr class="hit">
+        <td class="n">The cause</td>
+        <td>5B's panel builds its group map from <span style="font-family:var(--mono)">public/universe_ranking.json</span>
+            — an artifact the <b>weekly rotation rewrites</b>. The Aug-8 rotation moved three tickers between
+            sub-industries, so R28's group caps bound on different days and the equity path shifted while the trade
+            count did not. Small enough to have gone unnoticed indefinitely.</td>
+      </tr>
+      <tr class="hit">
+        <td class="n">Blast radius</td>
+        <td><b>Build 6A was affected too</b> — it now fails its own gate identically. Layer A and 5.1 are clean on
+            this input; they never read the group map. Two committed study results had been quietly non-reproducible
+            since Saturday.</td>
+      </tr>
+      <tr class="ok">
+        <td class="n">The discipline</td>
+        <td>The map was <b>not</b> pinned inside Build 7 to make its own gate pass. Doing so would have resolved,
+            after seeing a number, an ambiguity that was made a stop condition precisely so it could not be.</td>
+      </tr>
+    </table>
+
+    <div class="note hot"><b>The general lesson, and it has a name now.</b> A pin anchored to something that moves
+    stops testing what it was written to test. Yesterday that arrived on a study's <i>anchors</i> — a sliding
+    twenty-commit window. Today it arrived on a study's <i>inputs</i> — a live artifact read at run time. Same
+    family, different surface. <b>Anchor to a fixed commit or a content hash; never to a position in a moving
+    sequence, and never to a file something else rewrites.</b></div>
+  </div>
+
+  <!-- 4 · THE SWEEP -->
+  <div class="panel">
+    <h2>4 · The sibling sweep — one study was already broken and passing</h2>
+    <p class="sub">"Clean on the group map" is not "clean." Every input of every committed study was enumerated and
+    classified.</p>
+
+    <svg viewBox="0 0 940 210" role="img" aria-label="Thirty-eight study inputs: twenty-nine live, four recorded only, five pinned">
+      <text x="30" y="26" font-size="12.5" font-weight="700" fill="#E6EDF3">38 inputs across five committed studies</text>
+
+      <rect x="30" y="44" width="640" height="46" rx="6" fill="#F85149" opacity=".85"/>
+      <text x="350" y="73" text-anchor="middle" font-size="14" font-weight="700" fill="#0B0F14">29 LIVE — read at run time, nothing asserted</text>
+
+      <rect x="678" y="44" width="90" height="46" rx="6" fill="#D4A72C" opacity=".85"/>
+      <text x="723" y="73" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0B0F14">4 rec.</text>
+
+      <rect x="776" y="44" width="134" height="46" rx="6" fill="#3FB950" opacity=".85"/>
+      <text x="843" y="73" text-anchor="middle" font-size="13" font-weight="700" fill="#0B0F14">5 PINNED</text>
+
+      <text x="30" y="118" font-size="11.5" fill="#8B98A5">"RECORDED-ONLY" is the trap: a hash written into a results file is <tspan font-weight="700" fill="#E6EDF3">not</tspan> a pin unless something asserts it.</text>
+
+      <rect x="30" y="134" width="880" height="60" rx="8" fill="#121820" stroke="#F85149" stroke-width="1.5"/>
+      <text x="48" y="158" font-size="12.5" font-weight="700" fill="#F85149">Found already broken — Layer A's honesty bridge:</text>
+      <text x="48" y="180" font-size="11.5" fill="#8B98A5">its recorded "516 candidate grades" had been silently replaying as 680 across entirely different days — while the pin passed, because it asserts floors and never the recorded count.</text>
+    </svg>
+
+    <div class="note hot"><b>Recorded-but-unasserted rot.</b> A number printed in a report that nothing checks, decaying
+    quietly while the suite prints green. Layer A's companion bridge figure had degraded from "129 of 130" to raising
+    <span style="font-family:var(--mono)">bridge too thin: 0</span>. Both are now pinned to explicit commits and both
+    reproduce their reported figures exactly.</div>
+
+    <div class="note warn"><b>And the second finding is the more uncomfortable one.</b> Layer A — the foundation of
+    the entire evidence base — survived on a single <i>aggregate</i> pin rather than per-input pins. Nine of its
+    inputs are live. What saved it is a frame-rebuild anchor that has a <span style="font-family:var(--mono)">--fast</span>
+    bypass, is not run automatically, and cannot name which input moved when it trips.</div>
+
+    <div class="note good"><b>The fix:</b> one manifest of asserted content hashes, checked at each study's real entry
+    point, raising with <b>the name of the input that moved</b>. Wired into all five studies. The price cache is
+    hashed over filename <i>and</i> content, because the directory listing <i>is</i> the study population. Two things
+    were left unpinned on purpose, with reasons recorded: the live import of production grading code — that coupling
+    is the point, not a defect — and the dependency floors, which are a repo-wide decision rather than a study one.</div>
+  </div>
+
+  <!-- 5 · WHAT CHANGES -->
+  <div class="panel">
+    <h2>5 · What this changes</h2>
+    <ol>
+      <li><b>The extension guard stays, and the question is closed.</b> Build 5.1's finding was real at signal level
+      and does not survive at system level. That is now five separate occasions on which a raw-return finding in this
+      project failed to transfer once stops were applied — the pattern is no longer a coincidence, it is a property
+      of the technique.</li>
+
+      <li><b>Fixed sizing stays, on stronger evidence than expected.</b> Risk-parity was proposed in deliberation,
+      partially retracted on arithmetic, and is now measured as worse by 4.41 CAGR points with a CI excluding zero.
+      The idea is dead. The plan currently being executed — eight names at a fixed percentage — is the arm that won.</li>
+
+      <li><b>The programme redirects from selection to capacity.</b> If the book is capacity-bound, the levers that
+      matter are the ceiling and the sizing, not which rows gate entry. Build 6B inherits a measured reason to exist.</li>
+
+      <li><b>Every committed study now fails loudly rather than drifting.</b> That is worth more than any single
+      verdict: five studies, thirty-eight inputs, one manifest, and a failure that names what moved.</li>
+    </ol>
+  </div>
+
+  <!-- CAVEATS -->
+  <div class="caveats">
+    <h3>What this does not settle</h3>
+    <p><b>One window, and v1 grades.</b> The study runs on the v1 scorer for comparability with 5B and to satisfy its
+    own integrity gate. Production has run v2 since 9 August. The transfer of this conclusion to v2 grades is an
+    assumption, not a finding.</p>
+    <p><b>The pre-registration contained a real defect.</b> Its paired per-trade R bootstrap was structurally blind to
+    sizing — R-multiples are share-scale invariant, so shares cancel and the test could not detect the thing it
+    existed to test. Caught by the implementer before any performance number was read, amended on the record with the
+    original clauses left intact above it, and the provenance noted plainly.</p>
+    <p><b>Risk-parity could not always fund itself.</b> Tight stops push size to the cap, and concurrent capped
+    positions exhaust cash. Shares clamp to affordable so the trade survives and the pairing holds; the clamp binds
+    on 9.4% and 5.3% of trades and is reported as a validity number, not hidden.</p>
+    <p><b>Slippage is not modelled.</b> 5B measured 32–37% of stop exits filling below the entry stop. That penalty
+    falls hardest on the wider-stop trades the no-guard arms admit — so those arms are flattered, which makes the
+    no-adoption verdict stronger rather than weaker.</p>
+    <p><b>One follow-up earned and not taken.</b> The doctrine study's comment declares it "frozen to the v1 ladder"
+    and imports a v1 function to that end — but the import is dead and the ladders are hand-inlined. Not wrong today,
+    since the parity pin guards the replica. But a freeze that lives in a comment is a freeze nobody enforces.</p>
+  </div>
+
+  <div class="foot">Build 7 · extension-guard carry replay · verdict read mechanically against the pre-registered table · nothing shipped to production</div>
+
+</div>
+</body>
+</html>

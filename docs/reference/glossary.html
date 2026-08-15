@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glossary — every identifier in this project</title>
+<style>
+  :root{
+    --bg:#0B0F14; --panel:#121820; --panel2:#0E141B; --line:#223041;
+    --ink:#E6EDF3; --muted:#8B98A5; --dim:#5C6B7A;
+    --ok:#3FB950; --warn:#D4A72C; --bad:#F85149; --info:#58A6FF; --alt:#8957E5;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  .wrap{max-width:1040px;margin:0 auto;padding:38px 22px 76px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  h1{font-size:clamp(24px,3.8vw,33px);letter-spacing:-.02em;margin:.35em 0 .2em;font-weight:750}
+  .lede{font-size:14.5px;color:var(--muted);max-width:80ch}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 22px 18px;margin-top:24px}
+  .panel h2{font-size:17px;margin:0 0 3px;font-weight:700;letter-spacing:-.01em}
+  .panel .sub{font-size:13px;color:var(--muted);margin:0 0 16px;max-width:88ch}
+  svg{width:100%;height:auto;display:block}
+  code{font-family:var(--mono);font-size:11.5px;color:#9FD5FF}
+  .note{font-size:13px;color:var(--muted);margin-top:14px;border-left:2px solid var(--line);padding-left:14px}
+  .note b{color:var(--ink);font-weight:600}
+  .note.hot{border-left-color:var(--bad)} .note.good{border-left-color:var(--ok)}
+  .note.warn{border-left-color:var(--warn)}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:12.5px}
+  th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;
+     color:var(--dim);font-weight:600;padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:bottom}
+  td{padding:10px 9px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted)}
+  td.n{color:var(--ink);font-weight:700;font-family:var(--mono);font-size:12px;white-space:nowrap}
+  td.m{font-family:var(--mono);font-size:11.5px}
+  tr.key td{background:rgba(88,166,255,.07)}
+  tr.hot td{background:rgba(248,81,73,.06)}
+  tr.ok td{background:rgba(63,185,80,.06)}
+  .foot{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">SignalAgent · reference · glossary</div>
+  <h1>Every identifier, and what it found</h1>
+  <p class="lede">Builds, arms, scorer versions, decision records and rule numbers — the shorthand this project
+  runs on. Each entry says what the thing was and what came out of it, so a reference elsewhere doesn't need
+  chasing.</p>
+
+  <!-- THE ARC -->
+  <div class="panel">
+    <h2>The arc in one picture</h2>
+    <p class="sub">Every study in order, and what each one narrowed.</p>
+
+    <svg viewBox="0 0 980 300" role="img" aria-label="Study sequence from Layer A through Build 7, narrowing from selection to machinery">
+      <defs><marker id="g" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0 L9,4.5 L0,9 Z" fill="#5C6B7A"/></marker></defs>
+
+      <text x="26" y="24" font-size="12" font-weight="700" fill="#8B98A5">DOES THE GRADE PICK WINNERS?</text>
+      <rect x="26" y="34" width="200" height="58" rx="7" fill="#0E141B" stroke="#F85149" stroke-width="1.6"/>
+      <text x="126" y="56" text-anchor="middle" font-size="12.5" font-weight="700" fill="#F85149">Layer A</text>
+      <text x="126" y="78" text-anchor="middle" font-size="11" fill="#8B98A5">No — A+ 0.83 &lt; B 1.15 &lt; C 1.63</text>
+
+      <line x1="226" y1="63" x2="256" y2="63" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#g)"/>
+
+      <rect x="264" y="34" width="200" height="58" rx="7" fill="#0E141B" stroke="#F85149" stroke-width="1.6"/>
+      <text x="364" y="56" text-anchor="middle" font-size="12.5" font-weight="700" fill="#F85149">5B</text>
+      <text x="364" y="78" text-anchor="middle" font-size="11" fill="#8B98A5">No arm beats another</text>
+
+      <line x1="464" y1="63" x2="494" y2="63" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#g)"/>
+
+      <rect x="502" y="34" width="200" height="58" rx="7" fill="#0E141B" stroke="#3FB950" stroke-width="1.7"/>
+      <text x="602" y="56" text-anchor="middle" font-size="12.5" font-weight="700" fill="#3FB950">5B addendum</text>
+      <text x="602" y="78" text-anchor="middle" font-size="11" fill="#8B98A5">The MACHINERY is the edge</text>
+
+      <text x="26" y="132" font-size="12" font-weight="700" fill="#8B98A5">WHICH PART OF THE GRADE?</text>
+      <rect x="26" y="142" width="200" height="58" rx="7" fill="#0E141B" stroke="#D4A72C" stroke-width="1.6"/>
+      <text x="126" y="164" text-anchor="middle" font-size="12.5" font-weight="700" fill="#D4A72C">5.1 · rows</text>
+      <text x="126" y="186" text-anchor="middle" font-size="11" fill="#8B98A5">the extension guard</text>
+
+      <line x1="226" y1="171" x2="256" y2="171" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#g)"/>
+
+      <rect x="264" y="142" width="200" height="58" rx="7" fill="#0E141B" stroke="#D4A72C" stroke-width="1.6"/>
+      <text x="364" y="164" text-anchor="middle" font-size="12.5" font-weight="700" fill="#D4A72C">5.2 · components</text>
+      <text x="364" y="186" text-anchor="middle" font-size="11" fill="#8B98A5">YTD monotone; MACD/MA flip by era</text>
+
+      <line x1="464" y1="171" x2="494" y2="171" stroke="#5C6B7A" stroke-width="1.5" marker-end="url(#g)"/>
+
+      <rect x="502" y="142" width="200" height="58" rx="7" fill="#0E141B" stroke="#5C6B7A" stroke-width="1.5"/>
+      <text x="602" y="164" text-anchor="middle" font-size="12.5" font-weight="700" fill="#E6EDF3">7 · the guard</text>
+      <text x="602" y="186" text-anchor="middle" font-size="11" fill="#8B98A5">stays; book is capacity-bound</text>
+
+      <text x="26" y="240" font-size="12" font-weight="700" fill="#8B98A5">WHAT ABOUT THE EXITS?</text>
+      <rect x="26" y="250" width="200" height="42" rx="7" fill="#0E141B" stroke="#5C6B7A" stroke-width="1.5"/>
+      <text x="126" y="276" text-anchor="middle" font-size="12" fill="#E6EDF3">6A · targets → none adopted</text>
+
+      <rect x="264" y="250" width="438" height="42" rx="7" fill="#121820" stroke="#58A6FF" stroke-width="1.7"/>
+      <text x="483" y="276" text-anchor="middle" font-size="12.5" font-weight="700" fill="#58A6FF">6B · sizing × exits — NOT RUN. This is the open question.</text>
+
+      <rect x="742" y="34" width="212" height="258" rx="8" fill="#121820" stroke="#3FB950" stroke-width="1.5"/>
+      <text x="848" y="60" text-anchor="middle" font-size="12" font-weight="700" fill="#3FB950">WHAT SURVIVED</text>
+      <text x="848" y="92" text-anchor="middle" font-size="11.5" fill="#E6EDF3">the stop</text>
+      <text x="848" y="114" text-anchor="middle" font-size="11.5" fill="#E6EDF3">the regime chassis</text>
+      <text x="848" y="136" text-anchor="middle" font-size="11.5" fill="#E6EDF3">the ceiling ladder</text>
+      <text x="848" y="170" text-anchor="middle" font-size="10.5" fill="#5C6B7A">Arm drawdown bands never</text>
+      <text x="848" y="188" text-anchor="middle" font-size="10.5" fill="#5C6B7A">overlapped SPY's −33.7% —</text>
+      <text x="848" y="206" text-anchor="middle" font-size="10.5" fill="#5C6B7A">the one seed-independent</text>
+      <text x="848" y="224" text-anchor="middle" font-size="10.5" fill="#5C6B7A">positive in the whole base</text>
+      <text x="848" y="258" text-anchor="middle" font-size="10.5" fill="#8B98A5">Five studies, one answer:</text>
+      <text x="848" y="276" text-anchor="middle" font-size="10.5" fill="#8B98A5">not the stock-picking</text>
+    </svg>
+  </div>
+
+  <!-- STUDIES -->
+  <div class="panel">
+    <h2>The studies</h2>
+
+    <table>
+      <tr><th style="width:12%">name</th><th style="width:34%">what it was</th><th style="width:54%">what it found</th></tr>
+
+      <tr class="key"><td class="n">Layer A</td>
+        <td>848,328 ticker-days graded point-in-time. Signal-level — <b>no stops, no sizing, no exits.</b> Forward
+            return measured open-to-open, T+1 to T+21</td>
+        <td><b>The grade does not rank returns, and the ordering is inverted:</b> A+ 0.83% &lt; B 1.15% &lt; C 1.63%.
+            Holds in both spans, CI below zero. <b>Median A+ spell = 1 day.</b> A+ is 3.5% of all days</td></tr>
+
+      <tr><td class="n">distribution<br>decomposition</td>
+        <td>Layer A re-cut by tail shape rather than mean</td>
+        <td>Both tails thinner, but the <b>right tail cut 2–7× harder.</b> A+'s top 5% of days contribute
+            <b>140% of the bucket's total</b> — so its bottom 95% loses money</td></tr>
+
+      <tr class="key"><td class="n">5B</td>
+        <td>Strategy replay with real stops, sizing and exits. Five arms, 50 random-K seeds for the noise band</td>
+        <td><b>No arm distinguishable from any other.</b> The stop owns the loss shape in every arm.
+            <b>S5 — one score threshold, no doctrine — tied the full seven-row apparatus.</b> Stop floor is soft:
+            32–37% of stop exits fill <i>below</i> the entry stop</td></tr>
+
+      <tr class="ok"><td class="n">5B<br>addendum</td>
+        <td>Benchmarks measured against the same random-K bands</td>
+        <td><b>The machinery is the edge.</b> Arm drawdown bands never overlapped SPY's −33.7% under any seed —
+            the one seed-independent positive in the entire evidence base</td></tr>
+
+      <tr><td class="n">5.1</td>
+        <td>Row ablation. For each of the seven grade rows, isolate the days that passed every <i>other</i> row and
+            measure what they did</td>
+        <td><b>The extension guard was the volume suspect:</b> 23,893 excluded days earning 1.43% against A+'s
+            0.83%, both spans, 527 tickers. The YTD penalty was richer but fragile. <b>RSI and the trend condition
+            were doing real work</b></td></tr>
+
+      <tr><td class="n">5.2</td>
+        <td>Score-component ablation — the five ladders inside the score, which 5.1 never touched</td>
+        <td><b>YTD is monotone increasing in forward return</b> (1.16 → 2.44 → 5.33 → 11.76) and &gt;150% is not
+            tail-driven. <b>MACD and MA flip sign between eras</b>, both significant. The zero-ablation method was
+            confounded and said so</td></tr>
+
+      <tr><td class="n">6A</td>
+        <td>Profit targets — sell a portion at 2R, 3R, 4R, or floor the stop at breakeven</td>
+        <td><b>No arm adopted.</b> The breakeven floor was inert — armed 435 times, changed 19 exits.
+            <b>58.9% of touched trades improved and the dollars still lost</b>, because a few runners pay for
+            everything</td></tr>
+
+      <tr class="key"><td class="n">6B</td>
+        <td><b>Sizing × exits.</b> The two components 5B deliberately froze</td>
+        <td><b>NOT RUN.</b> This is the open question, and Build 7 pointed at it</td></tr>
+
+      <tr><td class="n">7</td>
+        <td>Carry replay — remove the extension guard at system level, crossed with risk-parity sizing</td>
+        <td><b>The guard stays</b> (inside the noise band). <b>Risk-parity sizing LOSES</b> −4.41 CAGR points, CI
+            excluding zero. <b>And the book is capacity-bound:</b> removing the guard lifted A+ days 1.81× but
+            produced <i>fewer</i> trades, because ceiling denials more than doubled</td></tr>
+
+      <tr><td class="n">grade<br>history</td>
+        <td>Backfilled from git, 17 trading days, plus forward persistence</td>
+        <td>Live median A+ spell <b>1 day</b> among closed spells. <b>23 distinct names touched A+ in 17 days —
+            A+ is not scarce, it is fleeting.</b> A+ falls to C ten times for every twice it falls to B</td></tr>
+
+      <tr><td class="n">ribbon<br>probe</td>
+        <td>Standalone study of moving-average ribbon dip-buying, 23 long-history ETFs. Never touched SignalAgent</td>
+        <td><b>Closed as an entry edge.</b> CAGR delta negative for all 23 symbols in both variants while cutting
+            drawdown massively — the fourth independent confirmation that trend structure costs return and buys
+            drawdown protection</td></tr>
+    </table>
+  </div>
+
+  <!-- ARMS -->
+  <div class="panel">
+    <h2>The arms</h2>
+    <p class="sub">5B's five strategy arms, and 6A's target arms. <b>S1 is always the incumbent</b> and always the
+    integrity gate — a new study's S1 must reproduce 5B's cent-for-cent or nothing downstream is trusted.</p>
+
+    <table>
+      <tr><th style="width:10%">arm</th><th style="width:38%">what it did</th><th style="width:52%">result</th></tr>
+      <tr class="key"><td class="n">S1</td><td>production doctrine, unchanged</td>
+        <td>Exp/R 0.417 · CAGR 14.1% · MaxDD −17.5% · Sharpe 0.912. <b>The reference point</b></td></tr>
+      <tr><td class="n">S2</td><td>A+ required in every regime</td><td>nominally best on Sharpe, inside the band</td></tr>
+      <tr class="hot"><td class="n">S3</td><td><b>B-or-better everywhere</b></td>
+        <td><b>Finished LAST on both metrics</b> — 0.307 and 11.3%. This is the arm that tests "should I take B"</td></tr>
+      <tr><td class="n">S4</td><td>momentum gate</td>
+        <td>Best CAGR (15.9%), worst drawdown (−20.1%). <b>S4-native — momentum gate plus momentum ordering — beat
+            all 50 seeds on both metrics</b>, but post-hoc, one cell of eighteen</td></tr>
+      <tr><td class="n">S5</td><td><b>score ≥ 50 only</b>, no doctrine at all</td>
+        <td>0.413 — <b>tied the full seven-row apparatus.</b> The most uncomfortable result in the set</td></tr>
+      <tr><td class="n">T0–T5</td><td>6A's target arms — T0 no target, T4 breakeven floor at 2R, T3 thirds at 2R and 4R</td>
+        <td>None adopted. T3 priced the choice at <b>0.658 CAGR points surrendered per drawdown point saved</b></td></tr>
+    </table>
+  </div>
+
+  <!-- SCORER -->
+  <div class="panel">
+    <h2>Scorer versions</h2>
+
+    <table>
+      <tr><th style="width:12%">version</th><th style="width:44%">what it does</th><th style="width:44%">status</th></tr>
+      <tr><td class="n">v1</td>
+        <td>YTD anchored on whatever the frame held — after early July that meant a rolling six-month return
+            labelled YTD. And a <b>penalty</b>: above 100% YTD the component turned negative, down to −7</td>
+        <td><b>FROZEN.</b> Kept callable so Layer A, 5B, 5.1, 6A and 7 still reproduce. <b>But it still has six live
+            production call sites</b> — the UUP and XLE breaker inputs</td></tr>
+      <tr class="key"><td class="n">v2</td>
+        <td>Real calendar YTD anchored on the prior year's last close, on both paths. The penalty is gone, replaced
+            by a <b>flat cap at +12</b> above 20%</td>
+        <td>Production since 2026-08-09 on the score and grade paths. <b>NOT yet live on the universe path</b> —
+            that artifact is rebuilt weekly and predates the cutover</td></tr>
+    </table>
+
+    <div class="note hot"><b>The trap this creates:</b> <code>signals.json</code> is stamped
+    <code>scorer_version: v2</code> while carrying near-miss rows with YTD point values <b>v2 cannot emit</b>,
+    because those rows come from the older universe artifact. <b>The stamp does not distinguish them.</b></div>
+
+    <div class="note warn"><b>And a rule for any new study:</b> declare which scorer it runs on. Everything committed
+    ran on v1. A v2 study is not comparable to any of it and cannot reuse the pinned frames.</div>
+  </div>
+
+  <!-- DECISION RECORDS -->
+  <div class="panel">
+    <h2>Decision records</h2>
+    <p class="sub">All committed under <code>docs/decisions/</code>. These are the rulings; the studies above are
+    the evidence.</p>
+
+    <table>
+      <tr><th style="width:10%">id</th><th style="width:26%">subject</th><th style="width:64%">what it settled</th></tr>
+      <tr><td class="n">D-006</td><td>backtest protocol</td>
+        <td>The train/validate split, determinism, hashing — the rules every study follows</td></tr>
+      <tr class="key"><td class="n">D-008</td><td>the regime chassis</td>
+        <td>SPY vs its 200-day, plus three throttles (VIX, credit spreads, breadth). <b>Asymmetric hysteresis:
+            upgrades need two confirmations, downgrades are instant.</b> Sets the deployment ceiling — 90 / 50 / 25 / 5%</td></tr>
+      <tr class="key"><td class="n">D-011</td><td>the A+ doctrine</td>
+        <td>The seven rows. <b>Revisit trigger fired and still unruled.</b> Hard gate in Choppy and Caution,
+            advisory in Trending</td></tr>
+      <tr><td class="n">D-012</td><td>Fear &amp; Greed history</td><td>The permanent forward series</td></tr>
+      <tr><td class="n">D-016</td><td>extreme-fear overlay</td><td><b>Parked.</b> Needs the D-012 series</td></tr>
+      <tr><td class="n">D-017</td><td>the candidates tier</td>
+        <td>Stateless auto-grading, no auto-promotion. <b>Covers untracked names only</b> — tracked watchers grade
+            on a separate path</td></tr>
+      <tr class="key"><td class="n">D-018</td><td>the close-basis law</td>
+        <td>State transitions happen only on confirmed closes. <b>The forming bar splits at 16:10 ET</b>, not 16:00 —
+            the closing auction</td></tr>
+      <tr class="key"><td class="n">D-019</td><td>breaker coverage</td>
+        <td>Killed the <b>fabricated-clear</b> class: a breaker that could not be checked must never render as
+            clear. Extended 2026-08-11 to cover off-universe names</td></tr>
+      <tr><td class="n">D-020a</td><td>YTD anchor + cap</td>
+        <td>Real calendar YTD on both paths, the penalty capped flat, and the scorer <b>versioned</b> so the studies
+            survive</td></tr>
+      <tr><td class="n">D-021</td><td>pool builder v2</td>
+        <td>Added the Nasdaq-100 and an inclusions list, raised the market-cap floor to <b>$5B</b>, added a retention
+            floor that refuses to rotate on a &gt;10% pool shrink</td></tr>
+      <tr><td class="n">D-022</td><td>unmeasurable market cap</td>
+        <td><b>"Could not measure" and "too small" were published identically.</b> A rate-limit wave truncated a
+            contiguous alphabetical suffix — 34 large caps dropped as "below minimum," none of them small</td></tr>
+      <tr><td class="n">D-023</td><td>GICS aliases</td>
+        <td>Vendor labels stranding names in one-member groups they can never rank out of</td></tr>
+    </table>
+  </div>
+
+  <!-- RULES AND UNITS -->
+  <div class="panel">
+    <h2>Rules, units and other shorthand</h2>
+
+    <table>
+      <tr><th style="width:16%">term</th><th style="width:84%">meaning</th></tr>
+      <tr class="key"><td class="n">R28</td>
+        <td>Position limits — <b>≤20% of capital and ≤3 names per group</b>, under a regime-scaled total ceiling.
+            Measured at <b>market value, not cost basis</b>. Reporting-hard: it cannot block a broker order and does
+            not pretend to</td></tr>
+      <tr><td class="n">R24</td><td>Profit targets — the gap 6A tested and left unfilled</td></tr>
+      <tr><td class="n">R11</td><td>Exit discipline — what governs a position once held</td></tr>
+      <tr class="key"><td class="n">1R</td>
+        <td><b>One unit of initial risk: entry price minus the initial stop.</b> Fixed at entry, never re-based.
+            Every study reports expectancy per R</td></tr>
+      <tr><td class="n">fwd-20d</td>
+        <td>Forward 20-trading-day return, measured <b>open-to-open</b> — from the next day's open to the open 20
+            sessions later. Never from the signal-day close, which nobody could have traded at</td></tr>
+      <tr><td class="n">ex-top-5%</td>
+        <td>The mean with the best 5% of days removed. <b>The test for whether a result is broad or moonshot-driven</b></td></tr>
+      <tr><td class="n">random-K<br>band</td>
+        <td>The null. Run the same machinery with randomly chosen names instead of selected ones, 50 seeds, and see
+            whether the real arm escapes the resulting range. <b>In 5B, nothing did</b></td></tr>
+      <tr><td class="n">the extension<br>guard</td>
+        <td>Row 2 — a name may be at most <b>1.8×ATR above its 20-day average</b> at entry. Because the stop is that
+            same average, this is also a cap on risk per share</td></tr>
+      <tr><td class="n">weeks_in_<br>universe</td>
+        <td>How many consecutive weekly rotations a group has survived. <b>A group at 1 is one rotation from taking
+            its holdings with it</b></td></tr>
+      <tr><td class="n">thesis-failed</td>
+        <td>What a holding becomes when its group leaves the universe. A different exit path from the stop — and one
+            the stop cannot protect against</td></tr>
+      <tr><td class="n">pin</td>
+        <td>A test with three requirements: drive the real entry point, assert the invariant rather than the observed
+            output, and be <b>demonstrated to fail</b> against the reintroduced bug</td></tr>
+      <tr><td class="n">fan-out</td>
+        <td>Adversarial review — independent agents attacking a finished build before it stages.
+            <b>Has changed a verdict five times</b></td></tr>
+    </table>
+  </div>
+
+  <div class="foot">glossary · SignalAgent · every entry states what the thing found, not just what it was called</div>
+
+</div>
+</body>
+</html>

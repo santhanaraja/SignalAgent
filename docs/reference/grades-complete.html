@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grades A+, B and C — the complete rule</title>
+<style>
+  :root{
+    --bg:#0B0F14; --panel:#121820; --panel2:#0E141B; --line:#223041;
+    --ink:#E6EDF3; --muted:#8B98A5; --dim:#5C6B7A;
+    --ok:#3FB950; --warn:#D4A72C; --bad:#F85149; --info:#58A6FF; --alt:#8957E5;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  .wrap{max-width:1020px;margin:0 auto;padding:40px 22px 76px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  h1{font-size:clamp(25px,4vw,34px);letter-spacing:-.02em;margin:.35em 0 .2em;font-weight:750}
+  .lede{font-size:14.5px;color:var(--muted);max-width:80ch}
+  .src{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:12px}
+  .src b{color:var(--muted);font-weight:600}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 22px 18px;margin-top:26px}
+  .panel h2{font-size:17px;margin:0 0 3px;font-weight:700;letter-spacing:-.01em}
+  .panel .sub{font-size:13px;color:var(--muted);margin:0 0 16px;max-width:86ch}
+  .panel p{font-size:13.5px;color:var(--muted);max-width:86ch}
+  .panel p b{color:var(--ink);font-weight:600}
+  svg{width:100%;height:auto;display:block}
+  pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:13px 15px;
+      overflow-x:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink);margin:12px 0 0;line-height:1.65}
+  pre .kw{color:#FF7B72} pre .st{color:#A5D6FF} pre .cm{color:#5C6B7A} pre .nu{color:#79C0FF}
+  code{font-family:var(--mono);font-size:11.5px;color:#9FD5FF}
+  .note{font-size:13px;color:var(--muted);margin-top:15px;border-left:2px solid var(--line);padding-left:14px}
+  .note b{color:var(--ink);font-weight:600}
+  .note.hot{border-left-color:var(--bad)} .note.good{border-left-color:var(--ok)}
+  .note.warn{border-left-color:var(--warn)}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:12.5px}
+  th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+     color:var(--dim);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:bottom}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted)}
+  td.n{color:var(--ink);font-weight:600;font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+  td.m{font-family:var(--mono);font-size:11.5px}
+  tr.c td{background:rgba(248,81,73,.06)}
+  tr.b td{background:rgba(212,167,44,.06)}
+  tr.hl td{background:rgba(88,166,255,.07)}
+  .caveats{margin-top:30px;border-top:1px solid var(--line);padding-top:18px}
+  .caveats h3{font-size:12px;margin:0 0 10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+              font-family:var(--mono);font-weight:600}
+  .caveats p{font-size:12.5px;color:var(--muted);margin:8px 0;max-width:90ch}
+  .caveats b{color:var(--ink);font-weight:600}
+  .foot{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">SignalAgent · reference · the complete grade rule</div>
+  <h1>A+, B and C — every test, every threshold, every operator</h1>
+  <p class="lede">Seven rows decide the grade. Row 1 is itself five conditions, and row 5 is a composite score built
+  from five ladders. This page carries all of it — the tests, the constants, the comparison operators, and the places
+  where those operators disagree with each other. Read from source, nothing inferred.</p>
+  <div class="src">grade branch <b>position_signals.py:433</b> · conditions <b>:232</b> · score
+  <b>signal_engine.py:1157–1266</b> · row thresholds <b>config.yaml:200–217</b></div>
+
+  <!-- 1 -->
+  <div class="panel">
+    <h2>1 · The grade itself</h2>
+    <p class="sub">Four branches in fixed order. The first match wins, so <b>one C-row failure outranks any number of
+    B-row failures</b>.</p>
+
+<pre><span class="cm"># position_signals.py:433</span>
+failing = [k <span class="kw">for</span> k, r <span class="kw">in</span> rows.items() <span class="kw">if not</span> r[<span class="st">"met"</span>]]
+
+<span class="kw">if not</span> rows[<span class="st">"1_conditions"</span>][<span class="st">"met"</span>] <span class="kw">or not</span> rows[<span class="st">"2_extension"</span>][<span class="st">"met"</span>]:
+    grade = <span class="st">"C"</span>
+<span class="kw">elif not</span> rows[<span class="st">"3_approach"</span>][<span class="st">"met"</span>] <span class="kw">and not</span> appr_unavailable:
+    grade = <span class="st">"C"</span>
+<span class="kw">elif</span> failing:
+    grade = <span class="st">"B"</span>
+<span class="kw">else</span>:
+    grade = <span class="st">"A+"</span>
+
+<span class="cm"># :380 —</span> appr_unavailable = close <span class="kw">is None or</span> sma5 <span class="kw">is None</span></pre>
+
+    <svg viewBox="0 0 940 132" style="margin-top:18px" role="img" aria-label="Rows 1 to 3 give C, rows 4 to 7 give B, all seven give A plus">
+      <rect x="20" y="14" width="288" height="100" rx="9" fill="#0E141B" stroke="#F85149" stroke-width="1.7"/>
+      <text x="164" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#F85149">ROWS 1 · 2 · 3 → C</text>
+      <text x="164" y="66" text-anchor="middle" font-size="11.5" fill="#8B98A5">the price setup is wrong</text>
+      <text x="164" y="90" text-anchor="middle" font-size="11" fill="#5C6B7A">row 3 only when close and sma5 are present</text>
+
+      <rect x="326" y="14" width="288" height="100" rx="9" fill="#0E141B" stroke="#D4A72C" stroke-width="1.7"/>
+      <text x="470" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#D4A72C">ROWS 4 · 5 · 6 · 7 → B</text>
+      <text x="470" y="66" text-anchor="middle" font-size="11.5" fill="#8B98A5">setup fine, name not ready</text>
+      <text x="470" y="90" text-anchor="middle" font-size="11" fill="#5C6B7A">plus row 3 when either input is None</text>
+
+      <rect x="632" y="14" width="288" height="100" rx="9" fill="#0E141B" stroke="#3FB950" stroke-width="1.7"/>
+      <text x="776" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#3FB950">NOTHING FAILING → A+</text>
+      <text x="776" y="66" text-anchor="middle" font-size="11.5" fill="#8B98A5">all seven pass</text>
+      <text x="776" y="90" text-anchor="middle" font-size="11" fill="#5C6B7A">3.5% of ticker-days</text>
+    </svg>
+
+    <div class="note warn"><b>A fourth outcome the ladder never produces: <code>grade: null</code>.</b> Four causes —
+    missing or non-finite core inputs, a row with no grade inputs, a per-candidate exception, and inputs computed
+    under different knobs. <b>Null-grade dicts have a different shape — three keys, no <code>failing</code> list</b> —
+    so any consumer assuming <code>failing</code> exists will KeyError on exactly the ungradeable rows.</div>
+
+    <div class="note"><b>Holdings are never graded.</b> The block is gated on <code>kind == "watching"</code>. The
+    grade is an entry doctrine only — once you own a name the stop governs it and no grade is computed.</div>
+  </div>
+
+  <!-- 2 -->
+  <div class="panel">
+    <h2>2 · Row 1 — the five mechanical conditions</h2>
+    <p class="sub">All five live in <code>assess_position</code>. Row 1 passes only if all five do, and row 1 is
+    C-escalating — so any one of these failing sends the name straight to C.</p>
+
+    <table>
+      <tr><th style="width:18%">condition</th><th style="width:40%">exact test</th><th style="width:42%">notes</th></tr>
+      <tr>
+        <td class="n">1 trigger</td>
+        <td class="m">close &gt; sma20</td>
+        <td>Strict. <b>close == sma20 is NOT met.</b></td>
+      </tr>
+      <tr>
+        <td class="n">2 confirmation</td>
+        <td class="m">closes_above &gt;= 2<br><b style="color:var(--ink)">OR</b><br>close &gt; sma20 + 0.5 × ATR14</td>
+        <td>Two independent satisfiers. Either two consecutive closes above the SMA20, <b>or</b> a single close more
+            than half an ATR above it. The counter breaks on a NaN SMA, capping it during warm-up; the display clamps
+            to the minimum, so nine consecutive closes prints "2/2".</td>
+      </tr>
+      <tr>
+        <td class="n">3 regime gate</td>
+        <td class="m">exact string equality</td>
+        <td><b>Three modes, no permissive default</b> — see below.</td>
+      </tr>
+      <tr>
+        <td class="n">4 slope</td>
+        <td class="m">sma20 &gt;= sma20_5d_ago</td>
+        <td>No tolerance, no epsilon. <b>Equality passes.</b> The 5-day lookback is chosen at the call site — inside
+            the function the parameter affects only the printed text.</td>
+      </tr>
+      <tr>
+        <td class="n">5 thesis</td>
+        <td class="m">bool(group_in_universe)</td>
+        <td><b>Fails closed on a full outage</b> (no group, no universe, no signals). But an unmapped name
+            <b>passes, flagged</b> — with a consequence, below.</td>
+      </tr>
+    </table>
+
+    <div class="note hot"><b>The regime gate matches exact strings and has no permissive default.</b>
+    <code>"Risk-on / Trending"</code> → <b>full</b>, passes. <code>"Risk-on / Choppy"</code> → <b>conditional</b>,
+    passes and arms the A+-only hard gate. <b>Everything else — including any typo — is "blocked", fails, and takes
+    the whole grade to C.</b> That is the correct fail direction, but it means a malformed regime string would
+    silently grade the entire board C.</div>
+
+    <div class="note warn"><b>The unmapped-group trap, live on ARWR.</b> A watcher with no group mapping
+    <i>passes</i> condition 5 with a flag — but its group is then <code>None</code>, so row 6's breaker lookup
+    returns None, row 6 fails, and <b>the grade is capped at B</b>. The same missing fact passes one row and fails
+    another.</div>
+  </div>
+
+  <!-- 3 -->
+  <div class="panel">
+    <h2>3 · Rows 2 to 7 — exact tests</h2>
+    <p class="sub">Every operator, because several disagree with each other and with the score ladders.</p>
+
+    <table>
+      <tr><th style="width:16%">row</th><th style="width:38%">test</th><th style="width:46%">operator note</th></tr>
+      <tr class="c"><td class="n">2 extension</td><td class="m">extension_atr is not None<br>and extension_atr &lt;= 1.8</td>
+        <td><b>Inclusive — 1.8 exactly passes.</b> No unavailable carve-out: None or 0.0 → fails → C.</td></tr>
+      <tr class="c"><td class="n">3 approach</td><td class="m">close &gt; sma5<br>and up_close_since_swing_low</td>
+        <td>Strict — <b>close == sma5 fails.</b> Escalates to C only when both inputs are present.</td></tr>
+      <tr class="b"><td class="n">4 RSI</td><td class="m">45 &lt;= rsi14 &lt;= 70</td>
+        <td><b>Both ends inclusive.</b></td></tr>
+      <tr class="b"><td class="n">5 score</td><td class="m">quality_score &gt;= 75</td><td>Inclusive.</td></tr>
+      <tr class="b"><td class="n">6 breaker</td><td class="m">breaker_status == "clear"</td>
+        <td>Exact string, <b>case-sensitive</b> — "CLEAR" fails.</td></tr>
+      <tr class="b"><td class="n">7 runway</td><td class="m">runway_sessions &gt;= 15</td>
+        <td>Inclusive. <b>Passes on absent data</b> — see the traps.</td></tr>
+    </table>
+
+    <p style="margin-top:18px"><b>Row 3's "up-close off the swing low", precisely:</b> take the last <b>20 bars</b>,
+    find the <b>lowest close</b> in that window (first occurrence on ties), and require at least one strictly positive
+    close-to-close change from that bar forward. <b>If the low is the most recent bar there is nothing after it and
+    the test is False.</b></p>
+  </div>
+
+  <!-- 4 -->
+  <div class="panel">
+    <h2>4 · Row 5's composite score — the whole formula</h2>
+    <p class="sub">Five components summed onto a base of 50, then clamped. Nothing else feeds it.</p>
+
+<pre>score = clamp(<span class="nu">0</span>, <span class="nu">100</span>, <span class="nu">50</span> + rsi + macd + ma + ytd + vol)</pre>
+
+    <p style="margin-top:14px">Raw values span <b>−5 to +107</b>, so <b>both clamps bind</b> — 0 and 100 are each
+    reachable. Every component returns an integer, so the score always is one.</p>
+
+    <table style="margin-top:18px">
+      <tr><th style="width:14%">component</th><th style="width:44%">ladder</th><th style="width:42%">operator</th></tr>
+      <tr><td class="n">RSI</td>
+        <td class="m">&lt;30 → +15 · &lt;40 → +8 · &lt;60 → +3<br>&lt;70 → −3 · &lt;80 → −8 · else −15</td>
+        <td>Strict <code>&lt;</code>, so <b>each boundary falls to the lower-scoring band</b>: 30 → +8, 60 → −3,
+            70 → −8.</td></tr>
+      <tr><td class="n">MACD</td>
+        <td class="m">bullish_rising +13 · bullish +8<br>bearish −8 · bearish_falling −13</td>
+        <td><b>0 is unreachable.</b> "Confirms" magnifies whichever side you are on — confirming while bearish gives
+            −13, not a credit. <code>macd == signal</code> counts as bearish.</td></tr>
+      <tr><td class="n">MA</td>
+        <td class="m">(±4 above SMA20) + (±6 above SMA50)<br>+ (±4 for SMA20 &gt; SMA50)</td>
+        <td>Eight input combinations, <b>only six distinct values</b> {−14, −6, −2, +2, +6, +14}. 0 and ±10 are
+            unreachable, and ±6 is two-way ambiguous.</td></tr>
+      <tr><td class="n">Volume</td>
+        <td class="m">&gt;1.5 → +3 · &lt;0.7 → −3 · else 0</td>
+        <td>Asymmetric, so <b>both boundaries score 0</b> — the zero band is the closed interval [0.7, 1.5].</td></tr>
+      <tr class="hl"><td class="n">YTD</td>
+        <td class="m">two ladders — see below</td>
+        <td>The component D-020a changed.</td></tr>
+    </table>
+
+    <div class="note hot"><b>Degradation defaults are not neutral.</b> A missing RSI scores <b>+3</b>, a missing MACD
+    scores <b>−8</b>, and missing moving averages score <b>−14</b>. A data outage does not produce a neutral score —
+    it produces a bad one.</div>
+
+    <div class="note warn"><b>The score bands use the opposite convention from every point ladder.</b> Bands are
+    inclusive <code>&gt;=</code> — 75 strong-buy, 60 buy, 45 hold, 30 sell — while every ladder above uses strict
+    comparisons that push boundaries downward. Two conventions, one number.</div>
+
+    <div class="note"><b>Where the numbers live.</b> All seven row thresholds sit in config. <b>None of the score
+    ladders do</b> — they are module constants and inline literals. Changing a score band is a code change, not a
+    configuration change.</div>
+  </div>
+
+  <!-- 5 -->
+  <div class="panel">
+    <h2>5 · The YTD component — v1 versus v2</h2>
+    <p class="sub">D-020a replaced the over-extension penalty with a flat cap. The two ladders agree completely up to
+    50% and diverge sharply above it.</p>
+
+    <table>
+      <tr><th style="width:26%">YTD return</th><th style="width:18%">v1 (frozen)</th><th style="width:18%">v2 (production)</th><th style="width:38%">divergence</th></tr>
+      <tr><td class="m">≤ −10%</td><td class="m">−10</td><td class="m">−10</td><td>—</td></tr>
+      <tr><td class="m">(−10, 0]</td><td class="m">−4</td><td class="m">−4</td><td>—</td></tr>
+      <tr><td class="m">(0, 5]</td><td class="m">+2</td><td class="m">+2</td><td>—</td></tr>
+      <tr><td class="m">(5, 20]</td><td class="m">+6</td><td class="m">+6</td><td>—</td></tr>
+      <tr><td class="m">(20, 50]</td><td class="m">+12</td><td class="m">+12</td><td>—</td></tr>
+      <tr class="hl"><td class="m">(50, 100]</td><td class="m">+8</td><td class="m">+12</td><td><b>+4</b></td></tr>
+      <tr class="hl"><td class="m">(100, 150]</td><td class="m">−2</td><td class="m">+12</td><td><b>+14</b></td></tr>
+      <tr class="hl"><td class="m">&gt; 150%</td><td class="m">−7</td><td class="m">+12</td><td><b>+19</b></td></tr>
+    </table>
+
+    <p style="margin-top:16px">All comparisons are strict, so boundaries fall to the lower band — YTD exactly 20 gives
+    +6, exactly 50 gives +12. Reachable values are <b>v1 {−10, −7, −4, −2, +2, +6, +8, +12}</b> and
+    <b>v2 {−10, −4, +2, +6, +12}</b>.</p>
+
+    <div class="note hot"><b>If a worked example shows <code>ytd: −7</code>, it is a v1 score and does not describe
+    production.</b> That value is producible only by the frozen ladder, and only above 150% YTD. Live SNDK at 421%
+    YTD scores <b>+12 under v2 for a total of 64</b>; the same frame under v1 gives <b>−7 for a total of 45</b>.
+    Same tape, nineteen points, different band.</div>
+  </div>
+
+  <!-- 6 -->
+  <div class="panel">
+    <h2>6 · Row 4 can never decide a grade</h2>
+    <p class="sub">The RSI row is B-escalating. It has also never once been the reason a name was graded, and the
+    arithmetic explains why.</p>
+
+    <svg viewBox="0 0 940 190" role="img" aria-label="All 600 row-4 failures also fail row 1 or row 2">
+      <rect x="20" y="14" width="900" height="46" rx="8" fill="#0E141B" stroke="#223041"/>
+      <text x="470" y="34" text-anchor="middle" font-size="12.5" font-weight="700" fill="#E6EDF3">Row 4 fails 600 times across 64 tickers in the committed record</text>
+      <text x="470" y="52" text-anchor="middle" font-size="12" fill="#F85149">Zero of those 600 in isolation</text>
+
+      <rect x="20" y="76" width="440" height="70" rx="8" fill="#0E141B" stroke="#D4A72C" stroke-width="1.5"/>
+      <text x="240" y="100" text-anchor="middle" font-size="12.5" font-weight="700" fill="#D4A72C">304 with RSI ≥ 70</text>
+      <text x="240" y="122" text-anchor="middle" font-size="11" fill="#8B98A5">every one also fails row 2 — overbought ⇒ past the 1.8×ATR guard</text>
+
+      <rect x="480" y="76" width="440" height="70" rx="8" fill="#0E141B" stroke="#8957E5" stroke-width="1.5"/>
+      <text x="700" y="100" text-anchor="middle" font-size="12.5" font-weight="700" fill="#8957E5">296 with RSI ≤ 45</text>
+      <text x="700" y="122" text-anchor="middle" font-size="11" fill="#8B98A5">every one also fails row 1 — oversold ⇒ a trend condition breaks</text>
+
+      <text x="470" y="174" text-anchor="middle" font-size="13" font-weight="700" fill="#E6EDF3">Zero overlap, zero remainder — row 4 is mathematically shadowed by rows 1 and 2.</text>
+    </svg>
+
+    <div class="note"><b>Its B verdict comes from three non-observational sources:</b> a direct call of the real
+    function; the 848,328-row backtest frame, where row 4 fails alone 1,772 times and grades B in all 1,772; and the
+    pins. The artifact record cannot settle it and essentially never could.</div>
+  </div>
+
+  <!-- 7 -->
+  <div class="panel">
+    <h2>7 · Seven traps</h2>
+    <p class="sub">Places where the code does something the rule as stated does not imply. All verified by direct
+    call.</p>
+
+    <table>
+      <tr><th style="width:28%">trap</th><th style="width:72%">what happens</th></tr>
+      <tr class="c"><td class="n">Row 7 passes on bad dates</td>
+        <td>An unparseable earnings date becomes None, and None <b>passes</b> row 7 as unbounded runway. On this
+            runtime <code>date.fromisoformat</code> accepts only <code>YYYY-MM-DD</code>, so a timestamped date
+            raises and <b>silently becomes a pass</b> — inverting the "A+ is proven, never presumed" convention rows
+            4, 5 and 6 follow.</td></tr>
+      <tr class="c"><td class="n">Row 2 grades unrounded</td>
+        <td>The row tests the raw extension while the display shows it rounded to two places. <b>A displayed "1.80×"
+            can be a failing 1.80004.</b></td></tr>
+      <tr class="c"><td class="n">RSI 70 collides</td>
+        <td>Exactly 70 <b>passes</b> row 4 (inclusive) and simultaneously scores <b>−8</b> in the ladder (because
+            <code>rsi &lt; 70</code> is False). Same number, opposite sides, two rows.</td></tr>
+      <tr class="c"><td class="n">Row 4's RSI isn't the shown RSI</td>
+        <td>Row 4 uses Wilder RSI on the <b>confirmed</b> frame; the dashboard's RSI comes from the scorer on the
+            <b>live</b> frame. They can differ mid-session.</td></tr>
+      <tr class="c"><td class="n">NaN is not None</td>
+        <td>Row 3's carve-out tests <code>is None</code> only. <b>A NaN SMA5 grades as a proven knife → C</b>, not as
+            missing data.</td></tr>
+      <tr class="c"><td class="n">The hard gate adds no state</td>
+        <td>Under Choppy a non-A+ name is blocked at the render — but <b>the artifact still says RE_ENTRY_READY</b>.
+            Reading the state without also reading the grade gate gives the wrong answer. B blocks identically to C,
+            and an ungradeable name is blocked too.</td></tr>
+      <tr class="c"><td class="n">Grades are yesterday, prices are now</td>
+        <td>Every graded scalar is as of the last confirmed close while the price, RSI and score printed beside it
+            are live. The forming bar splits at <b>16:10 ET, not 16:00</b> — the closing auction.</td></tr>
+    </table>
+  </div>
+
+  <!-- CAVEATS -->
+  <div class="caveats">
+    <h3>Three things to carry elsewhere</h3>
+    <p><b>Other graders exist and are not this one.</b> The backtest's grade-lite drops condition 5 from row 1,
+    hardwires the breaker to clear, uses the v1 YTD ladder, and demotes A+ to B on an earnings coverage gap. Another
+    study variant disables row 2 entirely. Both of those are C-branch rows — so <b>any "B or better" figure quoted
+    from a study is not this rule's B</b>.</p>
+    <p><b>Withholding is surface-dependent.</b> The ticker view returns no grade at all for an off-universe name, for
+    a missing or degraded breaker, and via three separate insufficient-data exits. <b>The candidate tier grades those
+    same names</b> — row 6 simply fails and they land at B. The same ticker can be "no grade" on one surface and "B"
+    on another, and both are correct.</p>
+    <p><b>Two documents currently describe this wrongly.</b> The <code>grade_setup</code> docstring says "rows 4–6
+    fail → B", omitting row 7, and claims row 3 escalates in every regime with no carve-out. The A+ doctrine brief
+    carries the pre-amendment rule in which the approach knife grades B — the rule amendment 1 overturned — with no
+    superseded banner. The D-011 decision record itself is correct.</p>
+  </div>
+
+  <div class="foot">grade reference · quoted from source and verified by direct call · supersedes any earlier summary</div>
+
+</div>
+</body>
+</html>

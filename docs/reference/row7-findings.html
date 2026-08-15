@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Row 7 — the earnings runway rule, measured</title>
+<style>
+  :root{
+    --bg:#0B0F14; --panel:#121820; --panel2:#0E141B; --line:#223041;
+    --ink:#E6EDF3; --muted:#8B98A5; --dim:#5C6B7A;
+    --ok:#3FB950; --warn:#D4A72C; --bad:#F85149; --info:#58A6FF; --alt:#8957E5;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  .wrap{max-width:1020px;margin:0 auto;padding:40px 22px 76px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  h1{font-size:clamp(25px,4vw,34px);letter-spacing:-.02em;margin:.35em 0 .2em;font-weight:750}
+  .lede{font-size:14.5px;color:var(--muted);max-width:80ch}
+  .src{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:12px}
+  .src b{color:var(--muted);font-weight:600}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 22px 18px;margin-top:26px}
+  .panel h2{font-size:17px;margin:0 0 3px;font-weight:700;letter-spacing:-.01em}
+  .panel .sub{font-size:13px;color:var(--muted);margin:0 0 16px;max-width:86ch}
+  .panel p{font-size:13.5px;color:var(--muted);max-width:86ch}
+  .panel p b{color:var(--ink);font-weight:600}
+  svg{width:100%;height:auto;display:block}
+  code{font-family:var(--mono);font-size:11.5px;color:#9FD5FF}
+  .note{font-size:13px;color:var(--muted);margin-top:15px;border-left:2px solid var(--line);padding-left:14px}
+  .note b{color:var(--ink);font-weight:600}
+  .note.hot{border-left-color:var(--bad)} .note.good{border-left-color:var(--ok)}
+  .note.warn{border-left-color:var(--warn)}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:12.5px}
+  th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+     color:var(--dim);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:bottom}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted)}
+  td.n{color:var(--ink);font-weight:600;font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+  td.m{font-family:var(--mono);font-size:11.5px}
+  tr.hot td{background:rgba(248,81,73,.06)}
+  tr.ok td{background:rgba(63,185,80,.06)}
+  tr.hl td{background:rgba(88,166,255,.07)}
+  .caveats{margin-top:30px;border-top:1px solid var(--line);padding-top:18px}
+  .caveats h3{font-size:12px;margin:0 0 10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+              font-family:var(--mono);font-weight:600}
+  .caveats p{font-size:12.5px;color:var(--muted);margin:8px 0;max-width:90ch}
+  .caveats b{color:var(--ink);font-weight:600}
+  .foot{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">SignalAgent · findings · row 7, the earnings runway</div>
+  <h1>Row 7 — what it costs, what it buys, and where the real damage is</h1>
+  <p class="lede">Row 7 refuses any entry within 15 trading sessions of an earnings print. The question was whether
+  that is too strict. The answer is no — and the same evidence points somewhere the question didn't: at the
+  positions you already hold.</p>
+  <div class="src">read-only · candidate tier 18 board-days 2026-07-19 → 2026-08-10 · 848,328-row backtest frame ·
+  two adversarial passes, both of which cut against the first draft</div>
+
+  <!-- 1 · THE VERDICT -->
+  <div class="panel">
+    <h2>1 · The deciding number</h2>
+    <p class="sub">Row 7 exists to prevent one specific event: a single-session move so large that a close-basis stop
+    cannot protect you. So the test is how often that event happens to trades that span a print, against trades that
+    don't.</p>
+
+    <svg viewBox="0 0 940 220" role="img" aria-label="Trades spanning a print had a 25.7 percent rate of single-day moves worse than minus 2R, against 10.9 percent for trades that did not">
+      <text x="470" y="26" text-anchor="middle" font-size="12.5" font-weight="700" fill="#E6EDF3">Share of trades with a single-day move worse than −2R</text>
+
+      <line x1="120" y1="170" x2="880" y2="170" stroke="#223041" stroke-width="1.4"/>
+
+      <rect x="230" y="112" width="150" height="58" fill="#3FB950" rx="4"/>
+      <text x="305" y="100" text-anchor="middle" font-size="23" font-weight="700" font-family="monospace" fill="#E6EDF3">10.9%</text>
+      <text x="305" y="192" text-anchor="middle" font-size="12.5" font-weight="700" fill="#3FB950">did NOT span a print</text>
+      <text x="305" y="210" text-anchor="middle" font-size="11" fill="#8B98A5">862 of 7,915</text>
+
+      <rect x="560" y="34" width="150" height="136" fill="#F85149" rx="4"/>
+      <text x="635" y="24" text-anchor="middle" font-size="23" font-weight="700" font-family="monospace" fill="#E6EDF3">25.7%</text>
+      <text x="635" y="192" text-anchor="middle" font-size="12.5" font-weight="700" fill="#F85149">SPANNED a print</text>
+      <text x="635" y="210" text-anchor="middle" font-size="11" fill="#8B98A5">221 of 860 · CI [22.9, 28.7]</text>
+    </svg>
+
+    <div class="note hot"><b>2.4× more likely — and it is not an artifact of longer holds.</b> Spanning trades do run
+    longer (34.5 sessions against 11.7), but the effect survives stratification: 24.1% vs 9.1% at 11–20 sessions,
+    25.8% vs 9.3% at 21–40, 26.7% vs 14.3% beyond 41. <b>Within-stratum ratio ≈ 2.7×.</b></div>
+
+    <div class="note"><b>The mechanism, measured directly on 13,228 print sessions:</b> volatility roughly doubles
+    (sd 4.90% against a ~2.4% baseline), a 5%-or-worse fall is about 4.6× more likely (9.69% vs ~2%), and the deepest
+    low of a 20-session hold lands on the print session <b>12.04%</b> of the time against 5% by chance.</div>
+  </div>
+
+  <!-- 2 · WORKED EXAMPLES -->
+  <div class="panel">
+    <h2>2 · Four trades that show what the row prevents</h2>
+    <p class="sub">R is the production definition — entry price minus the SMA20 on the confirmed signal day. A −9R
+    session is nine times the loss the position was sized to accept.</p>
+
+    <table>
+      <tr><th style="width:20%">trade</th><th style="width:18%">the move</th><th style="width:62%">what happened</th></tr>
+      <tr class="hot">
+        <td class="n">GNRC<br>2023-08-02</td>
+        <td class="m">−13.36R<br>−24.40%</td>
+        <td>The print landed on hold session 35. <b>The stop had not fired</b> — the prior close was 153.38 against an
+            SMA20 of 145.67, comfortably above. A healthy position by every measure the system tracks, and then a
+            quarter of its value gone in one session.</td>
+      </tr>
+      <tr class="hot">
+        <td class="n">WM<br>2024-07-25</td>
+        <td class="m">−10.18R</td>
+        <td><b>The overnight gap alone was −8.46R.</b> Four-fifths of the damage was done before the market opened,
+            where no stop of any kind can act.</td>
+      </tr>
+      <tr class="hot">
+        <td class="n">VST<br>2021-02-26</td>
+        <td class="m">−9.88R<br>−24.21%</td>
+        <td>Gap alone −7.35R. Same shape: the loss arrives in the auction, not during the session.</td>
+      </tr>
+      <tr class="hot">
+        <td class="n">RMD<br>2023-08-04</td>
+        <td class="m">−9.08R<br>−18.50%</td>
+        <td><b>The exact mechanic, start to finish.</b> The stop <i>did</i> fire on the prior close — the rule worked
+            — and the exit filled at the next open, straight into the gap. The system did everything right and still
+            took nine times its intended loss.</td>
+      </tr>
+    </table>
+
+    <div class="note hot"><b>RMD is the case that justifies the row.</b> A close-basis stop needs a close to act on
+    and an open to fill at. An earnings print puts the entire move between those two prices. This is not a stop that
+    failed; it is a stop that cannot apply.</div>
+  </div>
+
+  <!-- 3 · THE COST -->
+  <div class="panel">
+    <h2>3 · What the row costs</h2>
+    <p class="sub">Row 7 appears in the failing set of 1,703 of 3,296 candidate observations — but in 1,529 of those
+    another row was blocking anyway. Only the remainder is a real cost.</p>
+
+    <svg viewBox="0 0 940 210" role="img" aria-label="Of 1,703 row-7 failures only 174 were the sole reason a name was blocked">
+      <rect x="30" y="26" width="880" height="44" rx="7" fill="#0E141B" stroke="#223041"/>
+      <text x="470" y="54" text-anchor="middle" font-size="12.5" fill="#8B98A5">row 7 appears in <tspan font-weight="700" fill="#E6EDF3">1,703</tspan> of 3,296 candidate observations</text>
+
+      <rect x="30" y="84" width="740" height="46" rx="7" fill="#5C6B7A" opacity=".35"/>
+      <text x="400" y="113" text-anchor="middle" font-size="12.5" fill="#E6EDF3">1,529 — another row blocked anyway. Row 7 changed nothing.</text>
+
+      <rect x="778" y="84" width="132" height="46" rx="7" fill="#D4A72C"/>
+      <text x="844" y="113" text-anchor="middle" font-size="13" font-weight="700" fill="#0B0F14">174</text>
+
+      <text x="844" y="150" text-anchor="middle" font-size="11.5" fill="#D4A72C">the entire marginal cost</text>
+      <text x="470" y="184" text-anchor="middle" font-size="12.5" fill="#8B98A5">174 observations = <tspan font-weight="700" fill="#E6EDF3">69 distinct day-ticker pairs</tspan> across <tspan font-weight="700" fill="#E6EDF3">23 tickers</tspan>, 18 board-days</text>
+    </svg>
+
+    <p style="margin-top:16px">Those 69 arrive in earnings-season clusters, each name walking its runway down day by
+    day: REITs and industrials 19–24 July (CTVA, FRT, KIM, O, ODFL, REG, SPG, UPS), energy 29 July – 4 August (DVN,
+    FANG, OXY, APA, EOG, COP), tech and health 3–10 August (ANET, MSI, VTRS, CSCO, KEYS, LITE, ORKA).</p>
+
+    <table style="margin-top:14px">
+      <tr><th>runway when blocked</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6–14</th></tr>
+      <tr><td class="n">observations</td><td class="m">5</td><td class="m">9</td><td class="m">11</td><td class="m">~10</td><td class="m">~7</td><td class="m">5</td><td class="m">23</td></tr>
+    </table>
+
+    <div class="note"><b>Mean runway 4.33 sessions; the longest was SPG at 14 — one session short of the bar.</b> At a
+    5-session threshold, 28 of the 69 would have graded A+ instead of B. But <b>22 of those 28 fall in the single
+    week of 20–24 July</b> — days that produced 1, 0, 1, 0 and 0 actual A+ names. The uplift is a seasonal cluster,
+    not a steady stream.</div>
+  </div>
+
+  <!-- 4 · THE FAIL-OPEN -->
+  <div class="panel">
+    <h2>4 · The row does not always run</h2>
+    <p class="sub">A missing or stale earnings date makes row 7 pass as "unbounded runway" — the rule reports a pass
+    without having tested anything.</p>
+
+    <table>
+      <tr><th style="width:34%">today's board — 67 names reach row 7</th><th style="width:12%">count</th><th style="width:54%"></th></tr>
+      <tr class="ok"><td class="n">measured PASS</td><td class="m">59</td><td>runway ≥ 15, genuinely computed</td></tr>
+      <tr><td class="n">measured FAIL</td><td class="m">11</td><td>LITE 0 · SMCI 0 · COHR 1 · CSCO 1 · AMAT 2 · KEYS 5 · ADI 6 · CRWD, HPQ, NTNX, NVDA 11</td></tr>
+      <tr class="hl"><td class="n">FAIL-OPEN</td><td class="m">3</td><td><b>ARWR, MRNA, ORKA</b> — all post-print stale, all with genuinely long true runways</td></tr>
+    </table>
+
+    <div class="note good"><b>Blast radius on the board today is zero.</b> All three fail-opens are names that
+    recently reported, so their true runways are 62–75 sessions. Fixing the rule would change no grade currently
+    showing. ARWR's A+ is real: stored date 2026-08-06, true next print 2026-11-24.</div>
+
+    <div class="note hot"><b>But the board is not the whole map — and one off-board name is loaded.</b>
+    <b>CRDO</b> has a null cached date and a true print on 2026-09-02: <b>16 sessions away, crossing under the 15-bar
+    in two.</b> Its entry would read "unbounded runway" the whole way down. CYTK and HQ sit in the same state, one
+    score-gate flip from being graded on a runway nobody checked.</div>
+
+    <div class="note"><b>The fix is not to fail closed.</b> CRDO's true runway <i>passes</i> — blocking it would be a
+    false negative of its own. The null is <b>cache staleness, not vendor absence</b>: the production fetcher returns
+    the date on demand. The correct repair is to <b>resolve on demand</b> whenever the cached date is null or in the
+    past, which costs nothing in participation and closes the hole. (The third case I had assumed — an unparseable
+    date — turns out to be structurally unreachable: the only writer emits a strict date or nothing.)</div>
+  </div>
+
+  <!-- 5 · THE REFRAME -->
+  <div class="panel">
+    <h2>5 · The finding the question didn't ask for</h2>
+    <p class="sub">Row 7 gates entries. It says nothing about positions already held.</p>
+
+    <svg viewBox="0 0 940 200" role="img" aria-label="The doctrine refuses to enter within 15 sessions of a print but holds through prints without any rule">
+      <rect x="30" y="22" width="410" height="92" rx="9" fill="#0E141B" stroke="#3FB950" stroke-width="1.7"/>
+      <text x="235" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#3FB950">ENTRY</text>
+      <text x="235" y="76" text-anchor="middle" font-size="12.5" fill="#E6EDF3">refuses within 15 sessions of a print</text>
+      <text x="235" y="98" text-anchor="middle" font-size="11.5" fill="#8B98A5">"this risk is not one we want"</text>
+
+      <rect x="500" y="22" width="410" height="92" rx="9" fill="#0E141B" stroke="#F85149" stroke-width="1.7"/>
+      <text x="705" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#F85149">HOLDING</text>
+      <text x="705" y="76" text-anchor="middle" font-size="12.5" fill="#E6EDF3">no rule at all</text>
+      <text x="705" y="98" text-anchor="middle" font-size="11.5" fill="#8B98A5">every print is held through by default</text>
+
+      <rect x="30" y="130" width="880" height="52" rx="8" fill="#121820" stroke="#58A6FF" stroke-width="1.6"/>
+      <text x="470" y="152" text-anchor="middle" font-size="13" font-weight="700" fill="#58A6FF">The 2.4× −2R rate applies to holdings exactly as it does to entries.</text>
+      <text x="470" y="172" text-anchor="middle" font-size="11.5" fill="#8B98A5">Two of six current positions carry a print within a month: HPQ ~12 sessions, DELL ~17.</text>
+    </svg>
+
+    <div class="note hot"><b>The evidence indicts the holding side far more than the entry side.</b> Row 7's entire
+    cost is 174 observations concentrated in one week. The holding gap's cost is a doubled catastrophic-day rate
+    applying to every position that runs through a print — which, with a median hold of 10 sessions and quarterly
+    reporting, is a routine occurrence rather than an edge case.</div>
+  </div>
+
+  <!-- 6 · THE STUDY -->
+  <div class="panel">
+    <h2>6 · The four arms that would settle it</h2>
+    <p class="sub">Loosening the entry and fixing the holding are the same mechanism — "exit before the print" —
+    applied at opposite ends. Testing either alone cannot separate them.</p>
+
+    <table>
+      <tr><th style="width:22%"></th><th style="width:39%">hold through the print</th><th style="width:39%">exit N sessions before it</th></tr>
+      <tr><td class="n">row 7 = 15</td>
+          <td><b style="color:var(--ink)">A — incumbent.</b> What runs today.</td>
+          <td><b style="color:var(--ok)">C — fixes the holding side only.</b> My prior says this wins.</td></tr>
+      <tr><td class="n">row 7 = 5</td>
+          <td><b style="color:var(--bad)">B — the naive loosening.</b> More entries, print risk unchanged.</td>
+          <td><b style="color:var(--warn)">D — enter close, exit before.</b> More entries, no print exposure — but every
+              trade duration-capped at ≤5 sessions.</td></tr>
+    </table>
+
+    <div class="note warn"><b>Arm D has a structural problem worth pre-registering.</b> The names a 5-session
+    threshold admits carry 0–5 sessions of runway, so their holds are capped at 0–5 sessions against a median trade
+    length of 10. Since the system's entire expectancy lives in its top 5% of outcomes, <b>a hard duration cap
+    removes the right tail by construction</b> — the same mechanism Build 6A already measured, where 58.9% of touched
+    trades improved and the dollars still lost.</div>
+  </div>
+
+  <!-- CAVEATS -->
+  <div class="caveats">
+    <h3>What this does not settle, and what was corrected along the way</h3>
+    <p><b>Two adversarial passes cut against the first draft, in every case reducing the claim.</b> An asserted 6.5×
+    increase in print-holding risk was really ~2.5×. A claim that the print explained "essentially all" of the deeper
+    drawdown was wrong — <b>it explains about 23%; three-quarters of the extra pain happens on sessions other than
+    the print.</b> A "+42% uplift" figure mixed two different bases. And the absolute trade counts vary by
+    construction — an independent rebuild of the same recipe produced 13,236 trades against 11,664, so <b>the rates
+    are stable and the counts should not be quoted as measurements.</b></p>
+    <p><b>The return side of spanning is genuinely positive.</b> Trades that spanned a print returned more on average
+    (+0.54pp) with an identical hit rate, and a near-threshold control reproduced that. So row 7 is not free — it
+    trades away real return for tail protection. Whether that exchange is worth making is a preference, not a
+    measurement.</p>
+    <p><b>The analysis is day-level, not trade-level, for section 1.</b> No sizing, no costs, and heavy window overlap
+    means the raw sample sizes far exceed the effective ones. The trade-level −2R figures in section 1 are separately
+    reconstructed with a real stop simulation.</p>
+    <p><b>And the fail-open population cannot be measured here.</b> Those rows are precisely the ones excluded,
+    because whether they spanned a print is exactly what is unknown about them.</p>
+  </div>
+
+  <div class="foot">row 7 findings · read-only · no production change · corrections from two adversarial passes folded in</div>
+
+</div>
+</body>
+</html>
