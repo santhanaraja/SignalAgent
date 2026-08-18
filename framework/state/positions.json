@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1",
-  "updated_at": "2026-08-14T16:05:43Z",
+  "updated_at": "2026-08-18T15:20:00Z",
   "account": "TOS",
   "holdings": [
     {
@@ -67,22 +67,13 @@
       "note": "FILLED 2026-08-12 in TWO LEGS: 37 @ $85.00 and 38 @ $83.50 \u2014 blended $84.24 (37*85.00 + 38*83.50 = 6,318.00 / 75, exact, no rounding residue). positions.json carries one entry price per ticker, so the blend is the entry and the legs are recorded here. Communications Equipment \u2014 the FIRST time this group enters the book. Entry stop (for R) $76.40 = SMA20 on the 2026-08-11 confirmed close, verified against the frame. Initial R/share $7.84 ($588.00 on 75 shares)."
     },
     {
-      "ticker": "GEN",
-      "shares": 218,
-      "entry_price": 28.40,
-      "entry_date": "2026-08-12",
-      "stop_on_entry": "sma20_close",
-      "entry_stop": 27.31,
-      "note": "FILLED 2026-08-12: 218 @ $28.40 \u2014 Systems Software (second name in the group alongside NET). Entry stop (for R) $27.31 = SMA20 on the 2026-08-11 confirmed close AS THE ENGINE PUBLISHED IT \u2014 not an operator or broker figure. An independent recomputation from a fresh 6mo frame gives 27.36 instead; 27.31 is used because entry_stop must match the value that will actually fire. The engine's own watcher card is internally consistent at 27.31: SMA20 + 0.5*ATR14 = 27.80 (implying ATR 0.9808) and extension 1.7332 = (29.01 - 27.31)/0.9808; at 27.36 the published extension would have read 1.68. The 5c disagreement was raised separately \u2014 DISPROVEN 2026-08-14: GEN has no ex-dividend in the 07-15..08-11 window and auto_adjust True/False return the identical 27.3065, so adjustment cannot be the cause. Recomputed across 6mo/1y/2y frames the window gives 27.3065 \u2192 27.31: the engine was correct and the 27.36 figure was a window/bar-count error. Initial R/share $1.09 ($237.62 on 218 shares); at 27.36 it would be $1.04 ($226.52), an $11.10 difference that propagates into heat and every future R on this position. NOTE the engine's last word on GEN as a WATCHER was EXTENDED_HOLD (extension past the 1.8x guard) \u2014 the guard governs re-entry, not a deliberate entry, but it is on the record."
-    },
-    {
       "ticker": "APH",
       "shares": 28,
       "entry_price": 169.00,
       "entry_date": "2026-08-13",
       "stop_on_entry": "sma20_close",
       "entry_stop": 159.79,
-      "note": "FILLED 2026-08-13: 28 @ $169.00 \u2014 Electronic Components, the FIRST time this group enters the book. Entry stop (for R) $159.79 = SMA20 on the 2026-08-12 confirmed close, verified against the frame: 159.7910 over the 20 bars 2026-07-16..2026-08-12. Verified the GEN way \u2014 the engine's own fetch path (yf.Ticker.history(period='1y', auto_adjust=True)) and an independent yf.download recomputation agree to 0.0000, and there is NO ex-dividend inside the window, so the adjustment divergence suspected behind GEN's 27.31-vs-27.36 gap cannot arise here. Unlike GEN there is no engine-published SMA20 to reconcile against: APH was a CANDIDATE (candidate_grades A+, score 81), and candidate rows carry no sma20 \u2014 the first bake after this entry produces the engine's own figure and it should be checked against 159.79. CHECKED 2026-08-14: every bake from 14:21Z to 19:36Z on 2026-08-13 \u2014 all on the 2026-08-12 confirmed close \u2014 published sma20 159.79 exactly. Initial R/share $9.21 ($257.88 on 28 shares), 5.45% of price."
+      "note": "FILLED 2026-08-13 in TWO fills of 14 (09:43 and 10:11 ET), blended entry unchanged at $169.00 (corrected 2026-08-18; previously recorded as one fill of 28) \u2014 Electronic Components, the FIRST time this group enters the book. Entry stop (for R) $159.79 = SMA20 on the 2026-08-12 confirmed close, verified against the frame: 159.7910 over the 20 bars 2026-07-16..2026-08-12. Verified the GEN way \u2014 the engine's own fetch path (yf.Ticker.history(period='1y', auto_adjust=True)) and an independent yf.download recomputation agree to 0.0000, and there is NO ex-dividend inside the window, so the adjustment divergence suspected behind GEN's 27.31-vs-27.36 gap cannot arise here. Unlike GEN there is no engine-published SMA20 to reconcile against: APH was a CANDIDATE (candidate_grades A+, score 81), and candidate rows carry no sma20 \u2014 the first bake after this entry produces the engine's own figure and it should be checked against 159.79. CHECKED 2026-08-14: every bake from 14:21Z to 19:36Z on 2026-08-13 \u2014 all on the 2026-08-12 confirmed close \u2014 published sma20 159.79 exactly. Initial R/share $9.21 ($257.88 on 28 shares), 5.45% of price."
     },
     {
       "ticker": "PWR",
@@ -101,6 +92,51 @@
       "stop_on_entry": "sma20_close",
       "entry_stop": 410.74,
       "note": "FILLED 2026-08-14: 14 @ $425.00 \u2014 Semiconductors, a SELECTED group in the live artifact (rank 12; TSM score 84, strong-buy, BUY NOW), so this is an in-universe entry. Entry stop (for R) $410.74 = SMA20 on the 2026-08-13 confirmed close, verified against the frame rather than taken as given: 410.7400 over the 20 bars 2026-07-17..2026-08-13, and TWO independent paths \u2014 yf.Ticker.history and yf.download, both period='1y', auto_adjust=True \u2014 agree to 0.0000. No ex-dividend inside the window (TSM's nearest ex-date is 2026-06-11), so the adjustment axis cannot bite here. The 1y frame's last bar at verification time was the forming 2026-08-14 bar; the window deliberately ends at the 2026-08-13 CONFIRMED close per D-018. No engine-published SMA20 existed to reconcile against at entry (TSM was a group member, not a holding, and member rows carry no sma20); per the APH/PWR precedent the first bake BEFORE 16:10 ET on 2026-08-14 is still on the 2026-08-13 basis and should publish 410.74 \u2014 a bake after 16:10 ET rolls the window to the 08-14 close and will legitimately differ. Initial R/share $14.26 ($199.64 on 14 shares), 3.36% of price."
+    },
+    {
+      "ticker": "FANG",
+      "shares": 15,
+      "entry_price": 202.00,
+      "entry_date": "2026-08-17",
+      "stop_on_entry": "sma20_close",
+      "entry_stop": 196.74,
+      "note": "FILLED 2026-08-17: 15 @ $202.00 \u2014 Oil & Gas Exploration & Production, the FIRST time this group enters the book. PARTIAL FILL BY DESIGN: standing practice places a limit at the PRIOR DAY'S CLOSE, so gap-ups leave orders unfilled or partly filled. Recommended size was 31; filled 15 (3.11% of capital). Entry stop (for R) $196.74 = SMA20 on the 2026-08-14 confirmed close, verified against the frame: 196.7417 over the 20 bars 2026-07-20..2026-08-14, two independent fetch paths agreeing to 0.0000. Ex-dividend $1.10 on 2026-08-13 sits inside the window; both auto-adjusted paths agree. Initial R/share $5.26 ($78.90 on 15 shares). Position sizes across the five now span 2.14%\u20136.45% of the $97,500 capital base against a tested configuration of fixed 6.5% (Build 9: 6.5%/90-50-25-5 stands by incumbency)."
+    },
+    {
+      "ticker": "DVN",
+      "shares": 45,
+      "entry_price": 46.3089,
+      "entry_date": "2026-08-17",
+      "stop_on_entry": "sma20_close",
+      "entry_stop": 44.27,
+      "note": "FILLED 2026-08-17: 45 @ $46.3089 \u2014 Oil & Gas Exploration & Production (second name in the group alongside FANG). PARTIAL FILL BY DESIGN: standing practice places a limit at the PRIOR DAY'S CLOSE, so gap-ups leave orders unfilled or partly filled. Recommended size was 138; filled 45 (2.14% of capital \u2014 the smallest position in the book). Entry stop (for R) $44.27 = SMA20 on the 2026-08-14 confirmed close, verified: 44.2665 over 2026-07-20..2026-08-14, two paths to 0.0000. Initial R/share $2.04 ($91.75 on 45 shares)."
+    },
+    {
+      "ticker": "DNTH",
+      "shares": 25,
+      "entry_price": 115.00,
+      "entry_date": "2026-08-17",
+      "stop_on_entry": "sma20_close",
+      "entry_stop": 107.55,
+      "note": "FILLED 2026-08-17: 25 @ $115.00 \u2014 Biotechnology. PARTIAL FILL BY DESIGN: standing practice places a limit at the PRIOR DAY'S CLOSE, so gap-ups leave orders unfilled or partly filled. Recommended size was 54; filled 25 (2.95% of capital). ENTRY STOP DIVERGENCE, resolved per the GEN ruling (the engine's published value is what fires): operator supplied 107.32, which matches NO reconstruction (not the 08-14 window 107.6955, not 08-13 106.52, not 19/21-bar variants); the ENGINE's 2026-08-14 21:58Z bake \u2014 post-splitter, so on the 08-14 confirmed close \u2014 published ma20 107.55; a fresh recomputation today gives 107.6955 (post-hoc frame drift, the same axis GEN's disagreement resolved to). entry_stop 107.55 = the engine's basis-correct published value. Initial R/share $7.45 ($186.25 on 25 shares); at 107.32 it would be $192.00, at 107.70 $182.50."
+    },
+    {
+      "ticker": "MPWR",
+      "shares": 4,
+      "entry_price": 1418.00,
+      "entry_date": "2026-08-17",
+      "stop_on_entry": "sma20_close",
+      "entry_stop": 1360.59,
+      "note": "FILLED 2026-08-17: 4 @ $1418.00 \u2014 Semiconductors (second name in the group alongside TSM). PARTIAL FILL BY DESIGN: standing practice places a limit at the PRIOR DAY'S CLOSE, so gap-ups leave orders unfilled or partly filled. Filled 4 (5.82% of capital). Entry stop (for R) $1360.59 = SMA20 on the 2026-08-14 confirmed close, verified: 1360.5895 over 2026-07-20..2026-08-14, two paths to 0.0000. Initial R/share $57.41 ($229.64 on 4 shares)."
+    },
+    {
+      "ticker": "CFG",
+      "shares": 84,
+      "entry_price": 74.86,
+      "entry_date": "2026-08-17",
+      "stop_on_entry": "sma20_close",
+      "entry_stop": 72.41,
+      "note": "FILLED 2026-08-17 in TWO fills at the SAME price \u2014 1 + 83, both @ $74.86, no blend needed \u2014 Regional Banks, the FIRST holding from this group (watched since 2026-07-19; the group re-entered the selected 15 at the 2026-08-15 rotation). PARTIAL FILL BY DESIGN: standing practice places a limit at the PRIOR DAY'S CLOSE, so gap-ups leave orders unfilled or partly filled. Filled 84 (6.45% of capital, the largest position). Entry stop (for R) $72.41 = SMA20 on the 2026-08-14 confirmed close, verified: 72.4066 over 2026-07-20..2026-08-14, two paths to 0.0000; ex-dividend $0.46 on 2026-07-30 inside the window, both adjusted paths agree. Initial R/share $2.45 ($205.80 on 84 shares)."
     }
   ],
   "watching": [
@@ -122,7 +158,8 @@
       "ticker": "GEN",
       "status": "watch_entry",
       "entry_gate": "5 conditions + A+ grade (D-011)",
-      "note": "added 2026-07-18 off the Layer-2 GICS view \u2014 Systems Software #1 (breaker clear), score 72 BUY NOW, +5.2% vs SMA20, RSI 61 at add"
+      "overrides": "ONE \u2014 DISCRETIONARY EXIT 2026-08-18 10:44 ET: manual limit SOLD 218 @ $27.66 while the state machine said HELD (GEN marked 27.86, above its 27.31 stop \u2014 the system stop had NOT triggered). Reason: operator was travelling, executed on return \u2014 context the engine cannot see. Live results split accordingly: this trade is attributable to the OPERATOR, not the system.",
+      "note": "SOLD 218 @ $27.66 2026-08-18 (discretionary \u2014 see overrides). Entry 2026-08-12 @ $28.40, entry_stop 27.31. Proceeds $6,029.88 less $0.16 fee; P&L \u2212$161.32 = \u22120.68R (R/share $1.09). Original add 2026-07-18 off the Layer-2 GICS view \u2014 Systems Software #1 (breaker clear), score 72 BUY NOW, +5.2% vs SMA20, RSI 61 at add; watching for reclaim"
     },
     {
       "ticker": "JBHT",
@@ -152,6 +189,7 @@
       "ticker": "CRWD",
       "status": "watch_entry",
       "entry_gate": "5 conditions + A+ grade (D-011)",
+      "overrides": "ZERO \u2014 system stop fired at the 7/22 close, sold at the next open exactly as signaled (convention field added 2026-08-18 when the GEN discretionary exit made attribution load-bearing; this trade was fully attributable to the system)",
       "note": "sold 24 @ 189.085 2026-07-23 09:31 ET open \u2014 sma20_close stop fired at the 7/22 close (188.42 vs SMA20 191.89); realized \u2212$264.36 on the 7/20 entry @ 200.10 (entered via D-017 funnel A+ 7/18, held 2 sessions); watching for reclaim"
     }
   ]
