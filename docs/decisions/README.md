@@ -89,6 +89,7 @@ post-hoc — so anyone grepping for an old SHA lands here:
 | `a319b45` | `ecd3e0e` | Build 6A profit-target sweep |
 | `4dd5929` | `5771878` | D-020a scorer change |
 | `cdcfa19` | `b02ccb5` | Build 5.2 pre-registration (2026-08-14 rebase; prereg blob byte-identical across the pair) |
+| `2aa55a4` | `8e2643b` | Build 9 pre-registration (2026-08-16 rebase; prereg blob `f8ba4458` and its pinned sha256 `af870141594b5a03` both byte-identical across the pair) |
 
 The re-anchoring commit is `75a19ef`; the immutability pins compare
 against the post-rebase SHAs, and the pinned CONTENT is identical
@@ -103,6 +104,23 @@ that is its own change, not made here), and 5.2 has no standing pin
 file yet, so nothing currently FAILS on a clone — the citation is a
 dangling breadcrumb, not a broken pin. This table is the resolution
 path for anyone who greps it.
+
+The `2aa55a4` row is the 2026-08-16 instance, and it is the FIRST one
+where nothing was left dangling. Build 9 does have a standing pin file
+(`test_backtest_sizing.py`), and it passes across the rebase because it
+was written in the durable form: it asserts the prereg's CONTENT
+sha256 (`af870141594b5a03…`) and resolves prereg-before-results by
+path ancestry, never against a fixed commit SHA. Pin 4 reports the
+post-rebase pair (`8e2643b -> 083e689`) on its own. The `2aa55a4` in
+`backtest-sizing.md`, `backtest-sizing-results.json` and
+`scripts/backtest_sizing.py` is therefore a RECORD of where the prereg
+was committed when the study ran — not an executed reference — and it
+is deliberately NOT rewritten: re-anchoring the prose would edit a
+frozen record to match a SHA that only ever existed on the authoring
+machine. The prereg blob (`f8ba4458`) and the results blob
+(`4c8ee34e`) are byte-identical across both pairs, so the mapping row
+is the whole of the resolution. The study's own pre-rebase SHA
+(`965c199` -> `083e689`) is cited by nothing and needs no row.
 
 Status meanings: **Proposed** (deliberation open or parked with its
 retest recipe) · **Ruled** (in force) · **Superseded-by-D-xxx** (kept for
