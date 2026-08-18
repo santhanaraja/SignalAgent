@@ -552,7 +552,25 @@ def trade_metrics(trades):
     wpnl = pnl[pnl > 0]
     lpnl = pnl[pnl <= 0]
     pf_usd = float(wpnl.sum() / -lpnl.sum()) if lpnl.sum() < 0 else None
+    # DOLLARS BESIDE EVERY R (2026-08-18 ruling): the worst-R and the
+    # worst-dollar trade are DIFFERENT TRADES (5B: -3,638R was -$304),
+    # and R reported beside dollars makes the tiny-R degenerate
+    # self-evidently harmless instead of needing guards. a and pnl are
+    # index-aligned (both filtered on r_mult is not None).
+    i_wr = int(np.argmin(a))
+    i_wd = int(np.argmin(pnl))
+    dollar_stats = {
+        "worst_pnl_usd": round(float(pnl.min()), 2),
+        "best_pnl_usd": round(float(pnl.max()), 2),
+        "mean_pnl_usd": round(float(pnl.mean()), 2),
+        "median_pnl_usd": round(float(np.median(pnl)), 2),
+        "worst_r_trade": {"r_mult": round(float(a[i_wr]), 3),
+                          "pnl_usd": round(float(pnl[i_wr]), 2)},
+        "worst_usd_trade": {"pnl_usd": round(float(pnl[i_wd]), 2),
+                            "r_mult": round(float(a[i_wd]), 3)},
+    }
     return {
+        **dollar_stats,
         "trades": len(a),
         "expectancy_r": round(float(pnl.sum() / r_usd.sum()), 4)
             if r_usd.sum() > 0 else None,

@@ -1823,6 +1823,18 @@ def _assessment_positions(data):
                     "catchup_pending", "state_carried", "render_note"):
             if x.get(opt) is not None:
                 row[opt] = x[opt]
+        # dollars beside every R (2026-08-18 ruling): derivable from the
+        # fill facts already on the row; basis labelled so an unsold
+        # EXIT_FIRED never renders an estimate as a measurement (D-019)
+        _e, _sh, _cl = x.get("entry_price"), x.get("shares"), x.get("close")
+        if _e is not None and _sh is not None:
+            row["deployed_usd"] = round(_sh * _e, 2)
+            if _cl is not None:
+                row["current_value_usd"] = round(_sh * _cl, 2)
+                row["open_pnl_usd"] = round(_sh * (_cl - _e), 2)
+                row["open_pnl_basis"] = ("close_estimate"
+                                         if x.get("state") == "EXIT_FIRED"
+                                         else "mark_at_close")
         # conditions itemized only for non-HELD names (the re-entry ladder);
         # a HELD name's read is the stop, not the entry conditions
         if x.get("state") != "HELD":

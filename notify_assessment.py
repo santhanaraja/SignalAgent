@@ -83,7 +83,7 @@ def position_risk(holdings, data):
     as zero risk.
     """
     rows, missing = {}, []
-    initial = heat = locked = pnl = 0.0
+    initial = heat = locked = pnl = deployed = 0.0
     locked_n = 0
     for t, x in (holdings or {}).items():
         entry = x.get("entry_price")
@@ -98,8 +98,15 @@ def position_risk(holdings, data):
         to_stop = shares * (entry - stop) if stop is not None else init
         open_pnl = shares * (close - entry) if close is not None else 0.0
         rows[t] = {"initial_usd": init, "to_stop_usd": to_stop,
-                   "open_pnl_usd": open_pnl, "open_r": open_pnl / init}
+                   "open_pnl_usd": open_pnl, "open_r": open_pnl / init,
+                   # dollars beside every R (2026-08-18 ruling): R
+                   # normalises by risk — right for comparing trades,
+                   # wrong for knowing what happened to the money
+                   "deployed_usd": shares * entry,
+                   "current_usd": shares * close
+                   if close is not None else None}
         initial += init
+        deployed += shares * entry
         pnl += open_pnl
         if to_stop > 0:
             heat += to_stop
@@ -111,6 +118,11 @@ def position_risk(holdings, data):
             "heat_usd": heat, "locked_usd": locked, "locked_n": locked_n,
             "capital_usd": cap,
             "heat_pct": (heat / cap * 100.0) if cap else None,
+            # the pnl total was computed and DISCARDED before the
+            # 2026-08-18 ruling; now returned beside book R
+            "open_pnl_usd": pnl,
+            "deployed_usd": deployed,
+            "deployed_pct": (deployed / cap * 100.0) if cap else None,
             "book_r": (pnl / initial) if initial else 0.0}
 
 
@@ -170,9 +182,19 @@ def build_message(data, now_et):
             at_risk = f"locked profit ${abs(r['to_stop_usd']):,.2f}"
         else:
             at_risk = f"at risk ${r['to_stop_usd']:,.2f}"
+        cur_txt = (f" → ${r['current_usd']:,.2f}"
+                   if r.get("current_usd") is not None else "")
         lines.append(
-            f"    ↳ initial risk ${r['initial_usd']:,.2f} · {at_risk} "
-            f"· open {r['open_r']:+.2f}R")
+            f"    ↳ deployed ${r['deployed_usd']:,.2f}{cur_txt} "
+            f"· open ${r['open_pnl_usd']:+,.2f} ({r['open_r']:+.2f}R) "
+            f"· initial risk ${r['initial_usd']:,.2f} · {at_risk}")
+        if state == "EXIT_FIRED":
+            # D-019 shape: an unmeasured value must not render as a
+            # measured one — the position has NOT sold; this is the
+            # close-basis estimate until a fill is recorded
+            lines.append("    ↳ basis: close_estimate — exit fills "
+                         "next open; dollars above are an ESTIMATE at the "
+                         "fired close, actual_fill when recorded")
 
     if risk["rows"]:
         cap_txt = (f" = {risk['heat_pct']:.2f}% of "
@@ -181,6 +203,11 @@ def build_message(data, now_et):
         lines.append(
             f"*Risk* — heat ${risk['heat_usd']:,.2f}{cap_txt} "
             f"(sum of positions still at risk to their stops)")
+        dep_txt = (f" = {risk['deployed_pct']:.1f}% of capital"
+                   if risk.get("deployed_pct") is not None else "")
+        lines.append(f"    ↳ deployed ${risk['deployed_usd']:,.2f}"
+                     f"{dep_txt} · open P&L "
+                     f"${risk['open_pnl_usd']:+,.2f}")
         extra = [f"initial risk at entry ${risk['initial_usd']:,.2f}"]
         if risk["locked_usd"]:
             extra.append(f"locked profit ${risk['locked_usd']:,.2f} "
