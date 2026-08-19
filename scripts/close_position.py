@@ -53,7 +53,10 @@ def build_closed_entry(h, a):
     shares = h["shares"]
     entry = h["entry_price"]
     e_stop = h["entry_stop"]
-    realized = round(shares * (a.exit_fill - entry) - a.fees, 2)
+    # fees_usd None = UNMEASURED, never zero (the ledger's own D-019
+    # discipline): realized_usd is then GROSS of fees and the note must
+    # say so. A statement-backed fee is subtracted normally.
+    realized = round(shares * (a.exit_fill - entry) - (a.fees or 0.0), 2)
     r_usd = shares * (entry - e_stop)
     if r_usd <= 0:
         raise SystemExit(f"{h['ticker']}: entry_stop {e_stop} >= entry "
@@ -67,7 +70,7 @@ def build_closed_entry(h, a):
         "entry_stop": e_stop,
         "exit_date": a.exit_date,
         "exit_fill": a.exit_fill,
-        "fees_usd": a.fees,
+        "fees_usd": a.fees,          # None = unmeasured, not zero
         "exit_reason": a.exit_reason,
         "overrides": a.overrides,
         "realized_usd": realized,
@@ -104,6 +107,13 @@ def validate_ledger(doc):
         assert c["exit_reason"] in EXIT_REASONS, (key, c["exit_reason"])
         assert c["fill_source"] in FILL_SOURCES, (key, c["fill_source"])
         assert c["basis"] in BASES, (key, c["basis"])
+        assert c["fees_usd"] is None or isinstance(c["fees_usd"],
+                                                   (int, float)), \
+            f"{key}: fees_usd must be a number or null (unmeasured)"
+        if c["fees_usd"] is None:
+            assert "GROSS of fees" in c.get("note", ""), \
+                f"{key}: fees_usd is null (unmeasured) but the note " \
+                "does not say realized_usd is GROSS of fees"
         # D-019 consistency: an estimate never renders as a measurement
         if c["fill_source"] == "estimate":
             assert c["basis"] == "close_estimate", \
@@ -185,7 +195,9 @@ def main():
     ap.add_argument("--ticker", required=True)
     ap.add_argument("--exit-date", required=True)
     ap.add_argument("--exit-fill", type=float, required=True)
-    ap.add_argument("--fees", type=float, required=True)
+    ap.add_argument("--fees", required=True,
+                    help='fee in USD, or "unknown" to record it as '
+                         'UNMEASURED (null) with realized gross of fees')
     ap.add_argument("--exit-reason", required=True, choices=EXIT_REASONS)
     ap.add_argument("--fill-source", required=True, choices=FILL_SOURCES)
     ap.add_argument("--basis", default="actual_fill", choices=BASES)
@@ -200,6 +212,7 @@ def main():
     ap.add_argument("--file", default=DEFAULT_PATH,
                     help="positions.json path (tests drive a copy)")
     a = ap.parse_args()
+    a.fees = None if str(a.fees).lower() == "unknown" else float(a.fees)
     close_position(a.file, a)
 
 
