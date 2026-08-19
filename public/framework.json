@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-19T21:40:33.770009+00:00",
+  "generated_at": "2026-08-19T22:01:42.226183+00:00",
   "scorer_version": "score_stock_v2",
   "schema": "regime-b-chassis",
   "framework_version": "1.0",
@@ -24,9 +24,9 @@
         },
         "hy": {
           "firing": false,
-          "pctile": 73.3,
+          "pctile": 81.7,
           "cut": 90.0,
-          "basis": "fred_oas_pctile"
+          "basis": "hyg_ief_inverted_pctile"
         },
         "breadth": {
           "firing": false,
@@ -47,10 +47,10 @@
         "start": "2026-05-26",
         "end": "2026-08-19"
       },
-      "hy_basis": "fred_oas_pctile",
-      "hy_pctile": 73.3,
-      "degraded": false,
-      "degraded_reason": null
+      "hy_basis": "hyg_ief_inverted_pctile",
+      "hy_pctile": 81.7,
+      "degraded": true,
+      "degraded_reason": "hy_fallback_basis"
     },
     "gauges": {
       "vix_5d_avg": {
@@ -86,16 +86,14 @@
     },
     "macro_inputs": {
       "yield_curve": {
-        "value": 1.09,
+        "value": 1.494,
         "signal": "risk_on",
-        "detail": "30Y-2Y spread: 109bp (5.28% - 4.19%) \u2014 positive",
-        "source": "FRED API",
-        "spread_bp": 109,
-        "spread_label": "30Y-2Y",
-        "long_yield": 5.28,
-        "short_yield": 4.19,
-        "dgs30": 5.28,
-        "dgs2": 4.19,
+        "detail": "30Y-3mo spread: 149bp (5.19% - 3.70%) \u2014 positive",
+        "source": "yfinance (^TYX-^IRX)",
+        "spread_bp": 149,
+        "spread_label": "30Y-3mo",
+        "long_yield": 5.19,
+        "short_yield": 3.7,
         "role": "macro_input"
       }
     },
@@ -455,7 +453,7 @@
     }
   ],
   "position_signals": {
-    "generated_at": "2026-08-19T21:40:33.769183+00:00",
+    "generated_at": "2026-08-19T22:01:42.225349+00:00",
     "account": "TOS",
     "schema_version": "1.2",
     "regime_state": "Risk-on / Trending",
@@ -1146,7 +1144,7 @@
             "name": "confirmation",
             "met": true,
             "detail": "close 113.70 > SMA20 + 0.5*ATR14 (112.15)",
-            "consecutive_closes_above": 42,
+            "consecutive_closes_above": 40,
             "atr14": 5.45
           },
           "3_regime_gate": {
@@ -1158,7 +1156,7 @@
           "4_slope": {
             "name": "slope",
             "met": true,
-            "detail": "SMA20 109.43 vs 5d ago 106.46 (flat/rising)"
+            "detail": "SMA20 109.43 vs 5d ago 106.10 (flat/rising)"
           },
           "5_thesis": {
             "name": "thesis",
@@ -1177,9 +1175,9 @@
         "assess_inputs": {
           "close": 113.69999694824219,
           "sma20": 109.42649955749512,
-          "sma20_5d_ago": 106.46499977111816,
+          "sma20_5d_ago": 106.10049972534179,
           "atr14": 5.451071602957589,
-          "consecutive_closes_above": 42,
+          "consecutive_closes_above": 40,
           "regime_state": "Risk-on / Trending",
           "group_in_universe": true,
           "kind": "holding"
@@ -1686,7 +1684,7 @@
         "grade_inputs": {
           "sma5": 278.402001953125,
           "up_close_since_swing_low": true,
-          "rsi14": 46.91016944128121,
+          "rsi14": 46.91016947511314,
           "quality_score": 59,
           "ytd_basis": "prior_year_close",
           "score_waived": false,
@@ -1819,14 +1817,14 @@
           "1_trigger": {
             "name": "trigger",
             "met": false,
-            "detail": "close 244.55 below SMA20 250.41"
+            "detail": "close 244.55 below SMA20 250.57"
           },
           "2_confirmation": {
             "name": "confirmation",
             "met": false,
             "detail": "0/2 consecutive closes above SMA20",
             "consecutive_closes_above": 0,
-            "atr14": 3.89
+            "atr14": 3.98
           },
           "3_regime_gate": {
             "met": true,
@@ -1837,7 +1835,7 @@
           "4_slope": {
             "name": "slope",
             "met": true,
-            "detail": "SMA20 250.41 vs 5d ago 250.21 (flat/rising)"
+            "detail": "SMA20 250.57 vs 5d ago 249.57 (flat/rising)"
           },
           "5_thesis": {
             "name": "thesis",
@@ -1847,18 +1845,18 @@
         },
         "conditions_met": 3,
         "all_conditions_met": false,
-        "extension_pct": -2.34,
+        "extension_pct": -2.4,
         "extension_atr": -1.51,
-        "distance_to_sma20_pct": -2.34,
+        "distance_to_sma20_pct": -2.4,
         "close": 244.55,
         "sma5": 251.25,
         "sma10": 251.37,
-        "sma20": 250.41,
+        "sma20": 250.57,
         "assess_inputs": {
           "close": 244.5500030517578,
-          "sma20": 250.4120002746582,
-          "sma20_5d_ago": 250.2050003051758,
-          "atr14": 3.887141636439732,
+          "sma20": 250.5695007324219,
+          "sma20_5d_ago": 249.56750106811523,
+          "atr14": 3.975713457380022,
           "consecutive_closes_above": 0,
           "regime_state": "Risk-on / Trending",
           "group_in_universe": true,
@@ -1873,7 +1871,7 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension -1.5080482707261063\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension -1.5140672850781598\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": false,
@@ -1881,7 +1879,7 @@
             },
             "4_rsi": {
               "met": false,
-              "detail": "RSI 44 outside [45, 70]"
+              "detail": "RSI 45 outside [45, 70]"
             },
             "5_score": {
               "met": false,
@@ -1903,12 +1901,12 @@
             "5_score",
             "6_breaker"
           ],
-          "reasons": "five mechanical conditions not met; close 244.55 below SMA5 251.25 \u2014 arriving from above; RSI 44 outside [45, 70]; score 58 < 75; group breaker warning"
+          "reasons": "five mechanical conditions not met; close 244.55 below SMA5 251.25 \u2014 arriving from above; RSI 45 outside [45, 70]; score 58 < 75; group breaker warning"
         },
         "grade_inputs": {
           "sma5": 251.25,
           "up_close_since_swing_low": false,
-          "rsi14": 43.89808246094198,
+          "rsi14": 44.92877510319278,
           "quality_score": 58,
           "ytd_basis": "prior_year_close",
           "score_waived": false,
