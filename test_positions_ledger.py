@@ -43,12 +43,25 @@ def test_committed_file_obeys_the_laws():
           f"present ({len(doc['closed'])} entries), all laws hold: OK")
 
 
+def _fixture_holding(path=None):
+    """The pin must not name a ticker: holdings turn over, and hard-coding
+    one makes the pin rot the day that position closes (HPQ closed
+    2026-08-25 and took this pin with it). Drive whatever is live."""
+    with open(path or POSITIONS) as f:
+        doc = json.load(f)
+    h = doc["holdings"][0]
+    assert h["entry_price"] > h["entry_stop"], "fixture holding has no R"
+    return h
+
+
 def _run_close(tmp, extra=()):
+    h = _fixture_holding(tmp)
     return subprocess.run(
         [sys.executable, os.path.join(REPO, "scripts",
                                       "close_position.py"),
-         "--ticker", "HPQ", "--exit-date", "2026-08-19",
-         "--exit-fill", "29.40", "--fees", "0.15",
+         "--ticker", h["ticker"], "--exit-date", "2026-08-19",
+         "--exit-fill", f"{h['entry_price'] * 1.05:.4f}",
+         "--fees", "0.15",
          "--exit-reason", "system_stop",
          "--fill-source", "broker_statement",
          "--overrides", "ZERO — pin fixture",
@@ -63,25 +76,28 @@ def test_the_move_is_atomic_and_lossless():
         tmp = os.path.join(d, "positions.json")
         shutil.copy(POSITIONS, tmp)
         before = json.load(open(tmp))
-        h = next(x for x in before["holdings"] if x["ticker"] == "HPQ")
+        h = _fixture_holding(tmp)
         r = _run_close(tmp)
         assert r.returncode == 0, r.stderr
         after = json.load(open(tmp))
         assert len(after["holdings"]) == len(before["holdings"]) - 1
         assert len(after["closed"]) == len(before["closed"]) + 1
-        assert not any(x["ticker"] == "HPQ" for x in after["holdings"])
+        assert not any(x["ticker"] == h["ticker"]
+                       and x["entry_date"] == h["entry_date"]
+                       for x in after["holdings"])
         c = after["closed"][-1]
         for k in ("ticker", "entry_date", "entry_price", "shares",
                   "entry_stop"):
             assert c[k] == h[k], f"entry fact {k} not preserved"
-        # realized fields recompute (194 sh, 29.40 fill, 24.68 entry)
-        want = round(194 * (29.40 - 24.68) - 0.15, 2)
+        fill = round(h["entry_price"] * 1.05, 4)
+        want = round(h["shares"] * (fill - h["entry_price"]) - 0.15, 2)
         assert c["realized_usd"] == want, (c["realized_usd"], want)
         cp.validate_ledger(after)
         # everything else in the file byte-equal apart from the move
         b2, a2 = copy.deepcopy(before), copy.deepcopy(after)
         b2["holdings"] = [x for x in b2["holdings"]
-                          if x["ticker"] != "HPQ"]
+                          if not (x["ticker"] == h["ticker"]
+                                  and x["entry_date"] == h["entry_date"])]
         a2["closed"] = a2["closed"][:-1]
         for key in ("watching", "account", "schema_version"):
             assert b2[key] == a2[key], f"{key} changed by the move"
@@ -93,8 +109,9 @@ def test_the_move_is_atomic_and_lossless():
 def test_the_failures_fail():
     with open(POSITIONS) as f:
         doc = json.load(f)
+    _h = doc["holdings"][0]
     base = {
-        "ticker": "HPQ", "entry_date": "2026-07-20",
+        "ticker": _h["ticker"], "entry_date": _h["entry_date"],
         "entry_price": 24.68, "shares": 194, "entry_stop": 23.64,
         "exit_date": "2026-08-19", "exit_fill": 29.40, "fees_usd": 0.15,
         "exit_reason": "system_stop", "overrides": "ZERO — fixture",
