@@ -15,6 +15,14 @@ Three things pinned:
      arrays, an estimate wearing basis actual_fill, a realized_r that
      does not recompute, and a system_stop_modified exit attributed to
      the system must each be REFUSED, with the violation named.
+  5. RE-ENTRY IS LEGAL AND THE OLD RULE WAS WRONG. "No ticker in both
+     arrays" was stated in prompt after prompt and is false for a book
+     with a re-entry ladder. HPQ is the fixture that proves it: closed
+     2026-08-25 as this book's only win, re-entered 2026-09-03. The
+     pin asserts the committed file HAS that overlap, that the old rule
+     would reject the real file, and that the RIGHT rule — exit
+     strictly before entry — accepts it and still catches the ordering
+     violation the old rule could not distinguish.
 
 Run: python3 test_positions_ledger.py
 """
@@ -269,10 +277,73 @@ def test_the_real_cli_refuses_a_misattributed_override():
           "byte-identical both times, and accepts the honest form: OK")
 
 
+def test_re_entry_is_legal_and_the_old_rule_was_wrong():
+    """The rule this project repeated for weeks — "no ticker is in both
+    arrays" — is false for a book with a re-entry ladder.
+
+    THE LAW IS PINNED UNCONDITIONALLY, ON A BUILT FIXTURE. An earlier
+    draft named HPQ and gated every assertion on HPQ still being held,
+    which re-committed the exact rot this file already documents at
+    _fixture_holding: hard-coding a ticker makes the pin die the day
+    that position closes. Worse, the exit-drift detector shipped in the
+    same change exists to make drifting positions get SOLD, so the book
+    turning over is the expected outcome — the gated version would have
+    left the ordering law with zero coverage precisely when it worked.
+    The live book is checked too, but only as a bonus observation.
+    """
+    live = json.load(open(POSITIONS))
+
+    # --- the law, pinned on a fixture that cannot rot -----------------
+    def _book(exit_date, entry_date):
+        d = copy.deepcopy(live)
+        h = _fixture_holding(POSITIONS)
+        h = copy.deepcopy(h)
+        h["ticker"], h["entry_date"] = "ZZTEST", entry_date
+        c = copy.deepcopy(live["closed"][0])
+        c.update(ticker="ZZTEST", entry_date="2020-01-01",
+                 exit_date=exit_date)
+        d["holdings"] = [h]
+        d["closed"] = [c]
+        return d
+
+    # a legal RE-ENTRY: exit strictly before the open entry, same ticker
+    # in BOTH arrays. The old rule rejected this; the right one accepts.
+    cp.validate_ledger(_book("2026-08-25", "2026-09-03"))
+
+    # DEMONSTRATE THE FAILURES the old rule could not tell apart
+    for bad_exit, must_say in (("2026-09-03", "strictly"),
+                               ("2099-01-01", "shadows a live position"),
+                               (None, "ISO"),
+                               ("2026-9-3", "ISO"),
+                               ("", "ISO")):
+        try:
+            cp.validate_ledger(_book(bad_exit, "2026-09-03"))
+        except AssertionError as e:
+            assert must_say in str(e), f"{bad_exit!r}: {e}"
+        else:
+            raise SystemExit(
+                f"FAIL: exit_date {bad_exit!r} was ACCEPTED against an open "
+                "entry of 2026-09-03 — the ordering law failed OPEN")
+
+    # --- and the COMMITTED book, as an observation, never a gate ------
+    held = {h["ticker"] for h in live["holdings"]}
+    overlap = sorted(held & {c["ticker"] for c in live["closed"]})
+    cp.validate_ledger(live)
+    obs = (f"live book confirms it with {', '.join(overlap)}"
+           if overlap else
+           "live book currently has no re-entry — the law is pinned on "
+           "the fixture regardless")
+    print(f"  (5) re-entry is legal and the OLD rule is refuted: exit-"
+          f"strictly-before-entry accepts a real re-entry and REFUSES a "
+          f"tie, a postdated close, and three unorderable dates that a "
+          f"raw string compare would have passed; {obs}: OK")
+
+
 if __name__ == "__main__":
     print("\n=== positions.json closed[] ledger pins (schema 1.2) ===")
     test_committed_file_obeys_the_laws()
     test_the_move_is_atomic_and_lossless()
     test_the_failures_fail()
     test_the_real_cli_refuses_a_misattributed_override()
+    test_re_entry_is_legal_and_the_old_rule_was_wrong()
     print("\nAll ledger pins passed.\n")

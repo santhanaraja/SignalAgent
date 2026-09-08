@@ -156,6 +156,9 @@ def build_closed_entry(h, a):
     }
 
 
+_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
 def validate_ledger(doc):
     """Schema-1.2 laws over the whole file. Raises on violation."""
     assert doc.get("schema_version") == "1.2", "schema_version != 1.2"
@@ -174,6 +177,41 @@ def validate_ledger(doc):
         assert key not in live, \
             f"{key}: present in BOTH holdings and closed — the move " \
             "left a duplicate"
+        # RE-ENTRY IS LEGAL; A CLOSE THAT POSTDATES THE OPEN ENTRY IS NOT.
+        # "No ticker in both arrays" was the rule this project stated for
+        # weeks and it is WRONG: closed[] is an append-only HISTORY and
+        # holdings[] is CURRENT STATE, so a book with a re-entry ladder
+        # (RE_ENTRY_ARMING/READY are engine states) necessarily has a name
+        # in both. HPQ is the live proof — closed 2026-08-25 as this
+        # book's one win, re-entered 2026-09-03 — and a guard asserting
+        # the old form failed on it correctly. The real invariant is
+        # ORDERING: every closed row for a ticker that is currently held
+        # must have exited STRICTLY BEFORE that holding was entered.
+        # Otherwise a mis-dated or duplicated close shadows a live
+        # position, and the ledger claims a position was sold after it
+        # was bought.
+        # THE COMPARISON MUST NOT FAIL OPEN. A raw string compare treats
+        # a missing, null or unpadded date as merely "not greater", so
+        # the one case the law exists to catch — a close shadowing a
+        # live position — would slip through silently on exactly the
+        # sloppy input that produces it. Both operands are required to
+        # be real ISO dates first; an unparseable date is itself the
+        # violation, not a pass.
+        def _iso(v, what):
+            assert isinstance(v, str) and _ISO_DATE.match(v), \
+                f"{key}: {what} must be an ISO YYYY-MM-DD date to be " \
+                f"ordered, got {v!r} — an unorderable date cannot satisfy " \
+                "the re-entry law and must not be read as if it did"
+            return v
+        for h in doc.get("holdings", []):
+            if h["ticker"] == c["ticker"]:
+                _iso(c.get("exit_date"), "closed exit_date")
+                _iso(h.get("entry_date"), "open entry_date")
+                assert str(c["exit_date"]) < str(h["entry_date"]), (
+                    f"{key}: closed row exits {c['exit_date']} but the "
+                    f"OPEN {h['ticker']} was entered {h['entry_date']} — "
+                    "a re-entry requires the exit to precede the entry "
+                    "strictly; this row shadows a live position")
         assert c["exit_reason"] in EXIT_REASONS, (key, c["exit_reason"])
         # THE ATTRIBUTION IS A COUNT, AND IT MUST PARSE. Written as a
         # denylist ("must not say ZERO") this law was worthless: NONE,

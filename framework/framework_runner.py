@@ -362,6 +362,20 @@ def run_framework(force_fetch: bool = False) -> dict:
         n_trans = len(position_signals.get("transitions", []))
         print(f"[framework] Position signals: {n_pos} tickers evaluated, "
               f"{n_trans} state transition(s)")
+        # EXIT-DRIFT: self-surface on the run, next to R28's line. A
+        # detector whose only home is a JSON field is a detector nobody
+        # reads; the drift it looks for was always visible in the
+        # artifact and was missed for exactly that reason. Guarded — the
+        # detector must never be the thing that fails the bake.
+        try:
+            _d = (position_signals or {}).get("exit_drift_summary") or {}
+            if _d.get("status") == "action_needed":
+                print(f"[framework] EXIT DRIFT: {_d.get('message')}")
+            elif _d.get("status") in ("degraded", "unmeasured"):
+                print(f"[framework] EXIT DRIFT: {_d.get('message')} "
+                      f"(coverage, not outcome)")
+        except Exception:
+            pass
     except Exception as e:
         # A malformed positions.json or engine fault must not take down the
         # regime/theme/rules layers.

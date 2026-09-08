@@ -225,6 +225,34 @@ def build_message(data, now_et):
                          f"excluded from every total — no entry data: "
                          f"{', '.join(sorted(risk['missing']))}")
 
+    # EXIT DRIFT — surfaced in the notification, not only in the JSON.
+    # This block exists because the drift was ALWAYS in the artifact and
+    # was still missed for five days running: FTNT fired 2026-09-02 and
+    # sold 09-03, MSI fired 2026-09-03 and sat, AMCR's fill came two
+    # sessions late and cost $66 against its own estimate. A field nobody
+    # renders is a field nobody reads.
+    try:
+        _drift = ((data or {}).get("position_signals") or {}).get(
+            "exit_drift_summary") or {}
+        _st = _drift.get("status")
+        if _st in ("action_needed", "degraded", "unmeasured"):
+            _icon = "⚠️ " if _st == "action_needed" else ""
+            lines.append(f"*{_icon}Exit drift* — {_drift.get('message')}")
+            lines.append("    ↳ counted in CONFIRMED CLOSES, never in "
+                         "wall-clock days (a holiday makes a day-counter "
+                         "lie). Covers the EXIT side only — an unrecorded "
+                         "ENTRY is invisible to this engine by "
+                         "construction.")
+            # The coverage line renders WITH the drift line, never
+            # instead of it: an operator who actions the named holding
+            # must not close the notification believing the rest of the
+            # book was swept when some of it could not be read.
+            if _drift.get("unmeasured") or _drift.get("not_evaluated"):
+                lines.append("    ↳ ⚠️ UNMEASURED is not a clear reading "
+                             "(D-019: coverage, not outcome).")
+    except Exception:
+        pass
+
     lines.append("*Watchlist*")
     if not watchers:
         lines.append("• none")

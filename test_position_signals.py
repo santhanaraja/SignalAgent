@@ -19,12 +19,14 @@ import tempfile
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+REPO_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, REPO_DIR)
 
 from framework.position_signals import (
     PositionSignalEngine, HELD, EXIT_FIRED, WATCHING,
     RE_ENTRY_ARMING, RE_ENTRY_READY, EXTENDED_HOLD,
     assess_position, pending_closes, MAX_CATCHUP_BARS,
+    exit_drift_row, confirmed_closes_after,
 )
 from framework.regime_calculator import confirmed_close_frame
 
@@ -1775,6 +1777,252 @@ def test_d018_artifact_watchers_reproduce():
           f"{', '.join(checked)}: OK")
 
 
+# ------------------------------------------------------------------
+# EXIT-DRIFT DETECTOR
+# ------------------------------------------------------------------
+
+def test_exit_drift_status_comes_from_the_ladder():
+    """The defect an adversarial review reproduced through compute():
+    a bounce close must NOT zero the drift.
+
+    The first version counted the run of consecutive closes below SMA20.
+    A holding returns to HELD only on ALL FIVE conditions, so one
+    ordinary bounce — a broken-down name popping back over its 20-day
+    for a day — reset the count to a measured "ok" while the ladder
+    still had the position out. These cases pin the corrected contract:
+    STATUS off the ladder, COUNT off the last-HELD anchor.
+    """
+    idx = pd.date_range(end="2026-09-08", periods=6, freq="B")
+    df = pd.DataFrame({"Close": [1.0] * 6}, index=idx)
+    anchor = str(idx[0].date())
+
+    # HELD is never drift, whatever the price did
+    r = exit_drift_row("T", ladder_state=HELD, abstained=False,
+                       last_held_close=anchor, df_conf=df)
+    assert r["status"] == "ok" and r["closes_since_exit_fired"] == 0
+
+    # THE BOUNCE CASE. RE_ENTRY_ARMING means the price is back ABOVE the
+    # SMA20 — the old code returned 0 here. The ladder still has it out.
+    for out_state in (EXIT_FIRED, WATCHING, RE_ENTRY_ARMING,
+                      RE_ENTRY_READY):
+        r = exit_drift_row("T", ladder_state=out_state, abstained=False,
+                           last_held_close=anchor, df_conf=df)
+        assert r["status"] == "action_needed", (out_state, r)
+        # 5 confirmed closes after the anchor, minus the firing
+        # close itself = 4.
+        assert r["closes_since_exit_fired"] == 4, (out_state, r)
+
+    # the FIRING close itself is not yet drift
+    r = exit_drift_row("T", ladder_state=EXIT_FIRED, abstained=False,
+                       last_held_close=str(idx[-2].date()), df_conf=df)
+    assert r["status"] == "ok" and r["closes_since_exit_fired"] == 0, r
+
+    # DAYS ARE NOT THE UNIT: stretch the calendar, keep the bars.
+    wide = df.copy()
+    wide.index = pd.DatetimeIndex(list(idx[:-1]) +
+                                  [idx[-1] + pd.Timedelta(days=40)])
+    assert exit_drift_row("T", ladder_state=WATCHING, abstained=False,
+                          last_held_close=anchor, df_conf=wide
+                          )["closes_since_exit_fired"] == 4, \
+        "the count moved when only the CALENDAR changed — counting days"
+
+    # D-019: THE LADDER'S ABSTENTION IS AUTHORITATIVE, both directions.
+    for st in (EXIT_FIRED, HELD, None):
+        r = exit_drift_row("T", ladder_state=st, abstained=True,
+                           last_held_close=anchor, df_conf=df)
+        assert r["status"] == "unmeasured", (st, r)
+        assert r["closes_since_exit_fired"] is None, (st, r)
+
+    # NO ANCHOR: the alarm still fires, the LENGTH is None — never 0.
+    r = exit_drift_row("T", ladder_state=WATCHING, abstained=False,
+                       last_held_close=None, df_conf=df)
+    assert r["status"] == "action_needed", r
+    assert r["closes_since_exit_fired"] is None, \
+        "an unanchored drift reported a MEASURED length"
+
+    # the counter itself: None, never a measured zero, when unusable
+    assert confirmed_closes_after(None, anchor) is None
+    assert confirmed_closes_after(df, None) is None
+    assert confirmed_closes_after(df.iloc[:0], anchor) is None
+    assert confirmed_closes_after(df, anchor) == 5
+
+    # NEVER THROWS, whatever it is handed
+    for junk in ("not a frame", 42, object()):
+        assert confirmed_closes_after(junk, anchor) is None, junk
+        assert exit_drift_row("T", ladder_state=WATCHING, abstained=False,
+                              last_held_close=anchor, df_conf=junk
+                              )["status"] in ("action_needed", "unmeasured")
+    print("  exit drift: status is the LADDER's (a bounce to "
+          "RE_ENTRY_ARMING no longer zeroes it), the count is anchored to "
+          "the last HELD close and is holiday-invariant, an abstaining "
+          "ladder and a missing anchor both refuse to report a measured "
+          "zero: OK")
+
+
+def test_exit_drift_surfaces_through_the_real_engine():
+    """Drive compute() ACROSS RUNS — the REAL entry point.
+
+    The bug this build shipped with was a count that reset on a bounce,
+    so the thing that must be pinned is the ANCHOR SURVIVING RUNS, not a
+    single snapshot. Three sequential computes on a growing frame: HELD
+    (anchor stamped), the exit fires (not yet drift), two more closes
+    below (drift = 2). A third holding whose fetch returns nothing
+    abstains throughout, so the BOOK-level coverage is pinned too — and
+    pinned on the run where something IS drifting, which is where an
+    earlier version went silent about it.
+    """
+    # min_bars = max(sma_period + slope_lookback, atr_period + 1) + 1 = 26.
+    # An earlier draft used 25 and every row abstained — the gate working,
+    # but it made the pin assert nothing about drift.
+    up = [100 + i for i in range(30)]
+    frames = {"DRIFT": _bars(up, end="2026-07-02"),
+              "CLEAN": _bars(up, end="2026-07-02"),
+              "DARK": None}                  # fetch returns nothing
+    with tempfile.TemporaryDirectory() as tmp:
+        # keep the pin OFFLINE and off the committed earnings cache: the
+        # first draft reached Yahoo and wrote its fixture tickers into
+        # the tracked data/earnings_calendar.json.
+        import earnings_calendar as _ec
+        _saved = (_ec.CACHE_PATH, _ec.DATA_DIR, _ec.get_earnings_map)
+        try:
+            _ec.CACHE_PATH = os.path.join(tmp, "earnings_calendar.json")
+            _ec.DATA_DIR = tmp
+            _ec.get_earnings_map = lambda tickers, with_coverage=False: {}
+            eng = PositionSignalEngine(copy.deepcopy(CONFIG),
+                                       lambda t, period="6mo": frames.get(t))
+            eng.STATE_DIR = tmp
+            eng.DATA_DIR = tmp
+            with open(os.path.join(tmp, "positions.json"), "w") as f:
+                json.dump({"holdings": [
+                    {"ticker": t, "shares": 1, "entry_price": 100,
+                     "entry_stop": 90} for t in ("DRIFT", "CLEAN", "DARK")],
+                    "watching": []}, f)
+            run = lambda: eng.compute({"regime": TRENDING}, None,
+                                      emit_events=False)
+
+            # RUN 1 — everything above its SMA20: HELD, anchor stamped.
+            o1 = run()
+            assert o1["tickers"]["DRIFT"]["state"] == HELD, o1["tickers"]["DRIFT"]
+            assert o1["tickers"]["DRIFT"]["exit_drift"]["status"] == "ok"
+            st = json.load(open(os.path.join(tmp, "position_state.json")))
+            assert st["DRIFT"]["last_held_close"] == "2026-07-02", st["DRIFT"]
+            s1 = o1["exit_drift_summary"]
+            assert s1["holdings_total"] == 3 and s1["measured"] == 2, s1
+            assert "DARK" in (s1["unmeasured"] + s1["not_evaluated"]), s1
+
+            # RUN 2 — one close below: the exit FIRES. Not yet drift.
+            frames["DRIFT"] = _bars(up + [80.0], end="2026-07-03")
+            o2 = run()
+            r2 = o2["tickers"]["DRIFT"]
+            assert r2["state"] == EXIT_FIRED, r2["state"]
+            assert r2["exit_drift"]["closes_since_exit_fired"] == 0, r2["exit_drift"]
+            # the anchor must NOT advance past the last HELD close
+            st = json.load(open(os.path.join(tmp, "position_state.json")))
+            assert st["DRIFT"]["last_held_close"] == "2026-07-02", st["DRIFT"]
+
+            # RUN 3 — two further closes below: drift = 2.
+            frames["DRIFT"] = _bars(up + [80.0, 79.0, 78.0], end="2026-07-07")
+            o3 = run()
+            r3 = o3["tickers"]["DRIFT"]["exit_drift"]
+            assert r3["status"] == "action_needed", r3
+            assert r3["closes_since_exit_fired"] == 2, r3
+            assert r3["anchor_close"] == "2026-07-02", r3
+            s3 = o3["exit_drift_summary"]
+            assert s3["drifting"] == ["DRIFT"], s3
+            assert s3["worst_closes_since_exit_fired"] == 2, s3
+            # COVERAGE IS NOT SUPPRESSED BY OUTCOME — the gap is still
+            # named on the run where something drifts.
+            assert "DARK" in (s3["unmeasured"] + s3["not_evaluated"]), s3
+            assert "could NOT be checked" in s3["message"], s3
+            assert o3["tickers"]["CLEAN"]["exit_drift"]["status"] == "ok"
+        finally:
+            _ec.CACHE_PATH, _ec.DATA_DIR, _ec.get_earnings_map = _saved
+    # the pin must not have written into the committed artifact
+    real = os.path.join(REPO_DIR, "data", "earnings_calendar.json")
+    if os.path.exists(real):
+        blob = json.load(open(real))
+        seen = set(blob.get("dates") or {}) | set(blob.get("attempted") or {})
+        assert not ({"DRIFT", "CLEAN", "DARK"} & seen), \
+            "this pin wrote its fixture tickers into the committed cache"
+    print("  exit drift: through the REAL compute() across three runs — "
+          "the anchor is stamped while HELD and SURVIVES the exit, the "
+          "firing close is not drift, two closes later reads 2, and the "
+          "book-level coverage gap is still reported on the drifting "
+          "run: OK")
+
+
+def test_exit_drift_provider_hole_is_never_a_measured_zero():
+    """A NaN close must not become an all-clear. THE ONE FINDING WHOSE
+    ADVERSARIAL VERIFIER DIED MID-RUN, so it is demonstrated here rather
+    than argued.
+
+    In the first version this was reachable: the detector walked closes
+    backwards and `break`d on a NaN, falling through to a MEASURED zero
+    — an outage impersonating safety (D-019) inside the detector built
+    to prevent exactly that. The corrected design cannot reach it,
+    because the status comes from the ladder and the ladder already
+    refuses to render a verdict on a non-finite window. This pin holds
+    that property rather than trusting it.
+    """
+    up = [100 + i for i in range(30)]
+    df = _bars(up + [80.0, 79.0], end="2026-07-03")
+    df.iloc[-1, df.columns.get_loc("Close")] = np.nan
+    with tempfile.TemporaryDirectory() as tmp:
+        import earnings_calendar as _ec
+        _saved = (_ec.CACHE_PATH, _ec.DATA_DIR, _ec.get_earnings_map)
+        try:
+            _ec.CACHE_PATH = os.path.join(tmp, "earnings_calendar.json")
+            _ec.DATA_DIR = tmp
+            _ec.get_earnings_map = lambda tickers, with_coverage=False: {}
+            eng = PositionSignalEngine(copy.deepcopy(CONFIG),
+                                       lambda t, period="6mo": df)
+            eng.STATE_DIR = tmp
+            eng.DATA_DIR = tmp
+            with open(os.path.join(tmp, "positions.json"), "w") as f:
+                json.dump({"holdings": [{"ticker": "NANNY", "shares": 1,
+                                         "entry_price": 100,
+                                         "entry_stop": 90}],
+                           "watching": []}, f)
+            out = eng.compute({"regime": TRENDING}, None, emit_events=False)
+            row = out["tickers"]["NANNY"]["exit_drift"]
+            assert row["status"] == "unmeasured", row
+            assert row["closes_since_exit_fired"] is None, row
+            summ = out["exit_drift_summary"]
+            assert summ["status"] != "ok", summ
+            assert summ["measured"] == 0, summ
+            assert "could NOT be checked" in summ["message"], summ
+            assert "no holding is sitting on a fired exit" not in \
+                summ["message"], "a provider hole rendered as an all-clear"
+        finally:
+            _ec.CACHE_PATH, _ec.DATA_DIR, _ec.get_earnings_map = _saved
+    print("  exit drift: a NaN close makes the LADDER abstain, the row "
+          "reads unmeasured and the roll-up reads degraded — no measured "
+          "zero anywhere on the outage path: OK")
+
+
+def test_exit_drift_renders_on_both_surfaces():
+    """PIN THE RENDER. The build's whole premise is that the drift was
+    always in the artifact and was missed because nothing rendered it —
+    so the rendering is the part that must not be silently removable."""
+    import notify_assessment as na
+    data = {"position_signals": {"exit_drift_summary": {
+        "status": "action_needed", "drifting": ["MSI"],
+        "unmeasured": ["DARK"], "not_evaluated": [], "holdings_total": 3,
+        "measured": 2, "worst_closes_since_exit_fired": 2,
+        "message": "1 holding fired and still held: MSI 2 closes · "
+                   "1 of 3 holdings could NOT be checked (DARK) — a "
+                   "coverage gap, not a clear book"}}}
+    now_et = datetime.datetime(2026, 9, 8, 18, 0)
+    msg = na.build_message(data, now_et)
+    text = msg if isinstance(msg, str) else json.dumps(msg)
+    assert "Exit drift" in text, "the notify path does not render the drift"
+    assert "MSI 2 closes" in text, text[:400]
+    assert "DARK" in text, "coverage vanished from the rendered message"
+    assert "confirmed closes" in text.lower()
+    print("  exit drift: the notify path RENDERS the drift line and the "
+          "coverage gap together: OK")
+
+
 if __name__ == "__main__":
     print("\n=== Position signal engine tests (Build 1B) ===")
     test_confirmation_consecutive_closes()
@@ -1815,4 +2063,8 @@ if __name__ == "__main__":
     test_d018_fingerprint_helpers()
     test_d018_migration_from_pre_d018_state()
     test_d018_artifact_watchers_reproduce()
+    test_exit_drift_status_comes_from_the_ladder()
+    test_exit_drift_surfaces_through_the_real_engine()
+    test_exit_drift_provider_hole_is_never_a_measured_zero()
+    test_exit_drift_renders_on_both_surfaces()
     print("\nAll position-signal tests passed.\n")

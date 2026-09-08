@@ -506,6 +506,130 @@ def consec_closes_above(close, sma):
     return n
 
 
+def confirmed_closes_after(df_conf, anchor_date):
+    """Confirmed closes in the frame STRICTLY AFTER `anchor_date`.
+
+    Returns None — never 0 — when it cannot be counted. The distinction
+    is the whole point: 0 is an all-clear and None is "I could not look".
+    """
+    try:
+        if df_conf is None or len(df_conf) == 0 or not anchor_date:
+            return None
+        a = str(anchor_date)
+        return sum(1 for d in df_conf.index if str(d.date()) > a)
+    except Exception:
+        return None
+
+
+def exit_drift_row(ticker, *, ladder_state, abstained, last_held_close,
+                   df_conf):
+    """EXIT-DRIFT: has a fired exit gone unactioned, and for how long?
+
+    `positions.json` is hand-maintained, so an exit can fire and the
+    position simply stay in the book. FTNT fired on the 2026-09-02 close
+    and sold 09-03; MSI fired on the 2026-09-03 close and was still held
+    five days later; AMCR's fill came two sessions after its trigger and
+    cost $66 against its own estimate. The engine had already computed
+    every one of those exits — nothing compared them against the book
+    over time. This is that comparison.
+
+    THE STATUS COMES FROM THE LADDER, NOT FROM THE PRICE. The first
+    version of this counted the run of consecutive closes below SMA20
+    and called that "closes since EXIT_FIRED". It is not, and an
+    adversarial review reproduced the failure through the real compute():
+    a holding returns to HELD only when ALL FIVE conditions are met,
+    whereas a below-run resets on condition 1 alone. So ONE ordinary
+    bounce close inside a drift stretch — a name that just broke down
+    popping back over its 20-day for a day — zeroed the count, printed
+    "no holding is sitting on a fired exit", and silenced both surfaces
+    on exactly the failure this exists to catch. The ladder state is
+    authoritative and needs no reconstruction: for a HOLDING, any state
+    other than HELD means the engine says the position is out while the
+    book says it is owned.
+
+    THE COUNT IS ANCHORED, AND MAY BE None WHILE THE ALARM STILL FIRES.
+    It is measured from `last_held_close`, the most recent confirmed
+    close on which the ladder had this position HELD, so a bounce cannot
+    move it. When no anchor is on record — a position first seen by this
+    field, or a state record written before it existed — the COUNT is
+    None but the STATUS is still raised off the ladder. Reporting a
+    number nobody can source would be worse than reporting none; going
+    quiet because the number is missing would be worse still.
+
+    COUNTED IN CONFIRMED CLOSES, NEVER IN DAYS. 2026-09-07 was Labor
+    Day: a wall-clock counter would have called MSI four days adrift
+    when the market had been open twice.
+
+    THE LADDER'S ABSTENTION IS AUTHORITATIVE TOO. When the engine
+    declined to render a verdict for this row (`insufficient_data`, or
+    no state at all), this returns `unmeasured`. It must never publish
+    "the ladder says it is out" about a row on which the ladder said
+    nothing, and it must never publish an all-clear about one either
+    (D-019: coverage, not outcome — an outage must not impersonate
+    safety).
+
+    WHAT THIS CANNOT SEE, STATED SO NOBODY MISTAKES HALF A DETECTOR FOR
+    A WHOLE ONE: it covers the EXIT side only. The entry side — a
+    position bought and never written into positions.json — is invisible
+    here by construction, because the engine only knows the holdings the
+    file names. HPQ, OXY and CNC were bought on 2026-09-03 and went
+    three trading sessions with no stop monitored; nothing in this
+    process could have noticed, and no work on this function would
+    change that. Detecting an unrecorded ENTRY needs a broker-side
+    input, and there is no broker statement on this machine — every fill
+    in the ledger arrived by hand. The asymmetry is structural.
+    """
+    try:
+        if abstained or not ladder_state:
+            return {
+                "status": "unmeasured",
+                "closes_since_exit_fired": None,
+                "ladder_state": ladder_state,
+                "message": (f"{ticker}: drift UNMEASURED — the ladder "
+                            f"rendered no verdict for this row. Absence of "
+                            f"a reading is not absence of drift."),
+            }
+        if ladder_state == HELD:
+            return {"status": "ok", "closes_since_exit_fired": 0,
+                    "ladder_state": ladder_state}
+        n_after = confirmed_closes_after(df_conf, last_held_close)
+        # the firing close itself is not drift: the operator has had no
+        # session in which the exit could have been acted on.
+        n = None if n_after is None else max(0, n_after - 1)
+        if n is None:
+            return {
+                "status": "action_needed",
+                "closes_since_exit_fired": None,
+                "ladder_state": ladder_state,
+                "message": (f"{ticker}: the ladder has it {ladder_state} "
+                            f"and the book still holds it — HOW LONG IS "
+                            f"UNMEASURED (no HELD close on record to "
+                            f"count from). The drift is real; only its "
+                            f"length is unknown."),
+            }
+        if n == 0:
+            return {"status": "ok", "closes_since_exit_fired": 0,
+                    "ladder_state": ladder_state,
+                    "message": (f"{ticker}: exit fired on the latest "
+                                f"confirmed close — not yet drift.")}
+        return {
+            "status": "action_needed",
+            "closes_since_exit_fired": n,
+            "ladder_state": ladder_state,
+            "anchor_close": str(last_held_close),
+            "message": (f"{ticker}: the ladder has it {ladder_state} and "
+                        f"the book still holds it {n} confirmed close"
+                        f"{'s' if n != 1 else ''} after the exit fired "
+                        f"(last HELD close {last_held_close}). Counted in "
+                        f"confirmed closes, not days."),
+        }
+    except Exception as exc:
+        # Never blocks, never throws. A detector that can break the bake
+        # is a worse defect than the drift it looks for.
+        return {"status": "unmeasured", "closes_since_exit_fired": None,
+                "message": f"{ticker}: drift detector failed: {exc}"}
+
+
 def up_close_off_swing_low(close, lookback):
     """>=1 up-close since the swing low (lowest close in the trailing
     `lookback` window) — the D-011 approach filter's turn check."""
@@ -1324,6 +1448,17 @@ class PositionSignalEngine:
             if dte is not None and dte <= 7 and result["state"] in (HELD, RE_ENTRY_READY):
                 result["earnings_note"] = (
                     f"earnings in {dte}d — R8: binary catalyst window")
+            # --- EXIT-DRIFT DETECTOR (holdings only) ------------------
+            # Status off the LADDER (authoritative), count off the
+            # persisted last-HELD anchor. Guarded as a whole: a detector
+            # that can break the bake is a worse defect than the drift.
+            if kind == "holding":
+                result["exit_drift"] = exit_drift_row(
+                    ticker,
+                    ladder_state=result.get("state"),
+                    abstained=bool(result.get("insufficient_data")),
+                    last_held_close=rec.get("last_held_close"),
+                    df_conf=df_conf)
             tickers[ticker] = result
 
             if result.get("insufficient_data"):
@@ -1383,6 +1518,15 @@ class PositionSignalEngine:
                         "prev_before": revision["seed"],
                         "last_close_date": str(last_eval),
                         "last_bar_fingerprint": revision["new_bar"],
+                        # EXIT-DRIFT ANCHOR: the most recent confirmed
+                        # close on which the ladder had this position
+                        # HELD. Carried forward while it is out, so a
+                        # bounce above SMA20 cannot reset the count —
+                        # that reset was the critical defect in the
+                        # first version of the detector.
+                        "last_held_close": (
+                            str(last_eval) if result["state"] == HELD
+                            else rec.get("last_held_close")),
                     }
                     continue
                 # Nothing NEW was stepped: the ladder does not move, no event
@@ -1451,6 +1595,15 @@ class PositionSignalEngine:
                 # break case commits an older bar than df_conf's newest),
                 # so the next re-render's revision check compares like-to-like
                 "last_bar_fingerprint": bar_fingerprint(df_conf.loc[:last_bar]),
+                # EXIT-DRIFT ANCHOR — the LAST bar in this pending walk
+                # whose stepped state was HELD, else whatever was already
+                # on record. Taken from the walk rather than from the
+                # final state so a catch-up that steps through HELD and
+                # out again anchors on the right bar.
+                "last_held_close": next(
+                    (str(b.date()) for b, _f, st in reversed(pending)
+                     if st.get("state") == HELD),
+                    rec.get("last_held_close")),
             }
 
         # prune states for tickers no longer tracked
@@ -1491,6 +1644,79 @@ class PositionSignalEngine:
             "tickers": tickers,
             "transitions": transitions,
         }
+        # --- EXIT-DRIFT ROLL-UP -------------------------------------
+        # A per-row field nobody aggregates is a field nobody reads.
+        # This is the line the RUNNER and the NOTIFY PATH render;
+        # there is no dashboard panel for it, and this comment does
+        # not claim one (an earlier draft did, and a comment that
+        # asserts a surface nobody built is a false record).
+        #
+        # COVERAGE IS COUNTED OVER THE BOOK, NOT OVER THE ROWS THIS RUN
+        # HAPPENED TO EMIT. Counting the rows would let a holding that
+        # was dropped before evaluation — a malformed hand-edit, exactly
+        # the failure mode this detector distrusts — vanish into a clean
+        # all-clear, so `holdings_total` and `not_evaluated` are carried
+        # and the all-clear is only ever claimed over a population that
+        # was actually established.
+        #
+        # UNMEASURED IS NEVER SUPPRESSED BY OUTCOME. An earlier version
+        # surfaced the unmeasured names only when nothing was drifting —
+        # i.e. it went quiet about coverage on precisely the nights
+        # something was wrong, so an operator who actioned the named row
+        # would close the notification believing the book was swept.
+        try:
+            book = [e.get("ticker") for e, k in entries if k == "holding"]
+            drift = {t: r["exit_drift"] for t, r in tickers.items()
+                     if isinstance(r, dict) and r.get("exit_drift")}
+            drifting = sorted(
+                (t for t, d in drift.items()
+                 if d.get("status") == "action_needed"),
+                key=lambda t: -(drift[t].get("closes_since_exit_fired") or 0))
+            unmeasured = sorted(t for t, d in drift.items()
+                                if d.get("status") == "unmeasured")
+            not_evaluated = sorted(t for t in book if t not in drift)
+            gaps = sorted(set(unmeasured) | set(not_evaluated))
+
+            def _n(t):
+                v = drift.get(t, {}).get("closes_since_exit_fired")
+                return f"{v} close{'s' if v != 1 else ''}" if v is not None \
+                    else "length UNMEASURED"
+            parts = []
+            if drifting:
+                parts.append(
+                    f"{len(drifting)} holding"
+                    f"{'s' if len(drifting) != 1 else ''} fired and still "
+                    f"held: " + "; ".join(f"{t} {_n(t)}" for t in drifting))
+            if gaps:
+                parts.append(
+                    f"{len(gaps)} of {len(book)} holding"
+                    f"{'s' if len(book) != 1 else ''} could NOT be checked "
+                    f"({', '.join(gaps)}) — a coverage gap, not a clear book")
+            if not parts:
+                parts.append(f"no holding is sitting on a fired exit "
+                             f"({len(book)} of {len(book)} checked)")
+            result["exit_drift_summary"] = {
+                "status": ("action_needed" if drifting
+                           else "degraded" if gaps else "ok"),
+                "drifting": drifting,
+                "unmeasured": unmeasured,
+                "not_evaluated": not_evaluated,
+                "holdings_total": len(book),
+                "measured": len(book) - len(gaps),
+                "worst_closes_since_exit_fired": (
+                    max((drift[t].get("closes_since_exit_fired") or 0)
+                        for t in drifting) if drifting else 0),
+                "message": " · ".join(parts),
+                "basis": "confirmed closes (never wall-clock days)",
+                "covers": ("EXIT side only — an unrecorded ENTRY is "
+                           "invisible to this engine by construction; it "
+                           "needs a broker-side input that does not exist "
+                           "on this machine"),
+            }
+        except Exception as exc:
+            result["exit_drift_summary"] = {
+                "status": "unmeasured",
+                "message": f"exit-drift roll-up failed: {exc}"}
         if candidate_grades is not None:
             result["candidate_grades"] = candidate_grades
             # the signals generation these grades were computed FROM — the
