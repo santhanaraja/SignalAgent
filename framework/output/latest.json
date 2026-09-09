@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-09-08T22:21:42.655515+00:00",
+  "generated_at": "2026-09-09T17:02:53.673429+00:00",
   "scorer_version": "score_stock_v2",
   "schema": "regime-b-chassis",
   "framework_version": "1.0",
   "regime": {
-    "date": "2026-09-08",
+    "date": "2026-09-09",
     "regime": "Risk-on / Choppy",
     "regime_color": "#d29922",
     "engine": "chassis",
@@ -14,9 +14,27 @@
       "confirmed_state": "In-Trend-Throttled",
       "regime": "Risk-on / Choppy",
       "exposure_ceiling_pct": 50.0,
-      "trend_in": null,
-      "throttles": null,
-      "throttles_firing": null,
+      "trend_in": true,
+      "trend_pct": 7.82,
+      "throttles": {
+        "vix": {
+          "firing": false,
+          "value": 15.22,
+          "cut": 22.0
+        },
+        "hy": {
+          "firing": false,
+          "pctile": 25.0,
+          "cut": 90.0,
+          "basis": "fred_oas_pctile"
+        },
+        "breadth": {
+          "firing": true,
+          "value": -1.38,
+          "cut": -0.5
+        }
+      },
+      "throttles_firing": 1,
       "hysteresis": {
         "up": 0,
         "down": 0,
@@ -24,45 +42,66 @@
         "mode": "asymmetric"
       },
       "replay": {
-        "days_used": 0,
-        "window": 60
+        "days_used": 59,
+        "window": 60,
+        "start": "2026-06-15",
+        "end": "2026-09-08"
       },
-      "hy_basis": null,
-      "hy_pctile": null,
-      "degraded": true,
-      "degraded_reason": "data_unavailable"
+      "hy_basis": "fred_oas_pctile",
+      "hy_pctile": 25.0,
+      "degraded": false,
+      "degraded_reason": null,
+      "intraday_preview": {
+        "as_of": "2026-09-09",
+        "raw_state": "In-Trend-Throttled",
+        "throttles": {
+          "vix": {
+            "firing": false,
+            "value": 15.22
+          },
+          "hy": {
+            "firing": false,
+            "pctile": 23.3
+          },
+          "breadth": {
+            "firing": true,
+            "value": -1.68
+          }
+        },
+        "note": "forming bar \u2014 display only, never steps the ladder (close-basis law, ruled 2026-07-23)"
+      }
     },
     "gauges": {
       "vix_5d_avg": {
-        "value": 15.01,
+        "value": 15.24,
         "signal": "risk_on",
-        "detail": "VIX 5d avg 15.0 (spot 15.7)",
-        "spot": 15.72
+        "detail": "VIX 5d avg 15.2 (spot 16.3)",
+        "spot": 16.33
       },
       "hy_spread": {
-        "value": 2.68,
+        "value": 2.67,
         "signal": "risk_on",
-        "detail": "HY spread 2.68% (FRED BAMLH0A0HYM2)",
+        "detail": "HY spread 2.67% (FRED BAMLH0A0HYM2)",
         "source": "FRED",
-        "date": "2026-09-07"
+        "date": "2026-09-08"
       },
       "breadth": {
-        "value": -1.38,
+        "value": -1.69,
         "signal": "risk_off",
-        "detail": "RSP/SPY ratio change: -1.38% (20d) \u2014 breadth narrowing",
+        "detail": "RSP/SPY ratio change: -1.69% (20d) \u2014 breadth narrowing",
         "source": "RSP/SPY fallback"
       }
     },
     "backdrop_gate": {
       "gauge": "spy_vs_200dma",
       "role": "trend_chassis",
-      "open": false,
-      "capped": true,
-      "reason": "data_unavailable",
-      "value": 7.82,
-      "detail": "SPY $765.96 vs 200DMA $710.43 (+7.8%)",
-      "price": 765.96,
-      "ma200": 710.43
+      "open": true,
+      "capped": false,
+      "reason": null,
+      "value": 7.29,
+      "detail": "SPY $762.82 vs 200DMA $710.95 (+7.3%)",
+      "price": 762.82,
+      "ma200": 710.95
     },
     "macro_inputs": {
       "yield_curve": {
@@ -144,7 +183,7 @@
       "sector": "Information Technology",
       "tickers": 4,
       "weeks_in_universe": 8,
-      "breaker_status": "clear",
+      "breaker_status": "warning",
       "breaker_checks_expected": [
         "avg_ytd_negative",
         "group_avg_rsi_below_40",
@@ -435,7 +474,7 @@
     }
   ],
   "position_signals": {
-    "generated_at": "2026-09-08T22:21:42.654542+00:00",
+    "generated_at": "2026-09-09T17:02:53.672334+00:00",
     "account": "TOS",
     "schema_version": "1.2",
     "regime_state": "Risk-on / Choppy",
@@ -496,6 +535,15 @@
           "level": 216.04,
           "detail": "exit on close below SMA20 (216.04)"
         },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "WATCHING",
+          "close": 211.58,
+          "sma20": 216.42,
+          "conditions_met": 3,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "BIIB",
         "kind": "holding",
         "entry_price": 207.65,
@@ -506,7 +554,13 @@
         "weeks_in_universe": 5,
         "note": "FILLED 2026-08-10: 23 @ $207.65 \u2014 Biotechnology. Entry stop (for R) $203.69 = SMA20 on the 2026-08-07 confirmed close; the engine recomputes the trailing stop from live SMA20 as usual. Initial R/share $3.96 ($91.08 on 23 shares).",
         "next_earnings_date": "2026-10-29",
-        "days_to_earnings": 51
+        "days_to_earnings": 50,
+        "exit_drift": {
+          "status": "action_needed",
+          "closes_since_exit_fired": null,
+          "ladder_state": "EXIT_FIRED",
+          "message": "BIIB: the ladder has it EXIT_FIRED and the book still holds it \u2014 HOW LONG IS UNMEASURED (no HELD close on record to count from). The drift is real; only its length is unknown."
+        }
       },
       "DVN": {
         "state": "HELD",
@@ -563,6 +617,15 @@
           "level": 47.54,
           "detail": "exit on close below SMA20 (47.54)"
         },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "HELD",
+          "close": 48.67,
+          "sma20": 47.7,
+          "conditions_met": 5,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "DVN",
         "kind": "holding",
         "entry_price": 46.3089,
@@ -573,7 +636,12 @@
         "weeks_in_universe": 4,
         "note": "FILLED 2026-08-17: 45 @ $46.3089 \u2014 Oil & Gas Exploration & Production (second name in the group alongside FANG). PARTIAL FILL BY DESIGN: standing practice places a limit at the PRIOR DAY'S CLOSE, so gap-ups leave orders unfilled or partly filled. Recommended size was 138; filled 45 (2.14% of capital \u2014 the smallest position in the book). Entry stop (for R) $44.27 = SMA20 on the 2026-08-14 confirmed close, verified: 44.2665 over 2026-07-20..2026-08-14, two paths to 0.0000. Initial R/share $2.04 ($91.75 on 45 shares).",
         "next_earnings_date": "2026-11-04",
-        "days_to_earnings": 57
+        "days_to_earnings": 56,
+        "exit_drift": {
+          "status": "ok",
+          "closes_since_exit_fired": 0,
+          "ladder_state": "HELD"
+        }
       },
       "SLB": {
         "state": "HELD",
@@ -619,7 +687,7 @@
           "close": 57.099998474121094,
           "sma20": 54.81479282379151,
           "sma20_5d_ago": 53.19797344207764,
-          "atr14": 1.9354352142203173,
+          "atr14": 1.9361493800441174,
           "consecutive_closes_above": 34,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
@@ -629,6 +697,15 @@
           "type": "sma20_close",
           "level": 54.81,
           "detail": "exit on close below SMA20 (54.81)"
+        },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "HELD",
+          "close": 57.46,
+          "sma20": 55.02,
+          "conditions_met": 5,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "SLB",
         "kind": "holding",
@@ -640,7 +717,12 @@
         "weeks_in_universe": 4,
         "note": "FILLED 2026-08-20: 118 @ $54.10 \u2014 Oil & Gas Equipment & Services. Entry stop (for R) $51.33 = SMA20 on the 2026-08-19 confirmed close, verified against the frame with the basis bar ASSERTED: 51.3325 over the 20 bars 2026-07-23..2026-08-19, two independent fetch paths (yf.Ticker.history and yf.download, period='1y', auto_adjust=True) agreeing to 0.0000. WITHIN the extension guard BY TWO CENTS: ATR14 = 1.5464, so the 1.8x line is 51.33 + 1.8*1.5464 = $54.12 and the fill at $54.10 is 1.79xATR \u2014 inside, but by $0.02. Recorded because a two-cent pass is not a comfortable one, and a reader comparing this to EOG (2.36x, out of doctrine) should see that these two entries sat on opposite sides of the same line on the same morning. Initial R/share $2.77 ($326.86 on 118 shares), 5.12% of price.",
         "next_earnings_date": "2026-10-23",
-        "days_to_earnings": 45
+        "days_to_earnings": 44,
+        "exit_drift": {
+          "status": "ok",
+          "closes_since_exit_fired": 0,
+          "ladder_state": "HELD"
+        }
       },
       "MSI": {
         "state": "WATCHING",
@@ -693,6 +775,15 @@
           "group_in_universe": true,
           "kind": "holding"
         },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "WATCHING",
+          "close": 464.65,
+          "sma20": 475.65,
+          "conditions_met": 3,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "MSI",
         "kind": "holding",
         "entry_price": 475.0,
@@ -703,7 +794,13 @@
         "weeks_in_universe": 8,
         "note": "FILLED 2026-08-21: 13 @ $475.00 \u2014 Communications Equipment (in the selected 15, group rank 9 of the full ranking, breaker clear). NOT the first name this book has held from this group: VSAT was Communications Equipment too, entered 2026-08-12 and stopped out 2026-08-19 at -0.9452R. MSI re-enters a group the book has already lost money in this month \u2014 a fact about the group's recent behaviour rather than an argument against the entry, recorded so a future reader does not have to re-derive it. Graded A+ on the 2026-08-20 confirmed close with ZERO failing rows (the same bake publishes score 81 strong-buy and rsi14 63.3767; those are quoted AS PUBLISHED, not as recomputed values \u2014 a fresh recomputation of this ticker's grade inputs does not reproduce them, see the stop-divergence note below). Entry stop (for R) $452.68 = SMA20 on the 2026-08-20 confirmed close, verified against the frame with the basis bar ASSERTED: 452.6845 over the 20 bars 2026-07-24..2026-08-20, two independent fetch paths (yf.Ticker.history and yf.download, period='1y', auto_adjust=True) agreeing to 0.0000; the 2026-08-21 bar was still FORMING at verification time and was split off by confirmed_close_frame per D-018. WITHIN THE EXTENSION GUARD WITH ROOM: ATR14 = 14.3800, so the 1.8x line is 452.6845 + 1.8*14.3800 = $478.57 (computed from the UNROUNDED SMA20; substituting the 2dp stop 452.68 gives $478.56, and the equation is written unrounded so it evaluates to the number printed beside it) and the fill at $475.00 is 1.552xATR \u2014 $3.57 below the guard \u2014 the most comfortable margin of the FOUR entries taken on 2026-08-20 and 2026-08-21 (EOG past the guard at 2.36x, SLB inside by $0.02, RVMD inside by $0.33, MSI by $3.57). Stated that way deliberately: the trading week 2026-08-17..2026-08-21 actually contains NINE entries (FANG, DVN, DNTH, MPWR, CFG on 08-17; EOG, SLB on 08-20; MSI, RVMD on 08-21), so 'this week' would be wrong \u2014 these four are the ones taken on the last two sessions. The fill also sits ABOVE the 473.63 prior close, so it landed BETWEEN the prior close and the line: the limit-at-the-line convention working as intended, rather than the gap-past-the-close case where a limit at the prior close never fills at all. (The standing measurement of how much that case costs was made in session on 2026-08-19 and is NOT committed anywhere in this repo \u2014 it is deliberately not quoted here, because a permanent record must not cite a figure a future reader cannot re-derive from it.)  ENTRY-STOP DIVERGENCE AGAINST THE ENGINE, RECORDED NOT HIDDEN: the 2026-08-20 evening produced FIVE committed signals bakes, and they do not agree with each other about this one confirmed close. grade_inputs.sma20 / atr14 for MSI read: 20:04:21Z -> 449.3540 / 14.2500; 20:45:28Z -> 451.2480 / 14.7321; 21:12:13Z -> 451.2480 / 14.7321; 21:44:18Z -> 452.6845 / 14.3800; 22:02:50Z -> 451.2480 / 14.7321. The 20:04Z bake is CORRECT and not part of the problem: 20:04 UTC is 16:04 ET, before the 16:10 splitter, so D-018 rightly held the 08-20 bar as forming and 449.3540 is the 20-bar mean ending 2026-08-19. The remaining four are all post-splitter on the SAME confirmed close and still disagree: the 21:44:18Z bake published 452.6845 / 14.3800 -- EXACTLY the value recorded here as entry_stop -- and the 22:02:50Z bake, which is the artifact that stands, reverted to 451.2480. So the frame value is not merely defensible, it is one the engine itself published eighteen minutes before the bake that stands; and 451.2480 matches no construction on the frame at all -- not the 20-bar mean on any of the last five bars, not an 18/19/21/22-bar variant, not an unadjusted or 1y-period fetch. Two controls entered the same week DO reconcile exactly: EOG's published 143.5075 and SLB's 51.6490 both equal the frame's 20-bar mean on the 2026-08-20 close to 0.0000, under every fetch shape tried. So this is specific to MSI and to certain bakes, not a frame-wide offset, and the cause is UNRESOLVED \u2014 a bake-to-bake flip on a settled close is a stronger signal than post-hoc drift, because both values came out of the engine within eighteen minutes of each other. entry_stop is recorded from the FRAME because the instruction for this entry was explicitly to verify against the frame, and because the frame value is independently corroborated by two fetch paths AND by the figure the operator supplied. At the engine's value the R/share would be $23.75 instead of $22.32 (initial R $308.75 vs $290.16). A future reader should treat the stop as frame-sourced and this divergence as open. Initial R/share $22.32 ($290.16 on 13 shares), 4.70% of price; position $6,175.00 = 6.33% of capital, inside the 5-8% target band.",
         "next_earnings_date": "2026-11-05",
-        "days_to_earnings": 58
+        "days_to_earnings": 57,
+        "exit_drift": {
+          "status": "action_needed",
+          "closes_since_exit_fired": null,
+          "ladder_state": "WATCHING",
+          "message": "MSI: the ladder has it WATCHING and the book still holds it \u2014 HOW LONG IS UNMEASURED (no HELD close on record to count from). The drift is real; only its length is unknown."
+        }
       },
       "BMY": {
         "state": "EXIT_FIRED",
@@ -750,7 +847,7 @@
           "close": 64.69000244140625,
           "sma20": 66.19250011444092,
           "sma20_5d_ago": 65.64500007629394,
-          "atr14": 1.5560716901506697,
+          "atr14": 1.5557141985212053,
           "consecutive_closes_above": 0,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
@@ -760,6 +857,15 @@
           "type": "sma20_close",
           "level": 66.19,
           "detail": "exit on close below SMA20 (66.19)"
+        },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "WATCHING",
+          "close": 64.48,
+          "sma20": 66.24,
+          "conditions_met": 3,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "BMY",
         "kind": "holding",
@@ -771,7 +877,13 @@
         "weeks_in_universe": 1,
         "note": "FILLED 2026-08-24: 94 @ $67.05 \u2014 Pharmaceuticals. Entry stop (for R) $64.73 = SMA20 on the 2026-08-21 confirmed close, verified against the frame with the basis bar ASSERTED: 64.7345 over the 20 bars 2026-07-27..2026-08-21, two independent fetch paths (yf.Ticker.history and yf.download, period='1y', auto_adjust=True) agreeing to 0.0000. ENTRY-STOP DIVERGENCE FROM THE SUPPLIED FIGURE, resolved to the frame. The operator supplied 64.96; the frame gives 64.7345 and so does the ENGINE \u2014 the 2026-08-24T13:48:28Z bake (09:48 ET, pre-splitter, so on the declared 2026-08-21 confirmed close) publishes grade_inputs.sma20 64.7345 and atr14 1.7343, matching the frame to 0.0000. The supplied 64.96 matches NOTHING: not the 20-bar mean on any of the last five bars, not an 18/19/21/22/25/30/50-bar variant on the 08-21 bar. This is the GEN/DNTH shape \u2014 an operator figure with no reconstruction \u2014 but with the opposite resolution, because there the engine's published value disagreed with a fresh recomputation and here the two AGREE, leaving the supplied number the only outlier. entry_stop is therefore $64.73. Recorded because the difference is not cosmetic: at 64.96 the R/share would be $2.09 instead of $2.32 (10% less of initial risk), and R is the unit every downstream comparison uses. WELL INSIDE THE EXTENSION GUARD: ATR14 = 1.7343, so the 1.8x line is 64.7345 + 1.8*1.7343 = $67.8562 and the fill at $67.05 is 1.335xATR \u2014 $0.81 below the guard. The supplied extension figure was ~1.29x; the frame gives 1.3351, and the supplied extension LINE (67.86) matches the frame exactly, so the line and the stop in that set were computed off different bases. The fill sits above the 67.01 prior close, so it landed BETWEEN the prior close and the line \u2014 the limit-at-the-line convention working as intended. Initial R/share $2.32 ($218.08 on 94 shares), 3.46% of price; position $6,302.70 = 6.46% of capital, inside the 5-8% target band.",
         "next_earnings_date": "2026-10-29",
-        "days_to_earnings": 51
+        "days_to_earnings": 50,
+        "exit_drift": {
+          "status": "action_needed",
+          "closes_since_exit_fired": null,
+          "ladder_state": "EXIT_FIRED",
+          "message": "BMY: the ladder has it EXIT_FIRED and the book still holds it \u2014 HOW LONG IS UNMEASURED (no HELD close on record to count from). The drift is real; only its length is unknown."
+        }
       },
       "EQT": {
         "state": "HELD",
@@ -828,6 +940,15 @@
           "level": 54.38,
           "detail": "exit on close below SMA20 (54.38)"
         },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "EXIT_FIRED",
+          "close": 53.85,
+          "sma20": 54.36,
+          "conditions_met": 3,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "EQT",
         "kind": "holding",
         "entry_price": 53.8559,
@@ -838,7 +959,12 @@
         "weeks_in_universe": 4,
         "note": "FILLED 2026-08-26: 117 @ $53.8559 \u2014 Oil & Gas Exploration & Production. PRICE IS THE Net Prc EXECUTED AVERAGE, not the amount column's 53.9600 (see schema_notes.fill_price_convention); the four decimals are themselves the proof, since a US equity limit cannot carry them. Entry stop (for R) $53.24 = SMA20 on the 2026-08-25 confirmed close, verified against the frame with the basis bar ASSERTED: 53.2396 over the 20 bars 2026-07-29..2026-08-25, two fetch paths agreeing to 0.0000; supplied figure matched. || THE TIGHTEST POSITION THIS BOOK HAS EVER HELD: R/share $0.6159 = 1.14% of price, initial R $72.06 on a $6,301.14 position. For comparison the book's typical initial R is $165-$390 and the widest on record is NET at $369.92, so this carries roughly a fifth of the usual dollar risk for a full-size position. That cuts both ways and the record should say so: a tight stop is cheap to be wrong about, and it is also far likelier to be hit by noise \u2014 at 0.50xATR of extension the stop sits about half an ATR below the fill, so an ordinary day's range can reach it. || ATR14 = 1.2400, so the 1.8x line is $55.4716 and the fill at $53.8559 is 0.497xATR, the least extended entry in the book (previous least was LLY at 1.044x). The fill is BELOW the 54.00 prior close. || GROUP SLOT: blocked by the 3-name Oil & Gas E&P cap on four separate mornings; FANG's exit the same morning freed the slot, so this is a like-for-like swap inside the group rather than an increase in group exposure. Next earnings 2026-10-20.",
         "next_earnings_date": "2026-10-20",
-        "days_to_earnings": 42
+        "days_to_earnings": 41,
+        "exit_drift": {
+          "status": "ok",
+          "closes_since_exit_fired": 0,
+          "ladder_state": "HELD"
+        }
       },
       "JNJ": {
         "state": "HELD",
@@ -884,7 +1010,7 @@
           "close": 269.1199951171875,
           "sma20": 267.9776153564453,
           "sma20_5d_ago": 263.7294319152832,
-          "atr14": 5.497448160103171,
+          "atr14": 5.497648704187993,
           "consecutive_closes_above": 24,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
@@ -894,6 +1020,15 @@
           "type": "sma20_close",
           "level": 267.98,
           "detail": "exit on close below SMA20 (267.98)"
+        },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "EXIT_FIRED",
+          "close": 267.35,
+          "sma20": 268.42,
+          "conditions_met": 3,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "JNJ",
         "kind": "holding",
@@ -905,7 +1040,12 @@
         "weeks_in_universe": 1,
         "note": "FILLED 2026-08-27: 23 @ $265.09 at 10:21:21 ET on a LIMIT \u2014 Pharmaceuticals (the group's only name after LLY exited the same morning). Entry stop (for R) $261.89 = SMA20 on the 2026-08-26 confirmed close, verified against the frame with the basis bar ASSERTED: 261.8873 over the 20 bars 2026-07-30..2026-08-26, two independent fetch paths (yf.Ticker.history and yf.download, period='1y', auto_adjust=True) agreeing to 0.0000. The supplied figure MATCHED the frame exactly this time, unlike BMY and LLY on 2026-08-24. || THE SECOND-TIGHTEST POSITION THE BOOK HAS EVER HELD, and the pair is recorded here so it is findable: EQT $72.06 at 1.14% of price is the tightest, JNJ $73.60 at 1.21% is second. (Both figures at the STORED 2dp stop. At the unrounded 261.8873 the risk is $73.66 / 1.208% \u2014 the 6-cent difference is the 2dp rounding every entry_stop in this file carries, and it is recorded rather than reconciled away because the instruction quoted the unrounded number.) Initial R/share $3.20; position $6,097.07 = 6.25% of capital. || FILLED $5.96 BELOW ITS OWN LIMIT: the limit was 271.05, which is the 1.8xATR extension line itself (261.8873 + 1.8 x 5.0931), and the fill came 2.20% under it \u2014 and $4.91 below the 270.00 prior close. Extension at the fill is 0.629xATR, against a limit placed at 1.8x. || AN OPEN ASYMMETRY, NOT A FINDING (n=2): this is the SECOND time a patient limit caught an entry materially below the prior close, after ELV on 2026-08-25 (399.30 against a 402.63 close). The exit census finds delay uniformly adverse \u2014 10 of 12 adverse, and every fill away from the open loses money. Entries are so far pointing the other way. Two observations do not make a census and this must not be quoted as one; it is written down so that when there are enough entries to measure, the question is already framed: a buyer waiting is offering liquidity into weakness, a seller waiting is chasing it, and those need not share a sign. || ATR14 5.0931 = 1.90% of price, the lowest volatility on the board (LITE 8.55%, SMCI 6.98%, GEN 3.47%). Next earnings 2026-10-13, 33 sessions of runway.",
         "next_earnings_date": "2026-10-13",
-        "days_to_earnings": 35
+        "days_to_earnings": 34,
+        "exit_drift": {
+          "status": "ok",
+          "closes_since_exit_fired": 0,
+          "ladder_state": "HELD"
+        }
       },
       "SMCI": {
         "state": "HELD",
@@ -962,6 +1102,15 @@
           "level": 37.47,
           "detail": "exit on close below SMA20 (37.47)"
         },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "HELD",
+          "close": 39.36,
+          "sma20": 37.86,
+          "conditions_met": 5,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "SMCI",
         "kind": "holding",
         "entry_price": 37.45,
@@ -972,7 +1121,12 @@
         "weeks_in_universe": 8,
         "note": "FILLED 2026-08-28: 167 @ $37.45 on a LIMIT \u2014 Technology Hardware, Storage & Peripherals (the group's only name; HPQ closed out of it 2026-08-25). Entry stop (for R) $34.74 = SMA20 on the 2026-08-27 confirmed close, verified against the frame with the basis bar ASSERTED: 34.7360 over the 20 bars 2026-07-31..2026-08-27, two independent fetch paths (yf.Ticker.history and yf.download, period='1y', auto_adjust=True) agreeing to 0.0000. The supplied figure MATCHED. || LIMITED AT THE SMA5, NOT AT THE EXTENSION LINE: the order sat at 37.34 (SMCI's 5-day mean) rather than at the 1.8xATR line of 39.53, and filled 37.45 against a 38.46 prior close. Risk $452.57 instead of the $610 a line-priced entry would have carried \u2014 a 26% reduction in initial risk bought by where the limit was placed rather than by anything about the setup. Extension at the fill 1.018xATR against a guard of 1.8. || ATR14 2.6650 = 7.12% OF PRICE, so R/share is $2.71 = 7.24% of price. This is a WIDE name by the measure that matters for risk-per-share, notwithstanding the comfortable extension multiple: it passes row 2 easily and still risks over seven percent a share. Initial R $452.57 on a $6,254.15 position = 6.41% of capital. || HISTORY, as context only: declined 2026-08-24 on the grounds that a 6.6% pullback had changed the setup, which was wrong on the doctrine's own terms \u2014 the pullback moved it from 1.66xATR to 0.68x, i.e. toward the guard's safe side, and it then ran 9%. Next earnings 2026-11-03.",
         "next_earnings_date": "2026-11-03",
-        "days_to_earnings": 56
+        "days_to_earnings": 55,
+        "exit_drift": {
+          "status": "ok",
+          "closes_since_exit_fired": 0,
+          "ladder_state": "HELD"
+        }
       },
       "HUM": {
         "state": "HELD",
@@ -1018,7 +1172,7 @@
           "close": 403.0899963378906,
           "sma20": 388.76949920654295,
           "sma20_5d_ago": 381.61549987792966,
-          "atr14": 12.490354265485491,
+          "atr14": 12.489996773856026,
           "consecutive_closes_above": 13,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
@@ -1028,6 +1182,15 @@
           "type": "sma20_close",
           "level": 388.77,
           "detail": "exit on close below SMA20 (388.77)"
+        },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "HELD",
+          "close": 401.82,
+          "sma20": 390.22,
+          "conditions_met": 5,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "HUM",
         "kind": "holding",
@@ -1039,7 +1202,12 @@
         "weeks_in_universe": 8,
         "note": "FILLED 2026-09-02: 15 @ $396.31 on a LIMIT \u2014 Managed Health Care. Entry stop (for R) $382.08 = SMA20 on the 2026-09-01 confirmed close, window 2026-08-04..2026-09-01, two independent fetch paths (yf.Ticker.history and yf.download, period='1y', auto_adjust=True) agreeing to 0.0000. || STOP COMPUTED ON A HOLED FRAME \u2014 READ BEFORE TRUSTING THIS R. The 2026-08-28 bar has been absent from this ticker's yfinance frame since 2026-09-01, a third consecutive day, so the 20-bar window ending 2026-09-01 reaches one bar too far back. The supplied figure MATCHED this holed computation exactly and two fetch paths agree to 0.0000 \u2014 but agreement between two reads of the same hole is not verification. UNLIKE the holdings checked on 2026-08-31, THIS ERROR CANNOT BE QUANTIFIED: no 08-28 close was ever recorded for this ticker while the bar existed, so there is nothing to reconstruct from and the direction and size of the error are UNKNOWN. (An earlier estimate of '12-16% on the tightest names' came from the holdings, where reconstruction was possible; it does not transfer here and is not asserted.) WHAT THIS DOES AND DOES NOT AFFECT: the engine monitors against its own SMA20, hole and all, so the operative stop that will actually fire is whatever the engine computes \u2014 this defect does not change when the position exits. It changes the entry_stop stored here, and therefore every R this trade is measured by. The entry_stop is PROVISIONAL. || LIMITED AT OR NEAR MARKET, NOT AT THE 1.8x LINE, AND DELIBERATELY. On all four of this batch the extension line sat ABOVE the market, so a limit placed there would have bought at a worse price and widened the stop distance. Measured for this name: at the line the risk/share would have been $21.90 instead of $14.23, i.e. 1.54x the initial R actually taken. The limit-at-the-line convention is for names trading BELOW their line; applying it blindly to a name trading below-but-approaching would have been worse than having no convention. Recorded so the convention is read as conditional rather than universal. || ATR14 12.1679 = 3.07% of price. Extension at the fill 1.169xATR against a 1.8x line at 403.98, which sat $7.67 ABOVE the fill. R/share $14.23 = 3.59% of price; initial R $213.45; position $5,944.65 = 6.10% of capital. HUM filled 396.31 against a 397.79 market \u2014 the only one of the four to better it; the other three went at or near market, so the five-in-a-row patient-entry streak does NOT extend cleanly and is not claimed here. Next earnings 2026-11-04.",
         "next_earnings_date": "2026-11-06",
-        "days_to_earnings": 59
+        "days_to_earnings": 58,
+        "exit_drift": {
+          "status": "ok",
+          "closes_since_exit_fired": 0,
+          "ladder_state": "HELD"
+        }
       },
       "WMB": {
         "state": "HELD",
@@ -1085,7 +1253,7 @@
           "close": 75.83000183105469,
           "sma20": 73.60450057983398,
           "sma20_5d_ago": 72.75,
-          "atr14": 2.205000196184431,
+          "atr14": 2.205714089529855,
           "consecutive_closes_above": 9,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
@@ -1095,6 +1263,15 @@
           "type": "sma20_close",
           "level": 73.6,
           "detail": "exit on close below SMA20 (73.60)"
+        },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "HELD",
+          "close": 74.68,
+          "sma20": 73.72,
+          "conditions_met": 5,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "WMB",
         "kind": "holding",
@@ -1106,7 +1283,12 @@
         "weeks_in_universe": 2,
         "note": "FILLED 2026-09-02: 85 @ $74.645 on a LIMIT \u2014 Oil & Gas Storage & Transportation. Entry stop (for R) $72.83 = SMA20 on the 2026-09-01 confirmed close, window 2026-08-04..2026-09-01, two independent fetch paths (yf.Ticker.history and yf.download, period='1y', auto_adjust=True) agreeing to 0.0000. || STOP COMPUTED ON A HOLED FRAME \u2014 READ BEFORE TRUSTING THIS R. The 2026-08-28 bar has been absent from this ticker's yfinance frame since 2026-09-01, a third consecutive day, so the 20-bar window ending 2026-09-01 reaches one bar too far back. The supplied figure MATCHED this holed computation exactly and two fetch paths agree to 0.0000 \u2014 but agreement between two reads of the same hole is not verification. UNLIKE the holdings checked on 2026-08-31, THIS ERROR CANNOT BE QUANTIFIED: no 08-28 close was ever recorded for this ticker while the bar existed, so there is nothing to reconstruct from and the direction and size of the error are UNKNOWN. (An earlier estimate of '12-16% on the tightest names' came from the holdings, where reconstruction was possible; it does not transfer here and is not asserted.) WHAT THIS DOES AND DOES NOT AFFECT: the engine monitors against its own SMA20, hole and all, so the operative stop that will actually fire is whatever the engine computes \u2014 this defect does not change when the position exits. It changes the entry_stop stored here, and therefore every R this trade is measured by. The entry_stop is PROVISIONAL. || LIMITED AT OR NEAR MARKET, NOT AT THE 1.8x LINE, AND DELIBERATELY. On all four of this batch the extension line sat ABOVE the market, so a limit placed there would have bought at a worse price and widened the stop distance. Measured for this name: at the line the risk/share would have been $4.07 instead of $1.81, i.e. 2.24x the initial R actually taken. The limit-at-the-line convention is for names trading BELOW their line; applying it blindly to a name trading below-but-approaching would have been worse than having no convention. Recorded so the convention is read as conditional rather than universal. || ATR14 2.2614 = 3.03% of price. Extension at the fill 0.805xATR against a 1.8x line at 76.9, which sat $2.26 ABOVE the fill. R/share $1.815 = 2.43% of price; initial R $154.28; position $6,344.82 = 6.51% of capital.",
         "next_earnings_date": "2026-11-02",
-        "days_to_earnings": 55
+        "days_to_earnings": 54,
+        "exit_drift": {
+          "status": "ok",
+          "closes_since_exit_fired": 0,
+          "ladder_state": "HELD"
+        }
       },
       "OKE": {
         "state": "HELD",
@@ -1163,6 +1345,15 @@
           "level": 94.67,
           "detail": "exit on close below SMA20 (94.67)"
         },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "HELD",
+          "close": 95.34,
+          "sma20": 94.86,
+          "conditions_met": 5,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "OKE",
         "kind": "holding",
         "entry_price": 95.61,
@@ -1173,7 +1364,12 @@
         "weeks_in_universe": 2,
         "note": "FILLED 2026-09-02: 66 @ $95.61 on a LIMIT \u2014 Oil & Gas Storage & Transportation. Entry stop (for R) $92.68 = SMA20 on the 2026-09-01 confirmed close, window 2026-08-04..2026-09-01, two independent fetch paths (yf.Ticker.history and yf.download, period='1y', auto_adjust=True) agreeing to 0.0000. || STOP COMPUTED ON A HOLED FRAME \u2014 READ BEFORE TRUSTING THIS R. The 2026-08-28 bar has been absent from this ticker's yfinance frame since 2026-09-01, a third consecutive day, so the 20-bar window ending 2026-09-01 reaches one bar too far back. The supplied figure MATCHED this holed computation exactly and two fetch paths agree to 0.0000 \u2014 but agreement between two reads of the same hole is not verification. UNLIKE the holdings checked on 2026-08-31, THIS ERROR CANNOT BE QUANTIFIED: no 08-28 close was ever recorded for this ticker while the bar existed, so there is nothing to reconstruct from and the direction and size of the error are UNKNOWN. (An earlier estimate of '12-16% on the tightest names' came from the holdings, where reconstruction was possible; it does not transfer here and is not asserted.) WHAT THIS DOES AND DOES NOT AFFECT: the engine monitors against its own SMA20, hole and all, so the operative stop that will actually fire is whatever the engine computes \u2014 this defect does not change when the position exits. It changes the entry_stop stored here, and therefore every R this trade is measured by. The entry_stop is PROVISIONAL. || LIMITED AT OR NEAR MARKET, NOT AT THE 1.8x LINE, AND DELIBERATELY. On all four of this batch the extension line sat ABOVE the market, so a limit placed there would have bought at a worse price and widened the stop distance. Measured for this name: at the line the risk/share would have been $4.48 instead of $2.93, i.e. 1.53x the initial R actually taken. The limit-at-the-line convention is for names trading BELOW their line; applying it blindly to a name trading below-but-approaching would have been worse than having no convention. Recorded so the convention is read as conditional rather than universal. || ATR14 2.4879 = 2.6% of price. Extension at the fill 1.178xATR against a 1.8x line at 97.16, which sat $1.55 ABOVE the fill. R/share $2.93 = 3.06% of price; initial R $193.38; position $6,310.26 = 6.47% of capital.",
         "next_earnings_date": "2026-10-27",
-        "days_to_earnings": 49
+        "days_to_earnings": 48,
+        "exit_drift": {
+          "status": "ok",
+          "closes_since_exit_fired": 0,
+          "ladder_state": "HELD"
+        }
       },
       "TRGP": {
         "state": "HELD",
@@ -1219,7 +1415,7 @@
           "close": 294.2900085449219,
           "sma20": 288.19800262451173,
           "sma20_5d_ago": 280.5480026245117,
-          "atr14": 7.555722917829241,
+          "atr14": 7.5628662109375,
           "consecutive_closes_above": 17,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
@@ -1229,6 +1425,15 @@
           "type": "sma20_close",
           "level": 288.2,
           "detail": "exit on close below SMA20 (288.20)"
+        },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "HELD",
+          "close": 292.07,
+          "sma20": 289.53,
+          "conditions_met": 5,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "TRGP",
         "kind": "holding",
@@ -1240,7 +1445,12 @@
         "weeks_in_universe": 2,
         "note": "FILLED 2026-09-02: 21 @ $294.96 on a LIMIT \u2014 Oil & Gas Storage & Transportation. Entry stop (for R) $280.96 = SMA20 on the 2026-09-01 confirmed close, window 2026-08-04..2026-09-01, two independent fetch paths (yf.Ticker.history and yf.download, period='1y', auto_adjust=True) agreeing to 0.0000. || STOP COMPUTED ON A HOLED FRAME \u2014 READ BEFORE TRUSTING THIS R. The 2026-08-28 bar has been absent from this ticker's yfinance frame since 2026-09-01, a third consecutive day, so the 20-bar window ending 2026-09-01 reaches one bar too far back. The supplied figure MATCHED this holed computation exactly and two fetch paths agree to 0.0000 \u2014 but agreement between two reads of the same hole is not verification. UNLIKE the holdings checked on 2026-08-31, THIS ERROR CANNOT BE QUANTIFIED: no 08-28 close was ever recorded for this ticker while the bar existed, so there is nothing to reconstruct from and the direction and size of the error are UNKNOWN. (An earlier estimate of '12-16% on the tightest names' came from the holdings, where reconstruction was possible; it does not transfer here and is not asserted.) WHAT THIS DOES AND DOES NOT AFFECT: the engine monitors against its own SMA20, hole and all, so the operative stop that will actually fire is whatever the engine computes \u2014 this defect does not change when the position exits. It changes the entry_stop stored here, and therefore every R this trade is measured by. The entry_stop is PROVISIONAL. || LIMITED AT OR NEAR MARKET, NOT AT THE 1.8x LINE, AND DELIBERATELY. On all four of this batch the extension line sat ABOVE the market, so a limit placed there would have bought at a worse price and widened the stop distance. Measured for this name: at the line the risk/share would have been $16.82 instead of $14.00, i.e. 1.20x the initial R actually taken. The limit-at-the-line convention is for names trading BELOW their line; applying it blindly to a name trading below-but-approaching would have been worse than having no convention. Recorded so the convention is read as conditional rather than universal. || ATR14 9.3429 = 3.17% of price. Extension at the fill 1.498xATR against a 1.8x line at 297.78, which sat $2.82 ABOVE the fill. R/share $14.0 = 4.75% of price; initial R $294.00; position $6,194.16 = 6.35% of capital.",
         "next_earnings_date": "2026-11-05",
-        "days_to_earnings": 58
+        "days_to_earnings": 57,
+        "exit_drift": {
+          "status": "ok",
+          "closes_since_exit_fired": 0,
+          "ladder_state": "HELD"
+        }
       },
       "HPQ": {
         "state": "HELD",
@@ -1297,6 +1507,15 @@
           "level": 30.3,
           "detail": "exit on close below SMA20 (30.30)"
         },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "HELD",
+          "close": 31.68,
+          "sma20": 30.43,
+          "conditions_met": 5,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "HPQ",
         "kind": "holding",
         "entry_price": 32.334,
@@ -1307,7 +1526,12 @@
         "weeks_in_universe": 8,
         "note": "FILLED 2026-09-03: 190 @ $32.334 \u2014 Technology Hardware, Storage & Peripherals. THIS IS THE BOOK'S SECOND NAME IN THAT GROUP: SMCI is already held in it, so the group goes to two positions and $12,813 = 13.14% of capital on the 2026-09-04 close, inside the 20% group cap and inside the 3-position cap. || Stop provenance: derived FROM THE FRAME with the basis bar ASSERTED \u2014 the 20 bars 2026-08-06..2026-09-02, last row of the frame verified to BE 2026-09-02 \u2014 on two independent fetch paths (yf.Ticker.history and yf.download, period='1y', auto_adjust=True) agreeing to 0.0000. THE FRAME CAN PRODUCE THESE STOPS: the 2026-09-02 NaN outage that made every OHLC field null market-wide has resolved, and the 09-02 closes are finite again. THE ENGINE'S 2026-09-02 BAKE ALSO PRODUCED A STOP, AND IT DISAGREES -- the instruction's claim that the bake 'priced nothing' is false, and so was the first version of this note, which repeated it. Commit 4ad78dc (2026-09-02T21:59:36Z, post-splitter, r28 degraded=false, zero unpriced rows) publishes grade_inputs for this ticker on the 09-02 close. THE ENGINE'S VALUE IS THE WRONG ONE, and the cause is demonstrated rather than guessed: dropping the single 2026-08-28 bar from today's frame reproduces the engine's published sma20 AND its atr14 SIMULTANEOUSLY, for HPQ, OXY and CNC at once. For HPQ the ATR is what disambiguates -- two candidate bars (08-26 and 08-28) both reproduce the sma20 because both closed at 30.52, but only 08-28 also reproduces the atr14. That is the same missing-bar defect the open SMA20 chip documents and the same bar that had vanished from FTNT's frame on 2026-09-01; it has since healed, which is why the frame can produce the basis-correct value today and the engine could not on the night. The frame value is therefore recorded and the engine's is recorded here beside it, neither silently preferred. entry_stop $29.92 = SMA20 on the 2026-09-02 confirmed close (29.9185 unrounded). THE SUPPLIED FIGURE WAS ~30.00 AND THE FRAME SAYS 29.92 \u2014 a divergence of $0.08, recorded rather than smoothed over; the frame governs because the instruction for these entries was explicitly to derive the stops from it. || RISK, ON THE FRAME STOP: $2.4140 per share = 7.47% of the fill; initial R $458.66 on 190 shares. The figures supplied with the instruction (~$443 risk, ext ~1.69x, ~7.22% per share) were computed off the ~30.00 stop; on the frame they become $458.66, 1.701x and 7.47%. ATR14 1.4200 = 4.39% of price (supplied ~4.3%). || THE WIDTH, WHICH IS THE POINT OF THIS ROW: 7.47% per share is the WIDEST OF THE FIFTEEN POSITIONS NOW HELD, ahead of SMCI's 7.24%. IT IS NOT THE WIDEST THE BOOK HAS EVER TAKEN, and the instruction's phrasing would have made it so: across all 35 entries on record it ranks 32nd, with NET 7.71%, DELL 7.98% and VSAT 9.31% wider, all three closed. On the supplied ~30.00 stop it would be 7.22% and 31st. The correction is recorded because a superlative in a permanent record has to be true; the entry decision itself is the operator's and is not re-argued here. || EXTENSION: 1.701xATR, INSIDE the 1.8x guard \u2014 the line sits at 29.9185 + 1.8 x 1.4200 = $32.4745, which is $0.14 ABOVE the fill. HPQ also sat 20.5% above its SMA50 at the 09-02 close (supplied ~19.8%) and 0.7% BELOW its 52-week intraday high \u2014 i.e. at the top of its range, not a pullback. Position $6,143.46 at cost = 6.30% of capital, inside the 5-8% target band. || Graded A+ with zero failing rows in the artifact fetched 2026-09-08T19:29Z; that is TODAY'S grade on the 09-04 close, NOT the grade at entry, and must not be read as one \u2014 no artifact from 2026-09-02 or 09-03 exists to supply the entry-date grade. || NOTE FOR A FUTURE READER: this position went THREE TRADING SESSIONS (2026-09-03, 09-04, 09-08) with the engine monitoring no stop on it at all, because positions.json was stale, and TWO CONFIRMED CLOSES passed in that window without it. The instruction called it five sessions; that is five CALENDAR days -- 2026-09-07 was Labor Day and 09-05/09-06 the weekend, so the market was open on three of them. It did not break in that window. That is luck, not evidence, and the count is stated in sessions rather than days because the doctrine transitions on confirmed closes, not on dates. || ENGINE'S PUBLISHED FIGURES ON THE SAME CLOSE, FOR THE RECORD: sma20 29.8185, atr14 1.5107 (4ad78dc). Frame: ('29.9185', '1.4200'). Divergence explained above; the stop stored is the frame's.",
         "next_earnings_date": "2026-11-24",
-        "days_to_earnings": 77
+        "days_to_earnings": 76,
+        "exit_drift": {
+          "status": "ok",
+          "closes_since_exit_fired": 0,
+          "ladder_state": "HELD"
+        }
       },
       "OXY": {
         "state": "HELD",
@@ -1364,6 +1588,15 @@
           "level": 59.71,
           "detail": "exit on close below SMA20 (59.71)"
         },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "HELD",
+          "close": 61.23,
+          "sma20": 59.82,
+          "conditions_met": 5,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "OXY",
         "kind": "holding",
         "entry_price": 60.795,
@@ -1374,7 +1607,12 @@
         "weeks_in_universe": 4,
         "note": "FILLED 2026-09-03: 100 @ $60.795 \u2014 Oil & Gas Exploration & Production. THIS TAKES THE GROUP TO THREE NAMES (DVN, EQT, OXY) AND THEREFORE TO THE R28 POSITION CAP: group_max_positions is 3, so the group is now AT the limit, not near it \u2014 a fourth E&P name would breach. Group value $14,621.59 = 15.00% of capital on the 09-04 close, inside the 20% cap. || Stop provenance: derived FROM THE FRAME with the basis bar ASSERTED \u2014 the 20 bars 2026-08-06..2026-09-02, last row of the frame verified to BE 2026-09-02 \u2014 on two independent fetch paths (yf.Ticker.history and yf.download, period='1y', auto_adjust=True) agreeing to 0.0000. THE FRAME CAN PRODUCE THESE STOPS: the 2026-09-02 NaN outage that made every OHLC field null market-wide has resolved, and the 09-02 closes are finite again. THE ENGINE'S 2026-09-02 BAKE ALSO PRODUCED A STOP, AND IT DISAGREES -- the instruction's claim that the bake 'priced nothing' is false, and so was the first version of this note, which repeated it. Commit 4ad78dc (2026-09-02T21:59:36Z, post-splitter, r28 degraded=false, zero unpriced rows) publishes grade_inputs for this ticker on the 09-02 close. THE ENGINE'S VALUE IS THE WRONG ONE, and the cause is demonstrated rather than guessed: dropping the single 2026-08-28 bar from today's frame reproduces the engine's published sma20 AND its atr14 SIMULTANEOUSLY, for HPQ, OXY and CNC at once. For HPQ the ATR is what disambiguates -- two candidate bars (08-26 and 08-28) both reproduce the sma20 because both closed at 30.52, but only 08-28 also reproduces the atr14. That is the same missing-bar defect the open SMA20 chip documents and the same bar that had vanished from FTNT's frame on 2026-09-01; it has since healed, which is why the frame can produce the basis-correct value today and the engine could not on the night. The frame value is therefore recorded and the engine's is recorded here beside it, neither silently preferred. entry_stop $59.17 = SMA20 on the 2026-09-02 confirmed close (59.1735 unrounded). THE SUPPLIED FIGURE WAS ~59.27; the frame says 59.17, a divergence of $0.10. || RISK, ON THE FRAME STOP: $1.6250 per share = 2.67% of the fill; initial R $162.50 on 100 shares. Supplied figures (~$152, ext ~1.16x, ~2.51% per share) were computed off ~59.27. ATR14 1.3250. || THE 'SECOND-TIGHTEST ENTRY THE BOOK HAS TAKEN' CLAIM DOES NOT HOLD, AND THE CORRECTION IS THE USEFUL PART. At 2.67% of price OXY ranks 8TH of the 35 entries on record, behind EQT 1.14%, JNJ 1.21%, BIIB 1.91%, ELV 2.03%, WMB 2.43%, FANG 2.60% and AMCR 2.60%. On the SUPPLIED 59.27 stop it would be 2.51% and 7th \u2014 still not second. Among the fifteen positions currently held it is 5th tightest. EQT at 1.14% is correctly identified as the tightest; it is the 'second' that is wrong. || EXTENSION: 1.224xATR, comfortably inside the 1.8x guard \u2014 the line sits at 59.1735 + 1.8 x 1.3250 = $61.5585, which is $0.76 ABOVE the fill. || THE SHAPE OF THE ENTRY IS AS DESCRIBED AND CHECKS OUT: OXY was the only one of the three meaningfully off its high \u2014 9.5% below its 52-week INTRADAY high (7.8% below its highest close; the supplied 9.2% sits between the two conventions) against HPQ at 0.7% and CNC at 1.9% below theirs \u2014 and it sat 9.0% above a RISING SMA50, so a pullback above a rising SMA50 rather than a name at the top of its range. Position $6,079.50 at cost = 6.24% of capital. || GRADED C IN TODAY'S ARTIFACT (2026-09-08T19:29Z), failing 3_approach ('close 60.04 below SMA5 60.54 \u2014 arriving from above') and 5_score (66 < 75). That is today's reading on the 09-04 close, NOT the grade at entry, and no artifact exists for the entry date to supply one. It is recorded because a holding the grader now marks C is a fact about the book, not an argument about the entry. || Went three trading sessions (2026-09-03, 09-04, 09-08) and two confirmed closes unmonitored alongside HPQ and CNC -- five calendar days, but 09-07 was Labor Day. Did not break. || ENGINE'S PUBLISHED FIGURES ON THE SAME CLOSE, FOR THE RECORD: sma20 58.9090, atr14 1.3596 (4ad78dc). Frame: ('59.1735', '1.3250'). Divergence explained above; the stop stored is the frame's.",
         "next_earnings_date": "2026-11-09",
-        "days_to_earnings": 62
+        "days_to_earnings": 61,
+        "exit_drift": {
+          "status": "ok",
+          "closes_since_exit_fired": 0,
+          "ladder_state": "HELD"
+        }
       },
       "CNC": {
         "state": "EXIT_FIRED",
@@ -1432,6 +1670,15 @@
           "level": 65.58,
           "detail": "exit on close below SMA20 (65.58)"
         },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "WATCHING",
+          "close": 64.33,
+          "sma20": 65.56,
+          "conditions_met": 3,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "CNC",
         "kind": "holding",
         "entry_price": 68.02,
@@ -1442,7 +1689,13 @@
         "weeks_in_universe": 8,
         "note": "FILLED 2026-09-03: 92 @ $68.020 \u2014 Managed Health Care. THIS IS THE BOOK'S SECOND NAME IN THAT GROUP: HUM is already held in it, so the group goes to two positions and $12,190.78 = 12.50% of capital on the 09-04 close, inside both caps. ELV was also Managed Health Care and was stopped out 2026-08-31 at -0.912R, so this is a group the book has already lost money in this month \u2014 a fact about the group's recent behaviour, recorded so a future reader does not re-derive it, not an argument against the entry. || Stop provenance: derived FROM THE FRAME with the basis bar ASSERTED \u2014 the 20 bars 2026-08-06..2026-09-02, last row of the frame verified to BE 2026-09-02 \u2014 on two independent fetch paths (yf.Ticker.history and yf.download, period='1y', auto_adjust=True) agreeing to 0.0000. THE FRAME CAN PRODUCE THESE STOPS: the 2026-09-02 NaN outage that made every OHLC field null market-wide has resolved, and the 09-02 closes are finite again. THE ENGINE'S 2026-09-02 BAKE ALSO PRODUCED A STOP, AND IT DISAGREES -- the instruction's claim that the bake 'priced nothing' is false, and so was the first version of this note, which repeated it. Commit 4ad78dc (2026-09-02T21:59:36Z, post-splitter, r28 degraded=false, zero unpriced rows) publishes grade_inputs for this ticker on the 09-02 close. THE ENGINE'S VALUE IS THE WRONG ONE, and the cause is demonstrated rather than guessed: dropping the single 2026-08-28 bar from today's frame reproduces the engine's published sma20 AND its atr14 SIMULTANEOUSLY, for HPQ, OXY and CNC at once. For HPQ the ATR is what disambiguates -- two candidate bars (08-26 and 08-28) both reproduce the sma20 because both closed at 30.52, but only 08-28 also reproduces the atr14. That is the same missing-bar defect the open SMA20 chip documents and the same bar that had vanished from FTNT's frame on 2026-09-01; it has since healed, which is why the frame can produce the basis-correct value today and the engine could not on the night. The frame value is therefore recorded and the engine's is recorded here beside it, neither silently preferred. entry_stop $65.43 = SMA20 on the 2026-09-02 confirmed close (65.4300 unrounded). THE SUPPLIED FIGURE WAS ~65.62; the frame says 65.43, a divergence of $0.19 \u2014 the largest of the three. || RISK, ON THE FRAME STOP: $2.5900 per share = 3.81% of the fill; initial R $238.28 on 92 shares. Supplied figures (~$221, ext ~1.28x) were computed off ~65.62. ATR14 1.8457 = 2.71% of price. || EXTENSION: 1.403xATR, inside the 1.8x guard \u2014 the line sits at 65.4300 + 1.8 x 1.8457 = $68.7523, which is $0.73 ABOVE the fill. || Sat 4.0% above a rising SMA50 and 1.9% below its 52-week intraday high. Position $6,257.84 at cost = 6.42% of capital, the largest of the three at entry. || Graded A+ with zero failing rows in the artifact fetched 2026-09-08T19:29Z \u2014 again TODAY'S grade on the 09-04 close, not the grade at entry. || Went three trading sessions (2026-09-03, 09-04, 09-08) and two confirmed closes unmonitored -- five calendar days, but 09-07 was Labor Day. Did not break. || ENGINE'S PUBLISHED FIGURES ON THE SAME CLOSE, FOR THE RECORD: sma20 65.5420, atr14 1.8925 (4ad78dc). Frame: ('65.4300', '1.8457'). Divergence explained above; the stop stored is the frame's.",
         "next_earnings_date": "2026-10-27",
-        "days_to_earnings": 49
+        "days_to_earnings": 48,
+        "exit_drift": {
+          "status": "action_needed",
+          "closes_since_exit_fired": null,
+          "ladder_state": "EXIT_FIRED",
+          "message": "CNC: the ladder has it EXIT_FIRED and the book still holds it \u2014 HOW LONG IS UNMEASURED (no HELD close on record to count from). The drift is real; only its length is unknown."
+        }
       },
       "ARWR": {
         "state": "WATCHING",
@@ -1524,7 +1777,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "55 sessions before the print (\u2265 15)"
+              "detail": "54 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -1542,7 +1795,16 @@
           "ytd_basis": "prior_year_close",
           "score_waived": false,
           "breaker_status": "clear",
-          "runway_sessions": 55
+          "runway_sessions": 54
+        },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "WATCHING",
+          "close": 84.33,
+          "sma20": 86.55,
+          "conditions_met": 2,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "ARWR",
         "kind": "watching",
@@ -1551,7 +1813,7 @@
         "weeks_in_universe": 5,
         "note": "sold 71 @ 76.40 2026-07-10 MOC \u2014 sma20_close stop fired at 7/9 close; watching for reclaim",
         "next_earnings_date": "2026-11-24",
-        "days_to_earnings": 77
+        "days_to_earnings": 76
       },
       "MRNA": {
         "state": "RE_ENTRY_READY",
@@ -1598,7 +1860,7 @@
           "close": 140.3300018310547,
           "sma20": 121.98850135803222,
           "sma20_5d_ago": 99.30125141143799,
-          "atr14": 23.187136513846262,
+          "atr14": 23.187144143240793,
           "consecutive_closes_above": 22,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
@@ -1613,7 +1875,7 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension 0.7910205066533242\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension 0.7910202463794633\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": false,
@@ -1633,7 +1895,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "42 sessions before the print (\u2265 15)"
+              "detail": "41 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -1650,9 +1912,18 @@
           "ytd_basis": "prior_year_close",
           "score_waived": false,
           "breaker_status": "clear",
-          "runway_sessions": 42
+          "runway_sessions": 41
         },
         "grade_gate": "READY blocked \u2014 grade C under Choppy (A+ required): close 140.33 below SMA5 147.97 \u2014 arriving from above; score 57 < 75",
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "RE_ENTRY_READY",
+          "close": 137.57,
+          "sma20": 125.84,
+          "conditions_met": 5,
+          "a_plus_only": true,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "MRNA",
         "kind": "watching",
         "theme": "Biotech",
@@ -1660,7 +1931,7 @@
         "weeks_in_universe": 5,
         "note": "theme momentum leader +158% YTD; dashboard score 55, outranked",
         "next_earnings_date": "2026-11-05",
-        "days_to_earnings": 58
+        "days_to_earnings": 57
       },
       "GEN": {
         "state": "RE_ENTRY_READY",
@@ -1742,7 +2013,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "42 sessions before the print (\u2265 15)"
+              "detail": "41 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -1754,14 +2025,23 @@
         "grade_inputs": {
           "sma5": 30.49199981689453,
           "up_close_since_swing_low": true,
-          "rsi14": 54.84392703611303,
+          "rsi14": 54.843927044123056,
           "quality_score": 60,
           "ytd_basis": "prior_year_close",
           "score_waived": false,
           "breaker_status": "clear",
-          "runway_sessions": 42
+          "runway_sessions": 41
         },
         "grade_gate": "READY blocked \u2014 grade C under Choppy (A+ required): close 29.81 below SMA5 30.49 \u2014 arriving from above; score 60 < 75",
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "RE_ENTRY_READY",
+          "close": 29.69,
+          "sma20": 29.44,
+          "conditions_met": 5,
+          "a_plus_only": true,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "GEN",
         "kind": "watching",
         "theme": null,
@@ -1769,7 +2049,7 @@
         "weeks_in_universe": 8,
         "note": "SOLD 218 @ $27.66 2026-08-18 (discretionary \u2014 see overrides). Entry 2026-08-12 @ $28.40, entry_stop 27.31. Proceeds $6,029.88 less $0.16 fee; P&L \u2212$161.32 = \u22120.68R (R/share $1.09). Original add 2026-07-18 off the Layer-2 GICS view \u2014 Systems Software #1 (breaker clear), score 72 BUY NOW, +5.2% vs SMA20, RSI 61 at add; watching for reclaim || NON-FILL 2026-08-27, RECORDED BECAUSE IT IS THE GUARD WORKING, NOT A MISS: a limit was placed at 30.23 \u2014 GEN's own 1.8xATR extension line (SMA20 28.3826 + 1.8 x ATR14 1.0274 on the 2026-08-26 confirmed close, frame-verified, two paths to 0.0000) \u2014 and GEN traded ABOVE it for the whole session, so nothing filled. No trade exists and none is recorded in closed[]; this sits on the watching row because that is the only durable record GEN has, and a non-fill belongs with the name rather than in a trade ledger it never entered. GEN read A+ / RE_ENTRY_READY at 1.229xATR that morning and was declined by price, not by grade. Context for why the line is where it is: past-the-line entries were measured at +0.0186R across 16 trades and $174 over six years, i.e. indistinguishable from nothing, which is the case for not chasing rather than a case for the line's exact value. || SECOND NON-FILL OF THE SAME CLASS, HAL 2026-08-28, recorded here because GEN's row is the only durable place the book keeps non-fills and there is no HAL record to attach it to: a limit at 35.49 was placed at 10:14 with HAL at 35.93; HAL's Friday low was 35.32, so the price did trade through the limit, but the 35.32 print almost certainly PRECEDED the 10:14 placement. Operator confirmed on 2026-09-01 that it did NOT fill. It was withheld from the ledger on 2026-08-31 for want of a fill record rather than added on the strength of the range \u2014 the price reaching a limit is not evidence the limit filled, and recording it would have been a reconstruction wearing a measurement, the D-019 shape.",
         "next_earnings_date": "2026-11-05",
-        "days_to_earnings": 58
+        "days_to_earnings": 57
       },
       "JBHT": {
         "state": "RE_ENTRY_ARMING",
@@ -1815,7 +2095,7 @@
           "close": 274.7799987792969,
           "sma20": 269.5195022583008,
           "sma20_5d_ago": 270.3269378662109,
-          "atr14": 8.369817461286273,
+          "atr14": 8.369996207101005,
           "consecutive_closes_above": 2,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": false,
@@ -1830,7 +2110,7 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension 0.6285079149369691\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension 0.6284944928091041\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": true,
@@ -1850,7 +2130,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "26 sessions before the print (\u2265 15)"
+              "detail": "25 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -1863,12 +2143,21 @@
         "grade_inputs": {
           "sma5": 266.3059997558594,
           "up_close_since_swing_low": true,
-          "rsi14": 54.20267936089611,
+          "rsi14": 54.20267936576706,
           "quality_score": 72,
           "ytd_basis": "prior_year_close",
           "score_waived": false,
           "breaker_status": null,
-          "runway_sessions": 26
+          "runway_sessions": 25
+        },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "WATCHING",
+          "close": 267.54,
+          "sma20": 269.63,
+          "conditions_met": 2,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "JBHT",
         "kind": "watching",
@@ -1877,7 +2166,7 @@
         "weeks_in_universe": null,
         "note": "added 2026-07-19 via +watch (D-017 candidate, graded A+) \u2014 Cargo Ground Transportation (breaker clear), score 92 BUY NOW, +3.8% vs SMA20, RSI 58 at add",
         "next_earnings_date": "2026-10-14",
-        "days_to_earnings": 36
+        "days_to_earnings": 35
       },
       "CFG": {
         "state": "WATCHING",
@@ -1959,7 +2248,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "28 sessions before the print (\u2265 15)"
+              "detail": "27 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -1977,7 +2266,16 @@
           "ytd_basis": "prior_year_close",
           "score_waived": false,
           "breaker_status": null,
-          "runway_sessions": 28
+          "runway_sessions": 27
+        },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "WATCHING",
+          "close": 69.19,
+          "sma20": 70.94,
+          "conditions_met": 1,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "CFG",
         "kind": "watching",
@@ -1986,7 +2284,7 @@
         "weeks_in_universe": null,
         "note": "added 2026-07-19 via +watch (D-017 candidate, graded A+) \u2014 Regional Banks (breaker clear), score 81 BUY NOW, +2.7% vs SMA20, RSI 61 at add",
         "next_earnings_date": "2026-10-16",
-        "days_to_earnings": 38
+        "days_to_earnings": 37
       },
       "RF": {
         "state": "WATCHING",
@@ -2033,7 +2331,7 @@
           "close": 30.06999969482422,
           "sma20": 30.472093486785887,
           "sma20_5d_ago": 30.790720844268797,
-          "atr14": 0.5801634905669584,
+          "atr14": 0.5805207097180466,
           "consecutive_closes_above": 0,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": false,
@@ -2048,7 +2346,7 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension -0.6930697958410427\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension -0.6926433204372013\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": true,
@@ -2068,7 +2366,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "28 sessions before the print (\u2265 15)"
+              "detail": "27 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -2086,7 +2384,16 @@
           "ytd_basis": "prior_year_close",
           "score_waived": false,
           "breaker_status": null,
-          "runway_sessions": 28
+          "runway_sessions": 27
+        },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "WATCHING",
+          "close": 29.81,
+          "sma20": 30.4,
+          "conditions_met": 1,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "RF",
         "kind": "watching",
@@ -2095,7 +2402,7 @@
         "weeks_in_universe": null,
         "note": "added 2026-07-19 via +watch (D-017 candidate, graded A+) \u2014 Regional Banks (breaker clear), score 75 BUY NOW, +4.1% vs SMA20, RSI 64 at add",
         "next_earnings_date": "2026-10-16",
-        "days_to_earnings": 38
+        "days_to_earnings": 37
       },
       "MTB": {
         "state": "WATCHING",
@@ -2132,7 +2439,7 @@
         "conditions_met": 1,
         "all_conditions_met": false,
         "extension_pct": -1.4,
-        "extension_atr": -0.76,
+        "extension_atr": -0.75,
         "distance_to_sma20_pct": -1.4,
         "close": 238.44,
         "sma5": 237.17,
@@ -2142,7 +2449,7 @@
           "close": 238.44000244140625,
           "sma20": 241.82406768798828,
           "sma20_5d_ago": 244.96516799926758,
-          "atr14": 4.475719734134417,
+          "atr14": 4.482861937329171,
           "consecutive_closes_above": 0,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": false,
@@ -2157,7 +2464,7 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension -0.7560940915878165\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension -0.7548894643403196\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": true,
@@ -2177,7 +2484,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "28 sessions before the print (\u2265 15)"
+              "detail": "27 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -2195,7 +2502,16 @@
           "ytd_basis": "prior_year_close",
           "score_waived": false,
           "breaker_status": null,
-          "runway_sessions": 28
+          "runway_sessions": 27
+        },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "WATCHING",
+          "close": 237.63,
+          "sma20": 241.18,
+          "conditions_met": 1,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "MTB",
         "kind": "watching",
@@ -2204,7 +2520,7 @@
         "weeks_in_universe": null,
         "note": "added 2026-07-22 via +watch (D-017 candidate, graded A+ \u2014 the day's only A+) \u2014 Regional Banks (breaker clear), score 75 BUY NOW, +3.5% vs SMA20, RSI 67 at add",
         "next_earnings_date": "2026-10-16",
-        "days_to_earnings": 38
+        "days_to_earnings": 37
       },
       "CRWD": {
         "state": "RE_ENTRY_ARMING",
@@ -2219,7 +2535,7 @@
             "met": true,
             "detail": "2/2 consecutive closes above SMA20",
             "consecutive_closes_above": 3,
-            "atr14": 14.03
+            "atr14": 14.04
           },
           "3_regime_gate": {
             "met": true,
@@ -2250,7 +2566,7 @@
           "close": 210.02000427246094,
           "sma20": 209.8039993286133,
           "sma20_5d_ago": 210.37749862670898,
-          "atr14": 14.03493172781808,
+          "atr14": 14.035646711077009,
           "consecutive_closes_above": 3,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
@@ -2265,7 +2581,7 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension 0.015390523305469007\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension 0.015389739304080538\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": false,
@@ -2285,7 +2601,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "60 sessions before the print (\u2265 15)"
+              "detail": "59 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -2303,7 +2619,16 @@
           "ytd_basis": "prior_year_close",
           "score_waived": false,
           "breaker_status": "clear",
-          "runway_sessions": 60
+          "runway_sessions": 59
+        },
+        "intraday_preview": {
+          "as_of": "2026-09-09",
+          "would_state": "WATCHING",
+          "close": 208.66,
+          "sma20": 209.14,
+          "conditions_met": 2,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "CRWD",
         "kind": "watching",
@@ -2312,122 +2637,27 @@
         "weeks_in_universe": 8,
         "note": "sold 24 @ 189.085 2026-07-23 09:31 ET open \u2014 sma20_close stop fired at the 7/22 close (188.42 vs SMA20 191.89); realized \u2212$264.36 on the 7/20 entry @ 200.10 (entered via D-017 funnel A+ 7/18, held 2 sessions); watching for reclaim",
         "next_earnings_date": "2026-12-01",
-        "days_to_earnings": 84
+        "days_to_earnings": 83
       }
     },
-    "transitions": [
-      {
-        "timestamp": "2026-09-08T22:21:39.376375+00:00",
-        "type": "position_state_change",
-        "severity": "critical",
-        "group": "Biotechnology",
-        "ticker": "BIIB",
-        "description": "BIIB: HELD \u2192 EXIT_FIRED",
-        "detail": {
-          "from_state": "HELD",
-          "to_state": "EXIT_FIRED",
-          "close": 212.5,
-          "sma20": 216.04,
-          "extension_pct": -1.64,
-          "extension_atr": -0.59,
-          "conditions_met": "3/5",
-          "stop": "exit on close below SMA20 (216.04)",
-          "bar_date": "2026-09-08"
-        }
-      },
-      {
-        "timestamp": "2026-09-08T22:21:39.968021+00:00",
-        "type": "position_state_change",
-        "severity": "critical",
-        "group": "Pharmaceuticals",
-        "ticker": "BMY",
-        "description": "BMY: HELD \u2192 EXIT_FIRED",
-        "detail": {
-          "from_state": "HELD",
-          "to_state": "EXIT_FIRED",
-          "close": 64.69,
-          "sma20": 66.19,
-          "extension_pct": -2.27,
-          "extension_atr": -0.97,
-          "conditions_met": "3/5",
-          "stop": "exit on close below SMA20 (66.19)",
-          "bar_date": "2026-09-08"
-        }
-      },
-      {
-        "timestamp": "2026-09-08T22:21:40.857638+00:00",
-        "type": "position_state_change",
-        "severity": "medium",
-        "group": "Technology Hardware, Storage & Peripherals",
-        "ticker": "HPQ",
-        "description": "HPQ: untracked \u2192 HELD",
-        "detail": {
-          "from_state": null,
-          "to_state": "HELD",
-          "close": 31.17,
-          "sma20": 30.3,
-          "extension_pct": 2.86,
-          "extension_atr": 0.59,
-          "conditions_met": "5/5",
-          "bar_date": "2026-09-08"
-        }
-      },
-      {
-        "timestamp": "2026-09-08T22:21:40.933487+00:00",
-        "type": "position_state_change",
-        "severity": "medium",
-        "group": "Oil & Gas Exploration & Production",
-        "ticker": "OXY",
-        "description": "OXY: untracked \u2192 HELD",
-        "detail": {
-          "from_state": null,
-          "to_state": "HELD",
-          "close": 60.65,
-          "sma20": 59.71,
-          "extension_pct": 1.58,
-          "extension_atr": 0.69,
-          "conditions_met": "5/5",
-          "bar_date": "2026-09-08"
-        }
-      },
-      {
-        "timestamp": "2026-09-08T22:21:41.027011+00:00",
-        "type": "position_state_change",
-        "severity": "critical",
-        "group": "Managed Health Care",
-        "ticker": "CNC",
-        "description": "CNC: untracked \u2192 EXIT_FIRED",
-        "detail": {
-          "from_state": null,
-          "to_state": "EXIT_FIRED",
-          "close": 64.58,
-          "sma20": 65.58,
-          "extension_pct": -1.53,
-          "extension_atr": -0.56,
-          "conditions_met": "3/5",
-          "stop": "exit on close below SMA20 (65.58)",
-          "bar_date": "2026-09-08"
-        }
-      },
-      {
-        "timestamp": "2026-09-08T22:21:42.648385+00:00",
-        "type": "position_state_change",
-        "severity": "medium",
-        "group": "Systems Software",
-        "ticker": "CRWD",
-        "description": "CRWD: RE_ENTRY_READY \u2192 RE_ENTRY_ARMING",
-        "detail": {
-          "from_state": "RE_ENTRY_READY",
-          "to_state": "RE_ENTRY_ARMING",
-          "close": 210.02,
-          "sma20": 209.8,
-          "extension_pct": 0.1,
-          "extension_atr": 0.02,
-          "conditions_met": "4/5",
-          "bar_date": "2026-09-08"
-        }
-      }
-    ]
+    "transitions": [],
+    "exit_drift_summary": {
+      "status": "action_needed",
+      "drifting": [
+        "BIIB",
+        "MSI",
+        "BMY",
+        "CNC"
+      ],
+      "unmeasured": [],
+      "not_evaluated": [],
+      "holdings_total": 15,
+      "measured": 15,
+      "worst_closes_since_exit_fired": 0,
+      "message": "4 holdings fired and still held: BIIB length UNMEASURED; MSI length UNMEASURED; BMY length UNMEASURED; CNC length UNMEASURED",
+      "basis": "confirmed closes (never wall-clock days)",
+      "covers": "EXIT side only \u2014 an unrecorded ENTRY is invisible to this engine by construction; it needs a broker-side input that does not exist on this machine"
+    }
   },
   "r28": {
     "status": "ok",
@@ -2717,7 +2947,7 @@
     }
   },
   "rules": {
-    "date": "2026-09-08",
+    "date": "2026-09-09",
     "evaluations": [
       {
         "rule": "R1",
@@ -3052,7 +3282,7 @@
   "candidate_grades": {
     "SNDK": {
       "grade": "C",
-      "reasons": "extension 1.8004550182909678\u00d7ATR > 1.8\u00d7",
+      "reasons": "extension 1.800417064171583\u00d7ATR > 1.8\u00d7",
       "failing": [
         "2_extension"
       ],
@@ -3060,7 +3290,7 @@
     },
     "DELL": {
       "grade": "C",
-      "reasons": "extension 2.1784801872000754\u00d7ATR > 1.8\u00d7",
+      "reasons": "extension 2.1782379465865094\u00d7ATR > 1.8\u00d7",
       "failing": [
         "2_extension"
       ],
@@ -3095,7 +3325,7 @@
     },
     "MPC": {
       "grade": "C",
-      "reasons": "extension 3.0137226897878944\u00d7ATR > 1.8\u00d7; RSI 81 outside [45, 70]; score 74 < 75",
+      "reasons": "extension 3.012900103515788\u00d7ATR > 1.8\u00d7; RSI 81 outside [45, 70]; score 74 < 75",
       "failing": [
         "2_extension",
         "4_rsi",
@@ -3114,7 +3344,7 @@
     },
     "PSX": {
       "grade": "C",
-      "reasons": "extension 2.4678027590080065\u00d7ATR > 1.8\u00d7; RSI 77 outside [45, 70]",
+      "reasons": "extension 2.4657275796325995\u00d7ATR > 1.8\u00d7; RSI 77 outside [45, 70]",
       "failing": [
         "2_extension",
         "4_rsi"
@@ -3186,37 +3416,41 @@
     },
     "TER": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; score 63 < 75",
+      "reasons": "five mechanical conditions not met; score 63 < 75; group breaker warning",
       "failing": [
         "1_conditions",
-        "5_score"
+        "5_score",
+        "6_breaker"
       ],
       "group": "Semiconductor Materials & Equipment"
     },
     "ALAB": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; score 59 < 75",
+      "reasons": "five mechanical conditions not met; score 59 < 75; group breaker warning",
       "failing": [
         "1_conditions",
-        "5_score"
+        "5_score",
+        "6_breaker"
       ],
       "group": "Semiconductor Materials & Equipment"
     },
     "ASML": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; score 71 < 75",
+      "reasons": "five mechanical conditions not met; score 71 < 75; group breaker warning",
       "failing": [
         "1_conditions",
-        "5_score"
+        "5_score",
+        "6_breaker"
       ],
       "group": "Semiconductor Materials & Equipment"
     },
     "KLAC": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; score 72 < 75",
+      "reasons": "five mechanical conditions not met; score 72 < 75; group breaker warning",
       "failing": [
         "1_conditions",
-        "5_score"
+        "5_score",
+        "6_breaker"
       ],
       "group": "Semiconductor Materials & Equipment"
     },
@@ -3288,7 +3522,7 @@
     },
     "MOS": {
       "grade": "C",
-      "reasons": "extension 2.375567370581468\u00d7ATR > 1.8\u00d7; RSI 70 outside [45, 70]",
+      "reasons": "extension 2.3741490892668575\u00d7ATR > 1.8\u00d7; RSI 70 outside [45, 70]",
       "failing": [
         "2_extension",
         "4_rsi"
