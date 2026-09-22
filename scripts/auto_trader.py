@@ -72,6 +72,8 @@ class Guards:
     token_valid: bool = True
     adapter_allowed: bool = True
     stage_one_share: bool = True
+    us_listing_only: bool = True
+    usd_only: bool = True
 
 
 @dataclasses.dataclass
@@ -267,7 +269,8 @@ def compute_entries(artifact: dict, frame: Callable[[str], dict],
                     scores: dict[str, float], broker_positions: dict[str, int],
                     broker_value: Callable[[str], float], capital: float,
                     target_session: str, guards: Guards,
-                    refusals: list[Refused], selection: str = "risk_first"
+                    refusals: list[Refused], selection: str = "risk_first",
+                    venue_of: Callable[[str], Any] | None = None
                     ) -> tuple[list[Intent], list[str]]:
     """(spec 5) Every A+ on both paths, minus what the broker holds, sized
     at 6.5%, bought on a limit at the 1.8x line, stopped at the frame SMA20.
@@ -295,6 +298,31 @@ def compute_entries(artifact: dict, frame: Callable[[str], dict],
             refusals.append(Refused(tk, "buy", "ALREADY_HELD",
                                     f"broker holds {broker_positions[tk]}"))
             continue
+        # DEFENCE IN DEPTH, INDEPENDENT OF THE POOL FILTER. 3443.TW reached
+        # the dashboard because pool construction never asked where a
+        # security is listed. If that gate ever regresses, this one still
+        # refuses: the automation must be unable to place an order for a
+        # foreign listing, and unable to size off a price that is not in
+        # dollars. A missing resolver is treated as unknown, and unknown
+        # refuses — the same safe direction the pool filter takes.
+        if guards.us_listing_only or guards.usd_only:
+            import listing_venue as lv
+            v = lv.classify(tk, venue_of) if venue_of else None
+            if v is None:
+                refusals.append(Refused(tk, "buy", "VENUE_UNKNOWN",
+                                        "no venue resolver supplied — an "
+                                        "unverified listing cannot be bought"))
+                continue
+            if guards.us_listing_only and not v.us_listed:
+                refusals.append(Refused(tk, "buy", "VENUE_NOT_US", v.reason))
+                continue
+            if guards.usd_only:
+                try:
+                    lv.assert_usd(tk, v)
+                except ValueError as e:
+                    refusals.append(Refused(tk, "buy", "CURRENCY_NOT_USD",
+                                            str(e)))
+                    continue
         f = frame(tk)
         close, sma, atr = f.get("close"), f.get("sma20"), f.get("atr14")
         if None in (close, sma, atr) or atr <= 0 or sma <= 0:
@@ -454,7 +482,8 @@ def run(*, artifact: dict, ladder_state: dict, broker, frame, scores: dict,
         stage: str = "shadow", guards: Guards | None = None,
         kill_reader: Callable[[], Any] | None = None,
         store: dict | None = None, selection: str = "risk_first",
-        secrets: list[str] | None = None) -> dict:
+        secrets: list[str] | None = None,
+        venue_of: Callable[[str], Any] | None = None) -> dict:
     """One evening run. Returns the record that is logged and Slacked.
 
     Order of operations is deliberate: the kill switch and the bake gates
@@ -495,7 +524,8 @@ def run(*, artifact: dict, ladder_state: dict, broker, frame, scores: dict,
     sells = compute_exits(artifact, positions, target_session, guards, refusals)
     buys, other_rule = compute_entries(
         artifact, frame, scores, positions, broker.last_price, capital,
-        target_session, guards, refusals, selection=selection)
+        target_session, guards, refusals, selection=selection,
+        venue_of=venue_of)
     broker_keys = {o.key for o in broker.open_orders()}
     day_count = len(store.get("days", {}).get(target_session, []))
     gated = apply_order_gates(sells + buys, capital=capital, stage=stage,

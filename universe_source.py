@@ -650,10 +650,12 @@ def pool_stamp(uni_cfg=None):
     }
 
 
-def build_universe_candidates(config_path=None, write=True, allow_remote=True):
+def build_universe_candidates(config_path=None, write=True, allow_remote=True,
+                              venue_fetch=None):
     """Assemble the candidate universe, classify by GICS, and (optionally) write
     data/public universe_candidates.json. Returns (response_dict, tickers, by_gics)."""
     from gics_classifier import GICSClassifier
+    import listing_venue as lv
 
     uni_cfg = load_universe_config(config_path)
     if not uni_cfg:
@@ -662,6 +664,40 @@ def build_universe_candidates(config_path=None, write=True, allow_remote=True):
     src = UniverseSource(uni_cfg)
     detailed = src.get_candidate_universe_detailed()
     tickers = sorted(detailed["tickers"])
+
+    # US-LISTED ONLY, GATED ON THE LISTING VENUE.
+    #
+    # 3443.TW (Taiwan) and 6701.T (Tokyo) reached the pool because nothing
+    # here ever asked where a security is listed. The union above is built
+    # from ETF holdings, which carry foreign lines freely, and _norm was
+    # written to PRESERVE foreign suffixes rather than to reject them.
+    #
+    # The gate is the venue field, never the suffix: a suffix list will
+    # always miss one. TSM stays — a Taiwanese company listed on the NYSE in
+    # dollars is exactly what the rule permits. An unresolvable venue is
+    # excluded and logged, because unknown must not reach the board and a
+    # US name lost to a missing field must be visible.
+    venue_cfg = bool((uni_cfg.get("source") or {}).get("require_us_listing", True))
+    venue_gate = {"enabled": venue_cfg, "excluded": [], "disagreements": [],
+                  "kept": len(tickers), "remote_calls": 0}
+    if venue_cfg:
+        fetch = venue_fetch or lv.CachedFetch(
+            os.path.join(src.cache_dir, "venue_cache.json"),
+            allow_remote=allow_remote)
+        kept, excluded, disagreements = lv.filter_us_listed(tickers, fetch)
+        if hasattr(fetch, "save"):
+            fetch.save()
+        venue_gate = {"enabled": True, "excluded": excluded,
+                      "disagreements": disagreements, "kept": len(kept),
+                      "remote_calls": getattr(fetch, "remote_calls", 0)}
+        if excluded:
+            print(f"[universe] venue gate excluded {len(excluded)}: "
+                  + ", ".join(f"{e['ticker']} ({e['exchange'] or 'unknown'})"
+                              for e in excluded[:12]))
+        for d in disagreements:
+            print(f"[universe] venue/suffix disagreement on {d['ticker']}: "
+                  f"{d['note']}")
+        tickers = kept
 
     cache_cfg = uni_cfg.get("cache", {}) or {}
     gics = GICSClassifier(src.cache_dir, ttl_days=cache_cfg.get("gics_ttl_days", 30),
@@ -727,6 +763,9 @@ def build_universe_candidates(config_path=None, write=True, allow_remote=True):
         **pool_stamp(uni_cfg),
         "total_count": len(tickers),
         "by_source": detailed["by_source"],
+        # Which names the US-listing gate removed and why. Empty in the
+        # healthy state; every entry names its exchange and its reason.
+        "venue_gate": venue_gate,
         # Where the committed index list came from and when — carried into the
         # artifact so source attribution is evidence a reader can check, not a
         # claim they have to take on faith.

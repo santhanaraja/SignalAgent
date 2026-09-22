@@ -103,16 +103,19 @@ GROUPS = {"A": "Life Sciences Tools & Services", "AAPL": "Technology Hardware, S
 CANDS = {t: {"grade": "A+", "group": GROUPS[t]} for t in FRAME}
 
 
+US_VENUE = lambda tk: {"exchange": "NMS", "currency": "USD"}
+
+
 def go(art, led, broker, *, guards=None, stage="shadow", store=None,
        frame=None, kill=None, selection="risk_first", secrets=None,
-       now=NOW, capital=CAPITAL):
+       now=NOW, capital=CAPITAL, venue_of=US_VENUE):
     return at.run(artifact=art, ladder_state=led, broker=broker,
                   frame=frame or frame_of(FRAME), scores=SCORES,
                   capital=capital, target_session=SESSION, now_utc=now,
                   stage=stage, guards=guards or at.Guards(),
                   kill_reader=kill or (lambda: {"kill_switch": "off"}),
                   store=store if store is not None else {"placed_keys": [], "days": {}},
-                  selection=selection, secrets=secrets)
+                  selection=selection, secrets=secrets, venue_of=venue_of)
 
 
 def sells(rec):
