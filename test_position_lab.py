@@ -97,7 +97,31 @@ def test_replay_committed_artifact():
     fw = json.loads(_out.stdout.replace(": NaN", ": null"))
     rows = (fw.get("position_signals") or {}).get("tickers") or {}
     regime = fw["regime"]["regime"]
+
+    # THE LADDER IS STATEFUL, SO THE REPLAY NEEDS THE STATE THE RUN STARTED
+    # FROM. Without it this pin can only represent rows whose state is a
+    # function of the bar alone, and it goes RED — permanently — the moment a
+    # holding sits in WATCHING or RE_ENTRY_ARMING, because a stateless call
+    # reads "close above SMA20" as HELD. That is what DVN did on 2026-09-22
+    # through 09-24, and the 09-23 bake fails it identically, so the failure
+    # was never about any ledger edit.
+    #
+    # The prior state is the state committed by the PREVIOUS bake: this
+    # commit's artifact was produced by a run that began from its parent's
+    # position_state.json. Read from git for the same reason the artifact is
+    # — a working-tree file has already moved on.
+    prev_states = {}
+    _ps = subprocess.run(["git", "show", "HEAD^:framework/state/position_state.json"],
+                         capture_output=True, text=True, cwd=REPO)
+    if _ps.returncode == 0:
+        try:
+            prev_states = {t: (v or {}).get("state")
+                           for t, v in json.loads(_ps.stdout).items()
+                           if isinstance(v, dict)}
+        except Exception:
+            prev_states = {}
     checked = 0
+    stateful = 0
     for t, row in rows.items():
         conds = row.get("conditions") or {}
         if not conds or row.get("insufficient_data"):
@@ -116,6 +140,9 @@ def test_replay_committed_artifact():
             "regime_state": regime, "group_in_universe": c5["met"],
             "kind": row.get("kind", "watching"),
         }
+        if prev_states.get(t):
+            inputs = dict(inputs, prev_state=prev_states[t])
+            stateful += 1
         got = assess_position(**inputs)
         assert got["state"] == row["state"], \
             f"{t}: {got['state']} != recorded {row['state']}"
@@ -124,7 +151,7 @@ def test_replay_committed_artifact():
         assert got["conditions"]["4_slope"]["met"] == c4["met"], t
         checked += 1
     assert checked >= 2, f"only {checked} tracked tickers replayed"
-    print(f"  replay pin: {checked} committed tracked tickers reproduce: OK")
+    print(f"  replay pin: {stateful} of {checked} replayed with the prior ladder state; {checked} committed tracked tickers reproduce: OK")
 
 
 def test_validation():
