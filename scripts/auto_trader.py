@@ -15,6 +15,16 @@ time — it carried five sold positions, showed SMCI HELD with a gain four
 days after it was sold, and reported 40.2% deployed against a real 8.95%.
 Selling SMCI off that list in a margin account would have opened a SHORT.
 
+OPEN DEFECT, RECORDED 2026-09-28, PIN OWED, NOT FIXED HERE. This run sizes
+and refuses on the CONFIRMED CLOSE only, so it never compares the price it
+would actually pay against the stop it would set. On 2026-09-28 LITE graded
+A+ and was the lowest-risk name on the close-basis board at $179.72, while
+its live price had fallen $18.78 THROUGH its own 911.6960 stop: a buy limit
+anywhere at or above the close would have filled at the market and been
+stopped out on arrival. The rule owed is that an entry whose fill would land
+at or below its stop is REFUSED, evaluated at the open the order targets,
+with a pin demonstrating it against this LITE row.
+
 WHY THE GUARDS ARE FLAGS. Every refusal below is a named flag on Guards.
 The pins disable exactly one flag to reintroduce exactly one bug, show the
 unguarded run placing the wrong order, then show the guarded run refusing.
