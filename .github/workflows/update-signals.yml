@@ -32,6 +32,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # BAKE FROM THE NEWEST BASE, NOT THE ONE THE RUNNER HAPPENED TO GET.
+      # A checkout can predate a push that lands while the job queues or
+      # installs: on 2026-09-28 a runner baked from e03c9e1 and only saw
+      # 2b70931 at push time, three attempts in a row. Resetting here closes
+      # the window between checkout and bake; the retry below closes the one
+      # between bake and push.
+      - name: Sync to origin/main before baking
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+          echo "baking from $(git rev-parse --short HEAD)"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -112,12 +124,60 @@ jobs:
         run: |
           git diff --quiet public/ data/ framework/ || echo "changed=true" >> $GITHUB_OUTPUT
 
+      # RESET AND RE-BAKE, NEVER REBASE. `git pull --rebase` replayed a
+      # generated commit onto newer generated files and conflicted on every
+      # one of them — data/signals.json, history.json, grade_outcomes.json,
+      # framework/output/latest.json, public/framework.json,
+      # regime_chassis_state.json, regime_history.json,
+      # framework/state/position_state.json, plus rename/delete pairs from
+      # the snapshot rotation. Three failures in twenty-seven hours against
+      # four in the previous five hundred runs.
+      #
+      # A generated artifact has no merge: the newest bake from the newest
+      # base wins and the older one is discarded whole. On rejection this
+      # throws away a good bake and pays ~56s for another (the measured bake
+      # time on 2026-09-28), capped at two retries — worst case about three
+      # and a half minutes against a ~75s job.
+      #
+      # `merge=ours` was considered and REFUSED: it resolves every future
+      # collision silently, and position_state.json carries the ladder
+      # anchors the drift detector reads. A silent wrong answer is the
+      # failure class this repo keeps hitting.
       - name: Commit and push updated data
         if: steps.check.outputs.changed == 'true'
+        # The retry re-bakes, so this step needs every secret the bake steps
+        # have. Without them a re-bake silently degrades: the chassis falls
+        # back from the FRED OAS basis to HYG/IEF and the intraday alert has
+        # no webhook. A retry must produce the SAME artifact the first bake
+        # would have, not a weaker one.
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          ASSESSMENT_WEBHOOK_URL: ${{ secrets.ASSESSMENT_WEBHOOK_URL }}
+          PYTHONUNBUFFERED: '1'
         run: |
+          set -uo pipefail
           git config user.name "SignalAgent Bot"
           git config user.email "signal-bot@users.noreply.github.com"
-          git add public/signals.json public/history.json public/snapshots/ data/ public/framework.json framework/output/ framework/state/ public/universe_ranking.json public/universe_candidates.json
-          git commit -m "data: update signals $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git pull --rebase origin main
-          git push
+          PATHS="public/signals.json public/history.json public/snapshots/ data/ public/framework.json framework/output/ framework/state/ public/universe_ranking.json public/universe_candidates.json"
+          for attempt in 1 2 3; do
+            git add $PATHS
+            if git diff --cached --quiet; then
+              echo "attempt $attempt: nothing staged — the re-bake produced no change; nothing to push"
+              exit 0
+            fi
+            git commit -m "data: update signals $(date -u +'%Y-%m-%d %H:%M UTC')"
+            if git push; then
+              echo "attempt $attempt: pushed $(git rev-parse --short HEAD)"
+              exit 0
+            fi
+            echo "attempt $attempt: push REJECTED — discarding this bake and re-baking from the new base"
+            if [ "$attempt" -eq 3 ]; then break; fi
+            git fetch origin main
+            git reset --hard origin/main
+            bash scripts/bake.sh --no-notify || {
+              echo "::error::re-bake failed on attempt $attempt"; exit 1; }
+          done
+          echo "::error::push rejected after 3 attempts — the artifact was NOT committed. \
+          This run is a real failure: the ladder has not stepped this close and the \
+          site is serving the previous bake."
+          exit 1
