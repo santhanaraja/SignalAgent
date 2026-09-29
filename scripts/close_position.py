@@ -174,6 +174,18 @@ def validate_ledger(doc):
         key = (c["ticker"], c["entry_date"])
         missing = req - set(c)
         assert not missing, f"{key}: missing fields {sorted(missing)}"
+        # BOTH DATES ARE CHECKED FOR EVERY ROW, NOT ONLY FOR ROWS WHOSE
+        # TICKER IS CURRENTLY HELD. The re-entry law below parses them, but
+        # only inside the holdings loop, so a closed-and-gone ticker could
+        # carry "2026-7-06" or a null and never be looked at — and the
+        # duplicate it enables ("2026-7-06" alongside "2026-07-06") is then
+        # two copies of one trade, both validating, double-counted in every
+        # total. A date nobody can order is not a date.
+        for _f in ("entry_date", "exit_date"):
+            assert isinstance(c[_f], str) and _ISO_DATE.match(c[_f]), \
+                f"{key}: {_f} must be an ISO YYYY-MM-DD date, got {c[_f]!r}"
+        assert c["exit_date"] >= c["entry_date"], \
+            f"{key}: exit {c['exit_date']} precedes entry {c['entry_date']}"
         assert key not in live, \
             f"{key}: present in BOTH holdings and closed — the move " \
             "left a duplicate"

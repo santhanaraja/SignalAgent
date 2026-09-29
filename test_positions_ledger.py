@@ -28,6 +28,7 @@ Run: python3 test_positions_ledger.py
 """
 
 import copy
+import datetime
 import json
 import os
 import shutil
@@ -63,11 +64,22 @@ def _fixture_holding(path=None):
 
 
 def _run_close(tmp, extra=()):
+    """THE EXIT DATE IS DERIVED, NOT HARD-CODED. This pin takes care not
+    to name a TICKER, because holdings turn over — and then hard-coded
+    "2026-08-19" as the exit, which rots exactly the same way. It went
+    stale silently rather than loudly: by 2026-09-28 the live first
+    holding was ANET, entered 2026-09-21, so the pin was asserting that
+    the CLI SUCCEEDS on a trade that exits a month before it was
+    entered. It did succeed, because the ordering law only ran for
+    tickers still in holdings[] and this one had just left. Caught when
+    that law was extended to every closed row."""
     h = _fixture_holding(tmp)
+    exit_date = (datetime.date.fromisoformat(h["entry_date"])
+                 + datetime.timedelta(days=1)).isoformat()
     return subprocess.run(
         [sys.executable, os.path.join(REPO, "scripts",
                                       "close_position.py"),
-         "--ticker", h["ticker"], "--exit-date", "2026-08-19",
+         "--ticker", h["ticker"], "--exit-date", exit_date,
          "--exit-fill", f"{h['entry_price'] * 1.05:.4f}",
          "--fees", "0.15",
          "--exit-reason", "system_stop",
@@ -118,10 +130,18 @@ def test_the_failures_fail():
     with open(POSITIONS) as f:
         doc = json.load(f)
     _h = doc["holdings"][0]
+    # DERIVED, NOT HARD-CODED — same rot as _run_close had: this fixture
+    # takes its entry_date from whatever is live and paired it with a
+    # frozen "2026-08-19" exit, so once the live holding was entered
+    # later than that the row described a trade that exited before it
+    # was bought, and every failure this function pins was being tested
+    # through an impossible row.
+    _exit = (datetime.date.fromisoformat(_h["entry_date"])
+             + datetime.timedelta(days=1)).isoformat()
     base = {
         "ticker": _h["ticker"], "entry_date": _h["entry_date"],
         "entry_price": 24.68, "shares": 194, "entry_stop": 23.64,
-        "exit_date": "2026-08-19", "exit_fill": 29.40, "fees_usd": 0.15,
+        "exit_date": _exit, "exit_fill": 29.40, "fees_usd": 0.15,
         "exit_reason": "system_stop", "overrides": "ZERO — fixture",
         "realized_usd": 915.53, "realized_r": 4.5378,
         "realized_pct_of_capital": 0.9390, "capital_usd_at_exit": 97500,
@@ -324,6 +344,32 @@ def test_re_entry_is_legal_and_the_old_rule_was_wrong():
             raise SystemExit(
                 f"FAIL: exit_date {bad_exit!r} was ACCEPTED against an open "
                 "entry of 2026-09-03 — the ordering law failed OPEN")
+
+    # AND THE ORDERING LAW NOW RUNS FOR EVERY CLOSED ROW, not only for
+    # tickers that happen to still be held. A row that exits before it
+    # was entered is an impossible trade whoever holds the ticker.
+    gone = copy.deepcopy(live)
+    gone["holdings"] = []
+    gone["closed"] = [dict(live["closed"][0], ticker="ZZGONE",
+                           entry_date="2026-09-21", exit_date="2026-08-19")]
+    try:
+        cp.validate_ledger(gone)
+    except AssertionError as e:
+        assert "precedes entry" in str(e), e
+    else:
+        raise SystemExit("FAIL: a closed row exiting 2026-08-19 against an "
+                         "entry of 2026-09-21 was ACCEPTED because its "
+                         "ticker is not in holdings[]")
+    for bad in (None, "2026-9-21", "", 20260921):
+        try:
+            cp.validate_ledger(dict(gone, closed=[
+                dict(gone["closed"][0], exit_date="2026-09-22",
+                     entry_date=bad)]))
+        except AssertionError as e:
+            assert "ISO" in str(e), f"{bad!r}: {e}"
+        else:
+            raise SystemExit(f"FAIL: entry_date {bad!r} accepted on a closed "
+                             "row whose ticker is not held")
 
     # --- and the COMMITTED book, as an observation, never a gate ------
     held = {h["ticker"] for h in live["holdings"]}
