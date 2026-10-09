@@ -56,7 +56,19 @@ AAPL = {"ticker": "AAPL", "entry_date": "2026-09-28", "entry_price": 339.86,
 # exact defect this file's docstring says it was written to avoid. What
 # is durable is the BATCH: the seven arrived, AAPL left, the six that
 # were already there were not touched.
-CARRIED = {"ANET", "WAT", "HPE", "TER", "NTAP", "ZBRA"}
+# KEYED (ticker, entry_date) LIKE BATCH, AND FOR THE SAME REASON. An
+# earlier version of this constant was a bare ticker set, and the check
+# below resolved each name's date by scanning _all for the first key
+# matching that ticker — which made the assertion `(t, d) in _all`
+# TRUE BY CONSTRUCTION, and made a missing carried name raise
+# StopIteration and abort every check after it. A pin that cannot fail
+# is not a pin, and one that crashes instead of failing takes the rest
+# of the file down with it.
+CARRIED_KEYS = {
+    ("ANET", "2026-09-21"), ("WAT", "2026-09-21"), ("HPE", "2026-09-24"),
+    ("TER", "2026-09-28"), ("NTAP", "2026-09-28"), ("ZBRA", "2026-09-28"),
+}
+CARRIED = {t for t, _ in CARRIED_KEYS}
 
 
 def check(name, cond, detail=""):
@@ -106,15 +118,41 @@ def batch_pair():
 
 
 now = json.load(open(LEDGER))
-_held = {h["ticker"] for h in now["holdings"]}
-_closed = {(c["ticker"], c["entry_date"]) for c in now["closed"]}
-# NOT-RUN rather than FAIL when the batch is absent — see the same note in
-# test_orphan_migration.py. exit 3 is scripts/run_pins.py's NOT-RUN signal.
-if not (set(BATCH) <= _held) or ("AAPL", "2026-09-28") not in _closed:
-    print("ENTRY-BATCH PINS: NOT RUN — the 2026-10-01 batch is not applied.")
-    print(f"  missing from holdings: {sorted(set(BATCH) - _held) or 'none'}; "
-          f"AAPL closed row present: {('AAPL', '2026-09-28') in _closed}")
+# THE BATCH IS RESOLVED ACROSS BOTH ARRAYS, BY (ticker, entry_date).
+# An earlier gate asked "are all eight still HELD?" and, when one closed,
+# declared "the 2026-10-01 batch is not applied" and exited 3. That was
+# false twice: the batch WAS applied, and the file then stopped judging
+# it — so on 2026-10-09, when STX and MCHP closed, the only pin that
+# watches these rows turned itself off and reported NOT-RUN. A position
+# closing is the NORMAL life of a row; it moves from holdings[] to
+# closed[] and keeps every entry fact. Keying on the pair across both
+# arrays means a close MOVES a row instead of disabling the file, and a
+# row that is DELETED outright is still caught.
+_held = {(h["ticker"], h["entry_date"]): h for h in now["holdings"]}
+_clsd = {(c["ticker"], c["entry_date"]): c for c in now["closed"]}
+_all = {**_clsd, **_held}
+BATCH_KEYS = {(t, "2026-10-01") for t in BATCH}
+_missing = sorted(k for k in BATCH_KEYS if k not in _all)
+# NOT-RUN AND FAIL ARE DIFFERENT THINGS AND THE GATE MUST SAY WHICH.
+# All eight absent with no AAPL row means the batch was never applied —
+# there is nothing to judge, which is exit 3. But SOME absent means rows
+# that were once here have been LOST, and a lost row is a failure, not a
+# degraded input. An earlier version returned exit 3 for both, so
+# deleting one batch row silently switched the file off — the defect that
+# let STX and MCHP closing disable the only pin watching them.
+if len(_missing) == len(BATCH_KEYS) and ("AAPL", "2026-09-28") not in _clsd:
+    print("ENTRY-BATCH PINS: NOT RUN — the 2026-10-01 batch is not applied "
+          "at all (no batch row in either array, and no AAPL closed row).")
     raise SystemExit(3)
+if _missing or ("AAPL", "2026-09-28") not in _clsd:
+    print("ENTRY-BATCH PINS\n")
+    check("every batch row is still in the ledger, held or closed", False,
+          f"VANISHED: {_missing or 'none'}; AAPL closed row present: "
+          f"{('AAPL', '2026-09-28') in _clsd} — a row that was here and is "
+          "now in neither array has been LOST, which is a failure and not a "
+          "degraded input")
+    print(f"\n{len(FAILS)} PIN(S) FAILED: {FAILS}")
+    raise SystemExit(1)
 
 print("ENTRY-BATCH PINS (2026-10-01)\n")
 
@@ -251,12 +289,23 @@ else:
 # (3) the thirteen, and every stored value recomputed
 print("\n(3) the batch's own rows, and the arithmetic of the eight")
 got = {h["ticker"]: h["shares"] for h in now["holdings"]}
-check("the eight are held and AAPL is not",
-      set(BATCH) <= set(got) and "AAPL" not in got,
-      f"{len(got)} names held: {sorted(got)}")
-check("the six that predate the batch are all still held", CARRIED <= set(got),
-      f"missing {sorted(CARRIED - set(got)) or 'none'}")
-by = {h["ticker"]: h for h in now["holdings"]}
+still_held = sorted(t for t in BATCH if (t, "2026-10-01") in _held)
+now_closed = sorted(t for t in BATCH if (t, "2026-10-01") in _clsd)
+check("all eight batch rows are in the ledger, held or closed",
+      not _missing,
+      f"held {still_held}; closed {now_closed}")
+check("AAPL is closed, not held", "AAPL" not in got
+      and ("AAPL", "2026-09-28") in _clsd)
+check("every batch row that closed kept its entry facts verbatim",
+      all(_clsd[(t, "2026-10-01")]["entry_date"] == "2026-10-01"
+          for t in now_closed),
+      f"{len(now_closed)} closed: {now_closed}")
+_lost = sorted(CARRIED_KEYS - set(_all))
+check("the six that predate the batch are still in the ledger, at their "
+      "own entry dates",
+      not _lost,
+      f"missing: {_lost or 'none'}; present: {sorted(CARRIED_KEYS & set(_all))}")
+by = {t: _all[(t, "2026-10-01")] for t in BATCH}
 tot_risk = 0.0
 for t, (sh, fill, stop, risk, posn) in BATCH.items():
     h = by.get(t)
@@ -270,14 +319,34 @@ for t, (sh, fill, stop, risk, posn) in BATCH.items():
           and abs(r - risk) < 0.005
           and abs(h["shares"] * h["entry_price"] - posn) < 0.005
           and h["entry_date"] == "2026-10-01"
-          and h["stop_on_entry"] == "sma20_close")
+          # stop_on_entry lives on a HOLDING row; a closed row does not
+          # carry it (close_position copies the entry FACTS, not the rule).
+          # DISCRIMINATED ON WHICH ARRAY THE ROW CAME FROM, not on whether
+          # the field happens to be present: keying on presence let the
+          # assertion pass VACUOUSLY — a holding that silently lost the
+          # field fell through to the closed-row branch and was never
+          # checked against "sma20_close" at all.
+          and (h.get("stop_on_entry") == "sma20_close"
+               if (t, "2026-10-01") in _held
+               else "stop_on_entry" not in h and "exit_date" in h))
 check(f"the eight carry ${tot_risk:,.2f} of initial risk in total",
       abs(tot_risk - 2656.684) < 0.01, f"{tot_risk / CAP * 100:.4f}% of capital")
-six = sum(h["shares"] * (h["entry_price"] - h["entry_stop"])
-          for h in now["holdings"] if h["ticker"] in CARRIED)
+# SUMMED OVER THE SIX PINNED KEYS, not over every row whose ticker is one
+# of the six: _all spans holdings AND closed, so a ticker-only filter would
+# silently add a future re-entry or an old closed trade of the same name and
+# false-red this constant — the very defect this file's docstring exists for.
+# SUMMED OVER THE KEYS ACTUALLY PRESENT, and the check then requires that
+# none were lost. Indexing _all[k] over the full CARRIED_KEYS raised
+# KeyError the moment a carried row left the book — a crash in the one edit
+# whose purpose was to remove a crash. The missing key is named by _lost
+# above; here it must FAIL, loudly and with a number, not abort the file.
+_six_keys = sorted(CARRIED_KEYS & set(_all))
+six = sum(_all[k]["shares"] * (_all[k]["entry_price"] - _all[k]["entry_stop"])
+          for k in _six_keys)
 check("the six carry $2,265.75, so the fourteen carried $4,922.43 = 5.0487% "
       "once APH was recorded",
-      abs(six - 2265.7481) < 0.01 and abs(six + tot_risk - 4922.4321) < 0.02,
+      not _lost and len(_six_keys) == 6
+      and abs(six - 2265.7481) < 0.01 and abs(six + tot_risk - 4922.4321) < 0.02,
       f"six ${six:,.2f} + seven ${tot_risk:,.2f} = ${six + tot_risk:,.2f}; "
       "the figure is pinned on those thirteen rows, not on the book's size, "
       "so a later entry does not falsify it")
@@ -315,15 +384,81 @@ check("validate_ledger passes", raises(lambda: validate_ledger(now)) is None)
 check("no ticker is in both holdings and closed for the SAME entry_date",
       not ({(h["ticker"], h["entry_date"]) for h in now["holdings"]}
            & {(c["ticker"], c["entry_date"]) for c in now["closed"]}))
+_ftnt_prior = [c["exit_date"] for c in now["closed"]
+                if c["ticker"] == "FTNT" and c["entry_date"] != "2026-10-01"]
 check("FTNT is in both arrays — a legal re-entry, exit strictly before entry",
-      "FTNT" in got
-      and max(c["exit_date"] for c in now["closed"] if c["ticker"] == "FTNT")
+      ("FTNT", "2026-10-01") in _all
+      and bool(_ftnt_prior)
+      and max(_ftnt_prior)
       < by["FTNT"]["entry_date"],
       "closed 2026-09-03, re-entered 2026-10-01")
 check("bug reintroduced: dated the re-entry on the exit day it is refused",
       raises(lambda: validate_ledger(
           dict(now, holdings=[dict(by["FTNT"], entry_date="2026-09-03")])))
       is not None)
+
+# (6) THE TWO 2026-10-09 EXITS, RECOMPUTED FROM THEIR OWN STORED FILLS.
+# Both are batch names whose ENTRY facts are pinned above; until this
+# section the suite pinned nothing about how they LEFT, so a wrong
+# realised figure or a swapped attribution would have passed 46 green
+# pins. Each row is recomputed from its own fields — no constant here is
+# taken on trust except the fill, which only the broker record carries.
+print("\n(6) the two 2026-10-09 exits")
+#  ticker: (shares, fill, realised, R, trigger close, gap, delay)
+EXITS = {
+    "STX":  (6, 792.50, -867.00, -1.9430, 848.99, 162.06, -501.00),
+    "MCHP": (81, 74.8438, -331.39, -0.8540, 75.52, 63.18, -117.95),
+}
+#  the open of the session AFTER each name's OWN trigger — STX's trigger
+#  was the 10-02 close and 10-03/10-04 were the weekend, so its doctrine
+#  fill is the 10-05 open; MCHP's trigger was the 10-08 close.
+DOCTRINE_OPEN = {"STX": (876.00, "2026-10-05"), "MCHP": (76.30, "2026-10-09")}
+for t, (sh, fill, usd, r, tclose, gap, delay) in EXITS.items():
+    row = _clsd.get((t, "2026-10-01"))
+    check(f"{t} is closed, not held", row is not None
+          and (t, "2026-10-01") not in _held)
+    if row is None:
+        continue
+    risk = sh * (row["entry_price"] - row["entry_stop"])
+    check(f"{t}: {sh} @ {fill} -> realised ${usd:,.2f} = {r}R, recomputed",
+          row["shares"] == sh and row["exit_fill"] == fill
+          and row["exit_date"] == "2026-10-09"
+          and abs(row["realized_usd"] - sh * (fill - row["entry_price"])) < 0.005
+          and abs(row["realized_usd"] - usd) < 0.005
+          and abs(row["realized_r"] - usd / risk) < 0.0001
+          and abs(row["realized_r"] - r) < 0.0001)
+    check(f"{t} is system_stop with overrides ZERO — DVN/AAPL's shape",
+          row["exit_reason"] == "system_stop"
+          and override_count(row["overrides"]) == 0)
+    o, od = DOCTRINE_OPEN[t]
+    check(f"{t}: gap {gap:+,.2f} and delay {delay:+,.2f} sum to the total "
+          f"against its own trigger close {tclose}",
+          abs((o - tclose) * sh - gap) < 0.005
+          and abs((fill - o) * sh - delay) < 0.005
+          and abs(gap + delay - sh * (fill - tclose)) < 0.005,
+          f"doctrine fill = the {od} open {o}, the session after {t}'s own "
+          f"trigger — not a shared date")
+    for anchor in (str(tclose), f"{abs(delay):,.2f}"):
+        check(f"{t}'s note carries {anchor!r}", anchor in row["note"])
+check("STX is the largest adverse delay and PWR -$169.11 is second — the "
+      "ranking the notes now assert, read back off the notes themselves",
+      "-$169.11" in _clsd[("STX", "2026-10-01")]["note"]
+      and "2.96x" in _clsd[("STX", "2026-10-01")]["note"]
+      and "FOURTH-largest" in _clsd[("MCHP", "2026-10-01")]["note"]
+      # The retracted figures are deliberately QUOTED inside their
+      # retractions, as this file's other rows do, so their mere presence
+      # proves nothing. What must be absent is the AFFIRMATIVE sentence.
+      and "the previous worst was MSI 2026-09-09 at -$99.06"
+          not in _clsd[("STX", "2026-10-01")]["note"]
+      and "SECOND-largest single adverse delay"
+          not in _clsd[("MCHP", "2026-10-01")]["note"],
+      "three drafts asserted MSI -$99.06 / 5.06x / MCHP-second; MSI's own "
+      "committed row refuted all three")
+check("bug reintroduced: swap either fill and the realised no longer "
+      "recomputes",
+      all(abs(sh * (f + 1.0 - _clsd[(t, "2026-10-01")]["entry_price"])
+              - _clsd[(t, "2026-10-01")]["realized_usd"]) > 0.005
+          for t, (sh, f, *_rest) in EXITS.items()))
 
 print()
 if FAILS:
