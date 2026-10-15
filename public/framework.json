@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-10-14T21:16:31.786160+00:00",
+  "generated_at": "2026-10-15T00:01:22.291934+00:00",
   "scorer_version": "score_stock_v2",
   "schema": "regime-b-chassis",
   "framework_version": "1.0",
   "regime": {
-    "date": "2026-10-14",
+    "date": "2026-10-15",
     "regime": "Risk-on / Choppy",
     "regime_color": "#d29922",
     "engine": "chassis",
@@ -15,11 +15,11 @@
       "regime": "Risk-on / Choppy",
       "exposure_ceiling_pct": 50.0,
       "trend_in": true,
-      "trend_pct": 6.74,
+      "trend_pct": 7.97,
       "throttles": {
         "vix": {
           "firing": false,
-          "value": 15.52,
+          "value": 15.16,
           "cut": 22.0
         },
         "hy": {
@@ -30,7 +30,7 @@
         },
         "breadth": {
           "firing": false,
-          "value": 0.51,
+          "value": -0.11,
           "cut": -0.5
         }
       },
@@ -44,8 +44,8 @@
       "replay": {
         "days_used": 60,
         "window": 60,
-        "start": "2026-07-22",
-        "end": "2026-10-14"
+        "start": "2026-07-21",
+        "end": "2026-10-13"
       },
       "hy_basis": "fred_oas_pctile",
       "hy_pctile": 98.3,
@@ -67,10 +67,9 @@
         "date": "2026-10-13"
       },
       "breadth": {
-        "value": 0.51,
-        "signal": "risk_on",
-        "detail": "RSP/SPY ratio change: +0.51% (20d) \u2014 breadth broadening",
-        "source": "RSP/SPY fallback"
+        "value": null,
+        "signal": "unavailable",
+        "detail": "Breadth ratio computed non-finite value"
       }
     },
     "backdrop_gate": {
@@ -79,30 +78,28 @@
       "open": true,
       "capped": false,
       "reason": null,
-      "value": 6.74,
-      "detail": "SPY $769.60 vs 200DMA $721.02 (+6.7%)",
-      "price": 769.6,
-      "ma200": 721.02
+      "value": null,
+      "detail": "SPY/200DMA computed non-finite value",
+      "price": null,
+      "ma200": null
     },
     "macro_inputs": {
       "yield_curve": {
-        "value": 0.77,
+        "value": 1.44,
         "signal": "risk_on",
-        "detail": "30Y-2Y spread: 77bp (5.56% - 4.79%) \u2014 positive",
-        "source": "FRED API",
-        "spread_bp": 77,
-        "spread_label": "30Y-2Y",
-        "long_yield": 5.56,
-        "short_yield": 4.79,
-        "dgs30": 5.56,
-        "dgs2": 4.79,
+        "detail": "30Y-3mo spread: 144bp (5.53% - 4.09%) \u2014 positive",
+        "source": "yfinance (^TYX-^IRX)",
+        "spread_bp": 144,
+        "spread_label": "30Y-3mo",
+        "long_yield": 5.53,
+        "short_yield": 4.09,
         "role": "macro_input"
       }
     },
-    "risk_on_count": 2,
+    "risk_on_count": 1,
     "caution_count": 1,
     "risk_off_count": 0,
-    "unavailable_count": 0,
+    "unavailable_count": 1,
     "regime_change_pending": false,
     "consecutive_weeks_at_state": 8,
     "confirmations_needed": 2,
@@ -164,7 +161,7 @@
       "sector": "Information Technology",
       "tickers": 5,
       "weeks_in_universe": 13,
-      "breaker_status": "warning",
+      "breaker_status": "clear",
       "breaker_checks_expected": [
         "avg_ytd_negative",
         "group_avg_rsi_below_40",
@@ -187,7 +184,7 @@
       "sector": "Information Technology",
       "tickers": 7,
       "weeks_in_universe": 13,
-      "breaker_status": "warning",
+      "breaker_status": "clear",
       "breaker_checks_expected": [
         "avg_ytd_negative",
         "group_avg_rsi_below_40",
@@ -233,7 +230,7 @@
       "sector": "Information Technology",
       "tickers": 3,
       "weeks_in_universe": 10,
-      "breaker_status": "warning",
+      "breaker_status": "clear",
       "breaker_checks_expected": [
         "avg_ytd_negative",
         "group_avg_rsi_below_40",
@@ -394,7 +391,7 @@
       "sector": "Industrials",
       "tickers": 6,
       "weeks_in_universe": 3,
-      "breaker_status": "warning",
+      "breaker_status": "clear",
       "breaker_checks_expected": [
         "avg_ytd_negative",
         "group_avg_rsi_below_40",
@@ -417,7 +414,7 @@
       "sector": "Information Technology",
       "tickers": 3,
       "weeks_in_universe": 3,
-      "breaker_status": "warning",
+      "breaker_status": "clear",
       "breaker_checks_expected": [
         "avg_ytd_negative",
         "group_avg_rsi_below_40",
@@ -457,62 +454,16 @@
     }
   ],
   "position_signals": {
-    "generated_at": "2026-10-14T21:16:31.784895+00:00",
+    "generated_at": "2026-10-15T00:01:22.290733+00:00",
     "account": "TOS",
     "schema_version": "1.2",
     "regime_state": "Risk-on / Choppy",
     "tickers": {
       "ANET": {
         "state": "WATCHING",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": false,
-            "detail": "close 195.42 below SMA20 206.25"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": false,
-            "detail": "0/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 0,
-            "atr14": 7.06
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 206.25 vs 5d ago 202.67 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Communications Equipment' in universe (top-15)"
-          }
-        },
-        "conditions_met": 3,
-        "all_conditions_met": false,
-        "extension_pct": -5.25,
-        "extension_atr": -1.54,
-        "distance_to_sma20_pct": -5.25,
-        "close": 195.42,
-        "sma5": 207.71,
-        "sma10": 208.85,
-        "sma20": 206.25,
-        "assess_inputs": {
-          "close": 195.4199981689453,
-          "sma20": 206.25400085449218,
-          "sma20_5d_ago": 202.66599960327147,
-          "atr14": 7.05742427280971,
-          "consecutive_closes_above": 0,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "holding"
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "ANET",
         "kind": "holding",
         "entry_price": 205.0,
@@ -525,63 +476,18 @@
         "next_earnings_date": "2026-11-03",
         "days_to_earnings": 20,
         "exit_drift": {
-          "status": "action_needed",
-          "closes_since_exit_fired": 1,
-          "ladder_state": "WATCHING",
-          "anchor_close": "2026-10-12",
-          "message": "ANET: the ladder has it WATCHING and the book still holds it 1 confirmed close after the exit fired (last HELD close 2026-10-12). Counted in confirmed closes, not days."
-        }
+          "status": "unmeasured",
+          "closes_since_exit_fired": null,
+          "ladder_state": "EXIT_FIRED",
+          "message": "ANET: drift UNMEASURED \u2014 the ladder rendered no verdict for this row. Absence of a reading is not absence of drift."
+        },
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (WATCHING)"
       },
       "WAT": {
         "state": "RE_ENTRY_ARMING",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": true,
-            "detail": "close 436.61 above SMA20 431.75"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": false,
-            "detail": "1/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 1,
-            "atr14": 13.17
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 431.75 vs 5d ago 426.50 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Life Sciences Tools & Services' in universe (top-15)"
-          }
-        },
-        "conditions_met": 4,
-        "all_conditions_met": false,
-        "extension_pct": 1.12,
-        "extension_atr": 0.37,
-        "close": 436.61,
-        "sma5": 432.16,
-        "sma10": 432.41,
-        "sma20": 431.75,
-        "assess_inputs": {
-          "close": 436.6099853515625,
-          "sma20": 431.7535003662109,
-          "sma20_5d_ago": 426.50050201416013,
-          "atr14": 13.167055402483259,
-          "consecutive_closes_above": 1,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "holding"
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "WAT",
         "kind": "holding",
         "entry_price": 421.0,
@@ -594,69 +500,18 @@
         "next_earnings_date": "2026-11-03",
         "days_to_earnings": 20,
         "exit_drift": {
-          "status": "action_needed",
-          "closes_since_exit_fired": 1,
-          "ladder_state": "RE_ENTRY_ARMING",
-          "anchor_close": "2026-10-12",
-          "message": "WAT: the ladder has it RE_ENTRY_ARMING and the book still holds it 1 confirmed close after the exit fired (last HELD close 2026-10-12). Counted in confirmed closes, not days."
-        }
+          "status": "unmeasured",
+          "closes_since_exit_fired": null,
+          "ladder_state": "EXIT_FIRED",
+          "message": "WAT: drift UNMEASURED \u2014 the ladder rendered no verdict for this row. Absence of a reading is not absence of drift."
+        },
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (RE_ENTRY_ARMING)"
       },
       "HPE": {
         "state": "EXIT_FIRED",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": false,
-            "detail": "close 63.11 below SMA20 65.65"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": false,
-            "detail": "0/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 0,
-            "atr14": 3.75
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 65.65 vs 5d ago 62.54 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Technology Hardware, Storage & Peripherals' in universe (top-15)"
-          }
-        },
-        "conditions_met": 3,
-        "all_conditions_met": false,
-        "extension_pct": -3.86,
-        "extension_atr": -0.68,
-        "distance_to_sma20_pct": -3.86,
-        "close": 63.11,
-        "sma5": 69.34,
-        "sma10": 69.16,
-        "sma20": 65.65,
-        "assess_inputs": {
-          "close": 63.11000061035156,
-          "sma20": 65.64650020599365,
-          "sma20_5d_ago": 62.53901290893555,
-          "atr14": 3.750570842197963,
-          "consecutive_closes_above": 0,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "holding"
-        },
-        "stop": {
-          "type": "sma20_close",
-          "level": 65.65,
-          "detail": "exit on close below SMA20 (65.65)"
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "HPE",
         "kind": "holding",
         "entry_price": 61.38,
@@ -669,63 +524,18 @@
         "next_earnings_date": "2026-12-03",
         "days_to_earnings": 50,
         "exit_drift": {
-          "status": "ok",
-          "closes_since_exit_fired": 0,
-          "ladder_state": "EXIT_FIRED",
-          "message": "HPE: exit fired on the latest confirmed close \u2014 not yet drift."
-        }
+          "status": "unmeasured",
+          "closes_since_exit_fired": null,
+          "ladder_state": "HELD",
+          "message": "HPE: drift UNMEASURED \u2014 the ladder rendered no verdict for this row. Absence of a reading is not absence of drift."
+        },
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (EXIT_FIRED)"
       },
       "TER": {
         "state": "WATCHING",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": false,
-            "detail": "close 359.44 below SMA20 398.09"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": false,
-            "detail": "0/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 0,
-            "atr14": 19.94
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 398.09 vs 5d ago 389.49 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Semiconductor Materials & Equipment' in universe (top-15)"
-          }
-        },
-        "conditions_met": 3,
-        "all_conditions_met": false,
-        "extension_pct": -9.71,
-        "extension_atr": -1.94,
-        "distance_to_sma20_pct": -9.71,
-        "close": 359.44,
-        "sma5": 385.0,
-        "sma10": 407.64,
-        "sma20": 398.09,
-        "assess_inputs": {
-          "close": 359.44000244140625,
-          "sma20": 398.086003112793,
-          "sma20_5d_ago": 389.4925033569336,
-          "atr14": 19.938568115234375,
-          "consecutive_closes_above": 0,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "holding"
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "TER",
         "kind": "holding",
         "entry_price": 398.56,
@@ -738,68 +548,18 @@
         "next_earnings_date": "2026-10-27",
         "days_to_earnings": 13,
         "exit_drift": {
-          "status": "action_needed",
-          "closes_since_exit_fired": 2,
+          "status": "unmeasured",
+          "closes_since_exit_fired": null,
           "ladder_state": "WATCHING",
-          "anchor_close": "2026-10-09",
-          "message": "TER: the ladder has it WATCHING and the book still holds it 2 confirmed closes after the exit fired (last HELD close 2026-10-09). Counted in confirmed closes, not days."
-        }
+          "message": "TER: drift UNMEASURED \u2014 the ladder rendered no verdict for this row. Absence of a reading is not absence of drift."
+        },
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (WATCHING)"
       },
       "NTAP": {
         "state": "HELD",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": true,
-            "detail": "close 222.20 above SMA20 214.72"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": true,
-            "detail": "close 222.20 > SMA20 + 0.5*ATR14 (219.17)",
-            "consecutive_closes_above": 22,
-            "atr14": 8.89
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 214.72 vs 5d ago 203.84 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Technology Hardware, Storage & Peripherals' in universe (top-15)"
-          }
-        },
-        "conditions_met": 5,
-        "all_conditions_met": true,
-        "extension_pct": 3.48,
-        "extension_atr": 0.84,
-        "close": 222.2,
-        "sma5": 233.61,
-        "sma10": 229.48,
-        "sma20": 214.72,
-        "assess_inputs": {
-          "close": 222.1999969482422,
-          "sma20": 214.72438888549806,
-          "sma20_5d_ago": 203.8426956176758,
-          "atr14": 8.894038970114096,
-          "consecutive_closes_above": 22,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "holding"
-        },
-        "stop": {
-          "type": "sma20_close",
-          "level": 214.72,
-          "detail": "exit on close below SMA20 (214.72)"
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "NTAP",
         "kind": "holding",
         "entry_price": 204.39,
@@ -812,66 +572,18 @@
         "next_earnings_date": "2026-12-01",
         "days_to_earnings": 48,
         "exit_drift": {
-          "status": "ok",
-          "closes_since_exit_fired": 0,
-          "ladder_state": "HELD"
-        }
+          "status": "unmeasured",
+          "closes_since_exit_fired": null,
+          "ladder_state": "HELD",
+          "message": "NTAP: drift UNMEASURED \u2014 the ladder rendered no verdict for this row. Absence of a reading is not absence of drift."
+        },
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (HELD)"
       },
       "ZBRA": {
         "state": "HELD",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": true,
-            "detail": "close 376.88 above SMA20 372.69"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": true,
-            "detail": "2/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 17,
-            "atr14": 9.45
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 372.69 vs 5d ago 363.15 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Electronic Equipment & Instruments' in universe (top-15)"
-          }
-        },
-        "conditions_met": 5,
-        "all_conditions_met": true,
-        "extension_pct": 1.12,
-        "extension_atr": 0.44,
-        "close": 376.88,
-        "sma5": 384.18,
-        "sma10": 381.97,
-        "sma20": 372.69,
-        "assess_inputs": {
-          "close": 376.8800048828125,
-          "sma20": 372.69449920654296,
-          "sma20_5d_ago": 363.1549987792969,
-          "atr14": 9.448928833007812,
-          "consecutive_closes_above": 17,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "holding"
-        },
-        "stop": {
-          "type": "sma20_close",
-          "level": 372.69,
-          "detail": "exit on close below SMA20 (372.69)"
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "ZBRA",
         "kind": "holding",
         "entry_price": 372.52,
@@ -884,62 +596,18 @@
         "next_earnings_date": "2026-11-03",
         "days_to_earnings": 20,
         "exit_drift": {
-          "status": "ok",
-          "closes_since_exit_fired": 0,
-          "ladder_state": "HELD"
-        }
+          "status": "unmeasured",
+          "closes_since_exit_fired": null,
+          "ladder_state": "HELD",
+          "message": "ZBRA: drift UNMEASURED \u2014 the ladder rendered no verdict for this row. Absence of a reading is not absence of drift."
+        },
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (HELD)"
       },
       "NVDA": {
         "state": "WATCHING",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": false,
-            "detail": "close 221.30 below SMA20 228.69"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": false,
-            "detail": "0/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 0,
-            "atr14": 5.63
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 228.69 vs 5d ago 225.58 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Semiconductors' in universe (top-15)"
-          }
-        },
-        "conditions_met": 3,
-        "all_conditions_met": false,
-        "extension_pct": -3.23,
-        "extension_atr": -1.31,
-        "distance_to_sma20_pct": -3.23,
-        "close": 221.3,
-        "sma5": 227.18,
-        "sma10": 231.63,
-        "sma20": 228.69,
-        "assess_inputs": {
-          "close": 221.3000030517578,
-          "sma20": 228.68950119018555,
-          "sma20_5d_ago": 225.57850036621093,
-          "atr14": 5.628571646554129,
-          "consecutive_closes_above": 0,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "holding"
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "NVDA",
         "kind": "holding",
         "entry_price": 230.76,
@@ -952,68 +620,18 @@
         "next_earnings_date": "2026-11-17",
         "days_to_earnings": 34,
         "exit_drift": {
-          "status": "action_needed",
-          "closes_since_exit_fired": 2,
-          "ladder_state": "WATCHING",
-          "anchor_close": "2026-10-09",
-          "message": "NVDA: the ladder has it WATCHING and the book still holds it 2 confirmed closes after the exit fired (last HELD close 2026-10-09). Counted in confirmed closes, not days."
-        }
+          "status": "unmeasured",
+          "closes_since_exit_fired": null,
+          "ladder_state": "RE_ENTRY_ARMING",
+          "message": "NVDA: drift UNMEASURED \u2014 the ladder rendered no verdict for this row. Absence of a reading is not absence of drift."
+        },
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (WATCHING)"
       },
       "FFIV": {
         "state": "HELD",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": true,
-            "detail": "close 457.26 above SMA20 453.78"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": true,
-            "detail": "2/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 26,
-            "atr14": 13.43
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 453.78 vs 5d ago 440.17 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Communications Equipment' in universe (top-15)"
-          }
-        },
-        "conditions_met": 5,
-        "all_conditions_met": true,
-        "extension_pct": 0.77,
-        "extension_atr": 0.26,
-        "close": 457.26,
-        "sma5": 469.7,
-        "sma10": 464.12,
-        "sma20": 453.78,
-        "assess_inputs": {
-          "close": 457.260009765625,
-          "sma20": 453.78299713134766,
-          "sma20_5d_ago": 440.1664978027344,
-          "atr14": 13.43428475516183,
-          "consecutive_closes_above": 26,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "holding"
-        },
-        "stop": {
-          "type": "sma20_close",
-          "level": 453.78,
-          "detail": "exit on close below SMA20 (453.78)"
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "FFIV",
         "kind": "holding",
         "entry_price": 449.27,
@@ -1026,66 +644,18 @@
         "next_earnings_date": "2026-10-27",
         "days_to_earnings": 13,
         "exit_drift": {
-          "status": "ok",
-          "closes_since_exit_fired": 0,
-          "ladder_state": "HELD"
-        }
+          "status": "unmeasured",
+          "closes_since_exit_fired": null,
+          "ladder_state": "HELD",
+          "message": "FFIV: drift UNMEASURED \u2014 the ladder rendered no verdict for this row. Absence of a reading is not absence of drift."
+        },
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (HELD)"
       },
       "FTNT": {
         "state": "HELD",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": true,
-            "detail": "close 184.05 above SMA20 181.49"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": true,
-            "detail": "2/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 23,
-            "atr14": 5.65
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 181.49 vs 5d ago 175.37 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Systems Software' in universe (top-15)"
-          }
-        },
-        "conditions_met": 5,
-        "all_conditions_met": true,
-        "extension_pct": 1.41,
-        "extension_atr": 0.45,
-        "close": 184.05,
-        "sma5": 190.32,
-        "sma10": 187.6,
-        "sma20": 181.49,
-        "assess_inputs": {
-          "close": 184.0500030517578,
-          "sma20": 181.4890007019043,
-          "sma20_5d_ago": 175.37100067138672,
-          "atr14": 5.650712149483817,
-          "consecutive_closes_above": 23,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "holding"
-        },
-        "stop": {
-          "type": "sma20_close",
-          "level": 181.49,
-          "detail": "exit on close below SMA20 (181.49)"
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "FTNT",
         "kind": "holding",
         "entry_price": 178.38,
@@ -1098,67 +668,18 @@
         "next_earnings_date": "2026-10-28",
         "days_to_earnings": 14,
         "exit_drift": {
-          "status": "ok",
-          "closes_since_exit_fired": 0,
-          "ladder_state": "HELD"
-        }
+          "status": "unmeasured",
+          "closes_since_exit_fired": null,
+          "ladder_state": "HELD",
+          "message": "FTNT: drift UNMEASURED \u2014 the ladder rendered no verdict for this row. Absence of a reading is not absence of drift."
+        },
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (HELD)"
       },
       "PANW": {
         "state": "EXIT_FIRED",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": false,
-            "detail": "close 375.04 below SMA20 392.28"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": false,
-            "detail": "0/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 0,
-            "atr14": 17.68
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 392.28 vs 5d ago 382.31 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Systems Software' in universe (top-15)"
-          }
-        },
-        "conditions_met": 3,
-        "all_conditions_met": false,
-        "extension_pct": -4.4,
-        "extension_atr": -0.98,
-        "distance_to_sma20_pct": -4.4,
-        "close": 375.04,
-        "sma5": 398.64,
-        "sma10": 402.49,
-        "sma20": 392.28,
-        "assess_inputs": {
-          "close": 375.0400085449219,
-          "sma20": 392.2824996948242,
-          "sma20_5d_ago": 382.3144989013672,
-          "atr14": 17.678573608398438,
-          "consecutive_closes_above": 0,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "holding"
-        },
-        "stop": {
-          "type": "sma20_close",
-          "level": 392.28,
-          "detail": "exit on close below SMA20 (392.28)"
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "PANW",
         "kind": "holding",
         "entry_price": 392.2,
@@ -1171,67 +692,18 @@
         "next_earnings_date": "2026-11-19",
         "days_to_earnings": 36,
         "exit_drift": {
-          "status": "ok",
-          "closes_since_exit_fired": 0,
-          "ladder_state": "EXIT_FIRED",
-          "message": "PANW: exit fired on the latest confirmed close \u2014 not yet drift."
-        }
+          "status": "unmeasured",
+          "closes_since_exit_fired": null,
+          "ladder_state": "HELD",
+          "message": "PANW: drift UNMEASURED \u2014 the ladder rendered no verdict for this row. Absence of a reading is not absence of drift."
+        },
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (EXIT_FIRED)"
       },
       "CRL": {
         "state": "HELD",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": true,
-            "detail": "close 302.00 above SMA20 293.49"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": true,
-            "detail": "close 302.00 > SMA20 + 0.5*ATR14 (299.26)",
-            "consecutive_closes_above": 15,
-            "atr14": 11.55
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 293.49 vs 5d ago 286.89 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Life Sciences Tools & Services' in universe (top-15)"
-          }
-        },
-        "conditions_met": 5,
-        "all_conditions_met": true,
-        "extension_pct": 2.9,
-        "extension_atr": 0.74,
-        "close": 302.0,
-        "sma5": 300.53,
-        "sma10": 299.57,
-        "sma20": 293.49,
-        "assess_inputs": {
-          "close": 302.0,
-          "sma20": 293.48699645996095,
-          "sma20_5d_ago": 286.8864974975586,
-          "atr14": 11.550356183733259,
-          "consecutive_closes_above": 15,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "holding"
-        },
-        "stop": {
-          "type": "sma20_close",
-          "level": 293.49,
-          "detail": "exit on close below SMA20 (293.49)"
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "CRL",
         "kind": "holding",
         "entry_price": 288.3,
@@ -1244,67 +716,18 @@
         "next_earnings_date": "2026-11-04",
         "days_to_earnings": 21,
         "exit_drift": {
-          "status": "ok",
-          "closes_since_exit_fired": 0,
-          "ladder_state": "HELD"
-        }
+          "status": "unmeasured",
+          "closes_since_exit_fired": null,
+          "ladder_state": "HELD",
+          "message": "CRL: drift UNMEASURED \u2014 the ladder rendered no verdict for this row. Absence of a reading is not absence of drift."
+        },
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (HELD)"
       },
       "APH": {
         "state": "EXIT_FIRED",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": false,
-            "detail": "close 82.69 below SMA20 84.26"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": false,
-            "detail": "0/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 0,
-            "atr14": 2.48
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 84.26 vs 5d ago 82.74 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Electronic Components' in universe (top-15)"
-          }
-        },
-        "conditions_met": 3,
-        "all_conditions_met": false,
-        "extension_pct": -1.86,
-        "extension_atr": -0.63,
-        "distance_to_sma20_pct": -1.86,
-        "close": 82.69,
-        "sma5": 85.47,
-        "sma10": 86.34,
-        "sma20": 84.26,
-        "assess_inputs": {
-          "close": 82.69000244140625,
-          "sma20": 84.25667762756348,
-          "sma20_5d_ago": 82.7408893585205,
-          "atr14": 2.4842861720493863,
-          "consecutive_closes_above": 0,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "holding"
-        },
-        "stop": {
-          "type": "sma20_close",
-          "level": 84.26,
-          "detail": "exit on close below SMA20 (84.26)"
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "APH",
         "kind": "holding",
         "entry_price": 86.52,
@@ -1317,110 +740,18 @@
         "next_earnings_date": "2026-10-28",
         "days_to_earnings": 14,
         "exit_drift": {
-          "status": "ok",
-          "closes_since_exit_fired": 0,
-          "ladder_state": "EXIT_FIRED",
-          "message": "APH: exit fired on the latest confirmed close \u2014 not yet drift."
-        }
+          "status": "unmeasured",
+          "closes_since_exit_fired": null,
+          "ladder_state": "HELD",
+          "message": "APH: drift UNMEASURED \u2014 the ladder rendered no verdict for this row. Absence of a reading is not absence of drift."
+        },
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (EXIT_FIRED)"
       },
       "MRNA": {
         "state": "EXTENDED_HOLD",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": true,
-            "detail": "close 226.30 above SMA20 194.06"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": true,
-            "detail": "close 226.30 > SMA20 + 0.5*ATR14 (202.13)",
-            "consecutive_closes_above": 20,
-            "atr14": 16.15
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 194.06 vs 5d ago 175.98 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Biotechnology' in universe (top-15)"
-          }
-        },
-        "conditions_met": 5,
-        "all_conditions_met": true,
-        "extension_pct": 16.62,
-        "extension_atr": 2.0,
-        "extension_guard": "extension 2.0\u00d7ATR > 1.8\u00d7 \u2014 re-entry suppressed",
-        "close": 226.3,
-        "sma5": 215.66,
-        "sma10": 204.44,
-        "sma20": 194.06,
-        "assess_inputs": {
-          "close": 226.3000030517578,
-          "sma20": 194.05600204467774,
-          "sma20_5d_ago": 175.9750015258789,
-          "atr14": 16.15185764857701,
-          "consecutive_closes_above": 20,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "watching"
-        },
-        "grade": {
-          "grade": "C",
-          "rows": {
-            "1_conditions": {
-              "met": true,
-              "detail": "five mechanical conditions met"
-            },
-            "2_extension": {
-              "met": false,
-              "detail": "extension 1.9963029459909083\u00d7ATR > 1.8\u00d7"
-            },
-            "3_approach": {
-              "met": true,
-              "detail": "close 226.30 > SMA5 215.66 with up-close off the low"
-            },
-            "4_rsi": {
-              "met": true,
-              "detail": "RSI 69 in [45, 70]"
-            },
-            "5_score": {
-              "met": true,
-              "detail": "score 86 >= 75"
-            },
-            "6_breaker": {
-              "met": true,
-              "detail": "group breaker clear"
-            },
-            "7_runway": {
-              "met": true,
-              "detail": "16 sessions before the print (\u2265 15)"
-            }
-          },
-          "failing": [
-            "2_extension"
-          ],
-          "reasons": "extension 1.9963029459909083\u00d7ATR > 1.8\u00d7"
-        },
-        "grade_inputs": {
-          "sma5": 215.6580017089844,
-          "up_close_since_swing_low": true,
-          "rsi14": 69.14720058705218,
-          "quality_score": 86,
-          "ytd_basis": "prior_year_close",
-          "score_waived": false,
-          "breaker_status": "clear",
-          "runway_sessions": 16
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "MRNA",
         "kind": "watching",
         "theme": "Biotech",
@@ -1428,111 +759,14 @@
         "weeks_in_universe": 1,
         "note": "theme momentum leader +158% YTD; dashboard score 55, outranked",
         "next_earnings_date": "2026-11-05",
-        "days_to_earnings": 22
+        "days_to_earnings": 22,
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (EXTENDED_HOLD)"
       },
       "CFG": {
         "state": "WATCHING",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": false,
-            "detail": "close 62.57 below SMA20 64.58"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": false,
-            "detail": "0/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 0,
-            "atr14": 1.26
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": false,
-            "detail": "SMA20 64.58 vs 5d ago 66.09 (falling)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": false,
-            "detail": "group 'Regional Banks' not in current universe (top-15)"
-          }
-        },
-        "conditions_met": 1,
-        "all_conditions_met": false,
-        "extension_pct": -3.11,
-        "extension_atr": -1.59,
-        "distance_to_sma20_pct": -3.11,
-        "close": 62.57,
-        "sma5": 63.49,
-        "sma10": 63.69,
-        "sma20": 64.58,
-        "assess_inputs": {
-          "close": 62.56999969482422,
-          "sma20": 64.57649974822998,
-          "sma20_5d_ago": 66.09149971008301,
-          "atr14": 1.2607135772705078,
-          "consecutive_closes_above": 0,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": false,
-          "kind": "watching"
-        },
-        "grade": {
-          "grade": "C",
-          "rows": {
-            "1_conditions": {
-              "met": false,
-              "detail": "five mechanical conditions not met"
-            },
-            "2_extension": {
-              "met": true,
-              "detail": "extension -1.591559010374035\u00d7ATR <= 1.8\u00d7"
-            },
-            "3_approach": {
-              "met": false,
-              "detail": "close 62.57 below SMA5 63.49 \u2014 arriving from above"
-            },
-            "4_rsi": {
-              "met": false,
-              "detail": "RSI 32 outside [45, 70]"
-            },
-            "5_score": {
-              "met": false,
-              "detail": "score 58 < 75"
-            },
-            "6_breaker": {
-              "met": false,
-              "detail": "group breaker unknown (no group data)"
-            },
-            "7_runway": {
-              "met": false,
-              "detail": "2 sessions before the print (< 15)"
-            }
-          },
-          "failing": [
-            "1_conditions",
-            "3_approach",
-            "4_rsi",
-            "5_score",
-            "6_breaker",
-            "7_runway"
-          ],
-          "reasons": "five mechanical conditions not met; close 62.57 below SMA5 63.49 \u2014 arriving from above; RSI 32 outside [45, 70]; score 58 < 75; group breaker unknown (no group data); 2 sessions before the print (< 15)"
-        },
-        "grade_inputs": {
-          "sma5": 63.485999298095706,
-          "up_close_since_swing_low": false,
-          "rsi14": 32.16887867417442,
-          "quality_score": 58,
-          "ytd_basis": "prior_year_close",
-          "score_waived": false,
-          "breaker_status": null,
-          "runway_sessions": 2
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "CFG",
         "kind": "watching",
         "theme": null,
@@ -1540,108 +774,14 @@
         "weeks_in_universe": null,
         "note": "added 2026-07-19 via +watch (D-017 candidate, graded A+) \u2014 Regional Banks (breaker clear), score 81 BUY NOW, +2.7% vs SMA20, RSI 61 at add",
         "next_earnings_date": "2026-10-16",
-        "days_to_earnings": 2
+        "days_to_earnings": 2,
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (WATCHING)"
       },
       "CRWD": {
         "state": "WATCHING",
-        "conditions": {
-          "1_trigger": {
-            "name": "trigger",
-            "met": false,
-            "detail": "close 249.29 below SMA20 260.42"
-          },
-          "2_confirmation": {
-            "name": "confirmation",
-            "met": false,
-            "detail": "0/2 consecutive closes above SMA20",
-            "consecutive_closes_above": 0,
-            "atr14": 11.04
-          },
-          "3_regime_gate": {
-            "met": true,
-            "mode": "conditional",
-            "detail": "regime Risk-on / Choppy \u2014 conditional, A+ setups only",
-            "name": "regime_gate"
-          },
-          "4_slope": {
-            "name": "slope",
-            "met": true,
-            "detail": "SMA20 260.42 vs 5d ago 251.59 (flat/rising)"
-          },
-          "5_thesis": {
-            "name": "thesis",
-            "met": true,
-            "detail": "group 'Systems Software' in universe (top-15)"
-          }
-        },
-        "conditions_met": 3,
-        "all_conditions_met": false,
-        "extension_pct": -4.27,
-        "extension_atr": -1.01,
-        "distance_to_sma20_pct": -4.27,
-        "close": 249.29,
-        "sma5": 262.31,
-        "sma10": 266.47,
-        "sma20": 260.42,
-        "assess_inputs": {
-          "close": 249.2899932861328,
-          "sma20": 260.42250061035156,
-          "sma20_5d_ago": 251.58600082397462,
-          "atr14": 11.038743155343193,
-          "consecutive_closes_above": 0,
-          "regime_state": "Risk-on / Choppy",
-          "group_in_universe": true,
-          "kind": "watching"
-        },
-        "grade": {
-          "grade": "C",
-          "rows": {
-            "1_conditions": {
-              "met": false,
-              "detail": "five mechanical conditions not met"
-            },
-            "2_extension": {
-              "met": true,
-              "detail": "extension -1.0084940982461552\u00d7ATR <= 1.8\u00d7"
-            },
-            "3_approach": {
-              "met": false,
-              "detail": "close 249.29 below SMA5 262.31 \u2014 arriving from above"
-            },
-            "4_rsi": {
-              "met": true,
-              "detail": "RSI 49 in [45, 70]"
-            },
-            "5_score": {
-              "met": false,
-              "detail": "score 58 < 75"
-            },
-            "6_breaker": {
-              "met": true,
-              "detail": "group breaker clear"
-            },
-            "7_runway": {
-              "met": true,
-              "detail": "34 sessions before the print (\u2265 15)"
-            }
-          },
-          "failing": [
-            "1_conditions",
-            "3_approach",
-            "5_score"
-          ],
-          "reasons": "five mechanical conditions not met; close 249.29 below SMA5 262.31 \u2014 arriving from above; score 58 < 75"
-        },
-        "grade_inputs": {
-          "sma5": 262.31200256347654,
-          "up_close_since_swing_low": true,
-          "rsi14": 48.955687475458326,
-          "quality_score": 58,
-          "ytd_basis": "prior_year_close",
-          "score_waived": false,
-          "breaker_status": "clear",
-          "runway_sessions": 34
-        },
+        "insufficient_data": true,
+        "detail": "non-finite close/SMA in window",
+        "conditions": {},
         "ticker": "CRWD",
         "kind": "watching",
         "theme": null,
@@ -1649,323 +789,186 @@
         "weeks_in_universe": 13,
         "note": "CRWD's 2026-07-20..2026-07-23 trade was MIGRATED into closed[] on 2026-09-28; that row (CRWD, entry_date 2026-07-20) is the record and this one is not. The name stays here on the reclaim watch. Summary only, authoritative figures in closed[]: sold 24 @ 189.085 on 2026-07-23 for -$264.36 = -0.9501R against a 188.5061 entry stop, overrides ZERO.",
         "next_earnings_date": "2026-12-01",
-        "days_to_earnings": 48
+        "days_to_earnings": 48,
+        "state_carried": "no evaluable data this run \u2014 showing the state from the last confirmed close (WATCHING)"
       }
     },
-    "transitions": [
-      {
-        "timestamp": "2026-10-14T21:16:30.620998+00:00",
-        "type": "position_state_change",
-        "severity": "low",
-        "group": "Communications Equipment",
-        "ticker": "ANET",
-        "description": "ANET: EXIT_FIRED \u2192 WATCHING",
-        "detail": {
-          "from_state": "EXIT_FIRED",
-          "to_state": "WATCHING",
-          "close": 195.42,
-          "sma20": 206.25,
-          "extension_pct": -5.25,
-          "extension_atr": -1.54,
-          "conditions_met": "3/5",
-          "bar_date": "2026-10-14"
-        }
-      },
-      {
-        "timestamp": "2026-10-14T21:16:30.668909+00:00",
-        "type": "position_state_change",
-        "severity": "medium",
-        "group": "Life Sciences Tools & Services",
-        "ticker": "WAT",
-        "description": "WAT: EXIT_FIRED \u2192 RE_ENTRY_ARMING",
-        "detail": {
-          "from_state": "EXIT_FIRED",
-          "to_state": "RE_ENTRY_ARMING",
-          "close": 436.61,
-          "sma20": 431.75,
-          "extension_pct": 1.12,
-          "extension_atr": 0.37,
-          "conditions_met": "4/5",
-          "bar_date": "2026-10-14"
-        }
-      },
-      {
-        "timestamp": "2026-10-14T21:16:30.812805+00:00",
-        "type": "position_state_change",
-        "severity": "critical",
-        "group": "Technology Hardware, Storage & Peripherals",
-        "ticker": "HPE",
-        "description": "HPE: HELD \u2192 EXIT_FIRED",
-        "detail": {
-          "from_state": "HELD",
-          "to_state": "EXIT_FIRED",
-          "close": 63.11,
-          "sma20": 65.65,
-          "extension_pct": -3.86,
-          "extension_atr": -0.68,
-          "conditions_met": "3/5",
-          "stop": "exit on close below SMA20 (65.65)",
-          "bar_date": "2026-10-14"
-        }
-      },
-      {
-        "timestamp": "2026-10-14T21:16:31.039296+00:00",
-        "type": "position_state_change",
-        "severity": "low",
-        "group": "Semiconductors",
-        "ticker": "NVDA",
-        "description": "NVDA: RE_ENTRY_ARMING \u2192 WATCHING",
-        "detail": {
-          "from_state": "RE_ENTRY_ARMING",
-          "to_state": "WATCHING",
-          "close": 221.3,
-          "sma20": 228.69,
-          "extension_pct": -3.23,
-          "extension_atr": -1.31,
-          "conditions_met": "3/5",
-          "bar_date": "2026-10-14"
-        }
-      },
-      {
-        "timestamp": "2026-10-14T21:16:31.190666+00:00",
-        "type": "position_state_change",
-        "severity": "critical",
-        "group": "Systems Software",
-        "ticker": "PANW",
-        "description": "PANW: HELD \u2192 EXIT_FIRED",
-        "detail": {
-          "from_state": "HELD",
-          "to_state": "EXIT_FIRED",
-          "close": 375.04,
-          "sma20": 392.28,
-          "extension_pct": -4.4,
-          "extension_atr": -0.98,
-          "conditions_met": "3/5",
-          "stop": "exit on close below SMA20 (392.28)",
-          "bar_date": "2026-10-14"
-        }
-      },
-      {
-        "timestamp": "2026-10-14T21:16:31.304381+00:00",
-        "type": "position_state_change",
-        "severity": "critical",
-        "group": "Electronic Components",
-        "ticker": "APH",
-        "description": "APH: HELD \u2192 EXIT_FIRED",
-        "detail": {
-          "from_state": "HELD",
-          "to_state": "EXIT_FIRED",
-          "close": 82.69,
-          "sma20": 84.26,
-          "extension_pct": -1.86,
-          "extension_atr": -0.63,
-          "conditions_met": "3/5",
-          "stop": "exit on close below SMA20 (84.26)",
-          "bar_date": "2026-10-14"
-        }
-      },
-      {
-        "timestamp": "2026-10-14T21:16:31.446589+00:00",
-        "type": "position_state_change",
-        "severity": "medium",
-        "group": "Biotechnology",
-        "ticker": "MRNA",
-        "description": "MRNA: RE_ENTRY_READY \u2192 EXTENDED_HOLD",
-        "detail": {
-          "from_state": "RE_ENTRY_READY",
-          "to_state": "EXTENDED_HOLD",
-          "close": 226.3,
-          "sma20": 194.06,
-          "extension_pct": 16.62,
-          "extension_atr": 2.0,
-          "conditions_met": "5/5",
-          "extension_guard": "extension 2.0\u00d7ATR > 1.8\u00d7 \u2014 re-entry suppressed",
-          "bar_date": "2026-10-14"
-        }
-      },
-      {
-        "timestamp": "2026-10-14T21:16:31.776203+00:00",
-        "type": "position_state_change",
-        "severity": "low",
-        "group": "Systems Software",
-        "ticker": "CRWD",
-        "description": "CRWD: RE_ENTRY_READY \u2192 WATCHING",
-        "detail": {
-          "from_state": "RE_ENTRY_READY",
-          "to_state": "WATCHING",
-          "close": 249.29,
-          "sma20": 260.42,
-          "extension_pct": -4.27,
-          "extension_atr": -1.01,
-          "conditions_met": "3/5",
-          "bar_date": "2026-10-14"
-        }
-      }
-    ],
+    "transitions": [],
     "exit_drift_summary": {
-      "status": "action_needed",
-      "drifting": [
-        "TER",
-        "NVDA",
+      "status": "degraded",
+      "drifting": [],
+      "unmeasured": [
         "ANET",
-        "WAT"
+        "APH",
+        "CRL",
+        "FFIV",
+        "FTNT",
+        "HPE",
+        "NTAP",
+        "NVDA",
+        "PANW",
+        "TER",
+        "WAT",
+        "ZBRA"
       ],
-      "unmeasured": [],
       "not_evaluated": [],
       "holdings_total": 12,
-      "measured": 12,
-      "worst_closes_since_exit_fired": 2,
-      "message": "4 holdings fired and still held: TER 2 closes; NVDA 2 closes; ANET 1 close; WAT 1 close",
+      "measured": 0,
+      "worst_closes_since_exit_fired": 0,
+      "message": "12 of 12 holdings could NOT be checked (ANET, APH, CRL, FFIV, FTNT, HPE, NTAP, NVDA, PANW, TER, WAT, ZBRA) \u2014 a coverage gap, not a clear book",
       "basis": "confirmed closes (never wall-clock days)",
       "covers": "EXIT side only \u2014 an unrecorded ENTRY is invisible to this engine by construction; it needs a broker-side input that does not exist on this machine"
     }
   },
   "r28": {
     "status": "ok",
-    "degraded": false,
+    "degraded": true,
     "enforcement_class": "COMPUTED (reporting-hard \u2014 cannot block broker orders and does not pretend to)",
     "capital_usd": 97500.0,
     "regime_state": "Risk-on / Choppy",
     "ceiling_state": "Risk-on / Choppy",
     "ceiling_pct": 50.0,
-    "deployed_usd": 74845.21,
-    "deployed_pct": 76.76,
-    "cash_pct": 23.24,
+    "deployed_usd": 0.0,
+    "deployed_pct": 0.0,
+    "cash_pct": 100.0,
     "positions": [
       {
         "ticker": "ANET",
         "shares": 31.0,
-        "price": 195.42,
-        "value_usd": 6058.02,
+        "price": null,
+        "value_usd": null,
+        "pct_of_capital": null,
         "group": "Communications Equipment",
-        "pct_of_capital": 6.21,
-        "status": "compliant",
-        "message": "ANET $6,058 = 6.2% of capital"
+        "status": "no_price",
+        "message": "ANET: no EOD price in the artifact \u2014 not counted toward exposure (still counts toward the group position cap; fix the data, not the rule)"
       },
       {
         "ticker": "WAT",
         "shares": 15.0,
-        "price": 436.61,
-        "value_usd": 6549.15,
+        "price": null,
+        "value_usd": null,
+        "pct_of_capital": null,
         "group": "Life Sciences Tools & Services",
-        "pct_of_capital": 6.72,
-        "status": "compliant",
-        "message": "WAT $6,549 = 6.7% of capital"
+        "status": "no_price",
+        "message": "WAT: no EOD price in the artifact \u2014 not counted toward exposure (still counts toward the group position cap; fix the data, not the rule)"
       },
       {
         "ticker": "HPE",
         "shares": 104.0,
-        "price": 63.11,
-        "value_usd": 6563.44,
+        "price": null,
+        "value_usd": null,
+        "pct_of_capital": null,
         "group": "Technology Hardware, Storage & Peripherals",
-        "pct_of_capital": 6.73,
-        "status": "compliant",
-        "message": "HPE $6,563 = 6.7% of capital"
+        "status": "no_price",
+        "message": "HPE: no EOD price in the artifact \u2014 not counted toward exposure (still counts toward the group position cap; fix the data, not the rule)"
       },
       {
         "ticker": "TER",
         "shares": 15.0,
-        "price": 359.44,
-        "value_usd": 5391.6,
+        "price": null,
+        "value_usd": null,
+        "pct_of_capital": null,
         "group": "Semiconductor Materials & Equipment",
-        "pct_of_capital": 5.53,
-        "status": "compliant",
-        "message": "TER $5,392 = 5.5% of capital"
+        "status": "no_price",
+        "message": "TER: no EOD price in the artifact \u2014 not counted toward exposure (still counts toward the group position cap; fix the data, not the rule)"
       },
       {
         "ticker": "NTAP",
         "shares": 31.0,
-        "price": 222.2,
-        "value_usd": 6888.2,
+        "price": null,
+        "value_usd": null,
+        "pct_of_capital": null,
         "group": "Technology Hardware, Storage & Peripherals",
-        "pct_of_capital": 7.06,
-        "status": "compliant",
-        "message": "NTAP $6,888 = 7.1% of capital"
+        "status": "no_price",
+        "message": "NTAP: no EOD price in the artifact \u2014 not counted toward exposure (still counts toward the group position cap; fix the data, not the rule)"
       },
       {
         "ticker": "ZBRA",
         "shares": 17.0,
-        "price": 376.88,
-        "value_usd": 6406.96,
+        "price": null,
+        "value_usd": null,
+        "pct_of_capital": null,
         "group": "Electronic Equipment & Instruments",
-        "pct_of_capital": 6.57,
-        "status": "compliant",
-        "message": "ZBRA $6,407 = 6.6% of capital"
+        "status": "no_price",
+        "message": "ZBRA: no EOD price in the artifact \u2014 not counted toward exposure (still counts toward the group position cap; fix the data, not the rule)"
       },
       {
         "ticker": "NVDA",
         "shares": 27.0,
-        "price": 221.3,
-        "value_usd": 5975.1,
+        "price": null,
+        "value_usd": null,
+        "pct_of_capital": null,
         "group": "Semiconductors",
-        "pct_of_capital": 6.13,
-        "status": "compliant",
-        "message": "NVDA $5,975 = 6.1% of capital"
+        "status": "no_price",
+        "message": "NVDA: no EOD price in the artifact \u2014 not counted toward exposure (still counts toward the group position cap; fix the data, not the rule)"
       },
       {
         "ticker": "FFIV",
         "shares": 14.0,
-        "price": 457.26,
-        "value_usd": 6401.64,
+        "price": null,
+        "value_usd": null,
+        "pct_of_capital": null,
         "group": "Communications Equipment",
-        "pct_of_capital": 6.57,
-        "status": "compliant",
-        "message": "FFIV $6,402 = 6.6% of capital"
+        "status": "no_price",
+        "message": "FFIV: no EOD price in the artifact \u2014 not counted toward exposure (still counts toward the group position cap; fix the data, not the rule)"
       },
       {
         "ticker": "FTNT",
         "shares": 35.0,
-        "price": 184.05,
-        "value_usd": 6441.75,
+        "price": null,
+        "value_usd": null,
+        "pct_of_capital": null,
         "group": "Systems Software",
-        "pct_of_capital": 6.61,
-        "status": "compliant",
-        "message": "FTNT $6,442 = 6.6% of capital"
+        "status": "no_price",
+        "message": "FTNT: no EOD price in the artifact \u2014 not counted toward exposure (still counts toward the group position cap; fix the data, not the rule)"
       },
       {
         "ticker": "PANW",
         "shares": 15.0,
-        "price": 375.04,
-        "value_usd": 5625.6,
+        "price": null,
+        "value_usd": null,
+        "pct_of_capital": null,
         "group": "Systems Software",
-        "pct_of_capital": 5.77,
-        "status": "compliant",
-        "message": "PANW $5,626 = 5.8% of capital"
+        "status": "no_price",
+        "message": "PANW: no EOD price in the artifact \u2014 not counted toward exposure (still counts toward the group position cap; fix the data, not the rule)"
       },
       {
         "ticker": "CRL",
         "shares": 21.0,
-        "price": 302.0,
-        "value_usd": 6342.0,
+        "price": null,
+        "value_usd": null,
+        "pct_of_capital": null,
         "group": "Life Sciences Tools & Services",
-        "pct_of_capital": 6.5,
-        "status": "compliant",
-        "message": "CRL $6,342 = 6.5% of capital"
+        "status": "no_price",
+        "message": "CRL: no EOD price in the artifact \u2014 not counted toward exposure (still counts toward the group position cap; fix the data, not the rule)"
       },
       {
         "ticker": "APH",
         "shares": 75.0,
-        "price": 82.69,
-        "value_usd": 6201.75,
+        "price": null,
+        "value_usd": null,
+        "pct_of_capital": null,
         "group": "Electronic Components",
-        "pct_of_capital": 6.36,
-        "status": "compliant",
-        "message": "APH $6,202 = 6.4% of capital"
+        "status": "no_price",
+        "message": "APH: no EOD price in the artifact \u2014 not counted toward exposure (still counts toward the group position cap; fix the data, not the rule)"
       }
     ],
     "groups": [
       {
-        "group": "Technology Hardware, Storage & Peripherals",
+        "group": "Communications Equipment",
         "tickers": [
-          "HPE",
-          "NTAP"
+          "ANET",
+          "FFIV"
         ],
-        "value_usd": 13451.64,
+        "value_usd": 0.0,
         "count": 2,
-        "unpriced": [],
-        "pct_of_capital": 13.8,
+        "unpriced": [
+          "ANET",
+          "FFIV"
+        ],
+        "pct_of_capital": 0.0,
         "status": "compliant",
-        "message": "Technology Hardware, Storage & Peripherals: $13,452 = 13.8% across 2 positions"
+        "message": "Communications Equipment: $0 = 0.0% across 2 positions (2 unpriced: ANET, FFIV \u2014 exposure understated)"
       },
       {
         "group": "Life Sciences Tools & Services",
@@ -1973,25 +976,73 @@
           "WAT",
           "CRL"
         ],
-        "value_usd": 12891.15,
+        "value_usd": 0.0,
         "count": 2,
-        "unpriced": [],
-        "pct_of_capital": 13.22,
+        "unpriced": [
+          "WAT",
+          "CRL"
+        ],
+        "pct_of_capital": 0.0,
         "status": "compliant",
-        "message": "Life Sciences Tools & Services: $12,891 = 13.2% across 2 positions"
+        "message": "Life Sciences Tools & Services: $0 = 0.0% across 2 positions (2 unpriced: WAT, CRL \u2014 exposure understated)"
       },
       {
-        "group": "Communications Equipment",
+        "group": "Technology Hardware, Storage & Peripherals",
         "tickers": [
-          "ANET",
-          "FFIV"
+          "HPE",
+          "NTAP"
         ],
-        "value_usd": 12459.66,
+        "value_usd": 0.0,
         "count": 2,
-        "unpriced": [],
-        "pct_of_capital": 12.78,
+        "unpriced": [
+          "HPE",
+          "NTAP"
+        ],
+        "pct_of_capital": 0.0,
         "status": "compliant",
-        "message": "Communications Equipment: $12,460 = 12.8% across 2 positions"
+        "message": "Technology Hardware, Storage & Peripherals: $0 = 0.0% across 2 positions (2 unpriced: HPE, NTAP \u2014 exposure understated)"
+      },
+      {
+        "group": "Semiconductor Materials & Equipment",
+        "tickers": [
+          "TER"
+        ],
+        "value_usd": 0.0,
+        "count": 1,
+        "unpriced": [
+          "TER"
+        ],
+        "pct_of_capital": 0.0,
+        "status": "compliant",
+        "message": "Semiconductor Materials & Equipment: $0 = 0.0% across 1 position (1 unpriced: TER \u2014 exposure understated)"
+      },
+      {
+        "group": "Electronic Equipment & Instruments",
+        "tickers": [
+          "ZBRA"
+        ],
+        "value_usd": 0.0,
+        "count": 1,
+        "unpriced": [
+          "ZBRA"
+        ],
+        "pct_of_capital": 0.0,
+        "status": "compliant",
+        "message": "Electronic Equipment & Instruments: $0 = 0.0% across 1 position (1 unpriced: ZBRA \u2014 exposure understated)"
+      },
+      {
+        "group": "Semiconductors",
+        "tickers": [
+          "NVDA"
+        ],
+        "value_usd": 0.0,
+        "count": 1,
+        "unpriced": [
+          "NVDA"
+        ],
+        "pct_of_capital": 0.0,
+        "status": "compliant",
+        "message": "Semiconductors: $0 = 0.0% across 1 position (1 unpriced: NVDA \u2014 exposure understated)"
       },
       {
         "group": "Systems Software",
@@ -1999,83 +1050,52 @@
           "FTNT",
           "PANW"
         ],
-        "value_usd": 12067.35,
+        "value_usd": 0.0,
         "count": 2,
-        "unpriced": [],
-        "pct_of_capital": 12.38,
-        "status": "compliant",
-        "message": "Systems Software: $12,067 = 12.4% across 2 positions"
-      },
-      {
-        "group": "Electronic Equipment & Instruments",
-        "tickers": [
-          "ZBRA"
+        "unpriced": [
+          "FTNT",
+          "PANW"
         ],
-        "value_usd": 6406.96,
-        "count": 1,
-        "unpriced": [],
-        "pct_of_capital": 6.57,
+        "pct_of_capital": 0.0,
         "status": "compliant",
-        "message": "Electronic Equipment & Instruments: $6,407 = 6.6% across 1 position"
+        "message": "Systems Software: $0 = 0.0% across 2 positions (2 unpriced: FTNT, PANW \u2014 exposure understated)"
       },
       {
         "group": "Electronic Components",
         "tickers": [
           "APH"
         ],
-        "value_usd": 6201.75,
+        "value_usd": 0.0,
         "count": 1,
-        "unpriced": [],
-        "pct_of_capital": 6.36,
-        "status": "compliant",
-        "message": "Electronic Components: $6,202 = 6.4% across 1 position"
-      },
-      {
-        "group": "Semiconductors",
-        "tickers": [
-          "NVDA"
+        "unpriced": [
+          "APH"
         ],
-        "value_usd": 5975.1,
-        "count": 1,
-        "unpriced": [],
-        "pct_of_capital": 6.13,
+        "pct_of_capital": 0.0,
         "status": "compliant",
-        "message": "Semiconductors: $5,975 = 6.1% across 1 position"
-      },
-      {
-        "group": "Semiconductor Materials & Equipment",
-        "tickers": [
-          "TER"
-        ],
-        "value_usd": 5391.6,
-        "count": 1,
-        "unpriced": [],
-        "pct_of_capital": 5.53,
-        "status": "compliant",
-        "message": "Semiconductor Materials & Equipment: $5,392 = 5.5% across 1 position"
+        "message": "Electronic Components: $0 = 0.0% across 1 position (1 unpriced: APH \u2014 exposure understated)"
       }
     ],
     "ceiling": {
       "rule": "R17->R28 (D-008 Q4)",
-      "status": "action_needed",
-      "message": "deployed $74,845 = 76.8% vs the Risk-on / Choppy ceiling 50% ($48,750) \u2014 reduce exposure below 50% via normal exit discipline (stops/R11 govern; no same-day forced liquidation)"
+      "status": "unavailable",
+      "message": "no holding could be priced (12 held) \u2014 exposure unknown; ceiling not evaluated (artifact outage: fix the data, not the rule)"
     },
     "cash_floor": {
       "rule": "R18->R28 (informational)",
       "status": "info",
-      "message": "cash $22,655 = 23.2% vs the Risk-on / Choppy-implied floor 50% \u2014 the ceiling's complement, not a separate limit"
+      "message": "cash $97,500 = 100.0% vs the Risk-on / Choppy-implied floor 50% \u2014 the ceiling's complement, not a separate limit"
     },
     "summary": {
       "violations": 0,
-      "action_needed": 1,
+      "action_needed": 0,
       "warnings": 0,
-      "compliant": 20,
-      "no_price": 0,
+      "compliant": 8,
+      "no_price": 12,
       "invalid": 0
     }
   },
   "rules": {
-    "date": "2026-10-14",
+    "date": "2026-10-15",
     "evaluations": [
       {
         "rule": "R1",
@@ -2406,643 +1426,5 @@
     "R25": "Don't add to position because it's working. Add only on pullbacks per pre-committed plan.",
     "R26": "No margin leverage on aggressive options trades.",
     "R27": "Flexibility means switching themes by rules, not by feel."
-  },
-  "candidate_grades": {
-    "MPC": {
-      "grade": "C",
-      "reasons": "extension 3.782920608761816\u00d7ATR > 1.8\u00d7; RSI 80 outside [45, 70]; score 71 < 75; 14 sessions before the print (< 15)",
-      "failing": [
-        "2_extension",
-        "4_rsi",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Oil & Gas Refining & Marketing"
-    },
-    "VLO": {
-      "grade": "C",
-      "reasons": "extension 3.038795416812176\u00d7ATR > 1.8\u00d7; RSI 77 outside [45, 70]; 6 sessions before the print (< 15)",
-      "failing": [
-        "2_extension",
-        "4_rsi",
-        "7_runway"
-      ],
-      "group": "Oil & Gas Refining & Marketing"
-    },
-    "PSX": {
-      "grade": "C",
-      "reasons": "extension 3.3916219545255957\u00d7ATR > 1.8\u00d7; RSI 79 outside [45, 70]; 10 sessions before the print (< 15)",
-      "failing": [
-        "2_extension",
-        "4_rsi",
-        "7_runway"
-      ],
-      "group": "Oil & Gas Refining & Marketing"
-    },
-    "DELL": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 507.93 below SMA5 563.55 \u2014 arriving from above; RSI 42 outside [45, 70]; score 46 < 75",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score"
-      ],
-      "group": "Technology Hardware, Storage & Peripherals"
-    },
-    "P": {
-      "grade": "C",
-      "reasons": "close 141.49 below SMA5 151.77 \u2014 arriving from above",
-      "failing": [
-        "3_approach"
-      ],
-      "group": "Technology Hardware, Storage & Peripherals"
-    },
-    "AAPL": {
-      "grade": "B",
-      "reasons": "13 sessions before the print (< 15)",
-      "failing": [
-        "7_runway"
-      ],
-      "group": "Technology Hardware, Storage & Peripherals"
-    },
-    "SMCI": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 35.78 below SMA5 39.89 \u2014 arriving from above; RSI 38 outside [45, 70]; score 51 < 75; 14 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Technology Hardware, Storage & Peripherals"
-    },
-    "IOVA": {
-      "grade": "C",
-      "reasons": "close 14.21 below SMA5 14.24 \u2014 arriving from above; score 57 < 75",
-      "failing": [
-        "3_approach",
-        "5_score"
-      ],
-      "group": "Biotechnology"
-    },
-    "HALO": {
-      "grade": "B",
-      "reasons": "score 65 < 75; 13 sessions before the print (< 15)",
-      "failing": [
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Biotechnology"
-    },
-    "AMGN": {
-      "grade": "B",
-      "reasons": "14 sessions before the print (< 15)",
-      "failing": [
-        "7_runway"
-      ],
-      "group": "Biotechnology"
-    },
-    "BIIB": {
-      "grade": "B",
-      "reasons": "10 sessions before the print (< 15)",
-      "failing": [
-        "7_runway"
-      ],
-      "group": "Biotechnology"
-    },
-    "GILD": {
-      "grade": "B",
-      "reasons": "11 sessions before the print (< 15)",
-      "failing": [
-        "7_runway"
-      ],
-      "group": "Biotechnology"
-    },
-    "ABBV": {
-      "grade": "C",
-      "reasons": "extension 2.3702307131495264\u00d7ATR > 1.8\u00d7; 12 sessions before the print (< 15)",
-      "failing": [
-        "2_extension",
-        "7_runway"
-      ],
-      "group": "Biotechnology"
-    },
-    "UTHR": {
-      "grade": "C",
-      "reasons": "close 540.03 below SMA5 543.09 \u2014 arriving from above; 10 sessions before the print (< 15)",
-      "failing": [
-        "3_approach",
-        "7_runway"
-      ],
-      "group": "Biotechnology"
-    },
-    "MRVL": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 245.28 below SMA5 265.95 \u2014 arriving from above; RSI 44 outside [45, 70]; score 58 < 75",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score"
-      ],
-      "group": "Semiconductors"
-    },
-    "AMD": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 570.82 below SMA5 599.87 \u2014 arriving from above; score 58 < 75; 14 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Semiconductors"
-    },
-    "TXN": {
-      "grade": "C",
-      "reasons": "close 280.65 below SMA5 284.44 \u2014 arriving from above; score 66 < 75; 5 sessions before the print (< 15)",
-      "failing": [
-        "3_approach",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Semiconductors"
-    },
-    "ADI": {
-      "grade": "C",
-      "reasons": "close 403.57 below SMA5 407.33 \u2014 arriving from above; score 66 < 75",
-      "failing": [
-        "3_approach",
-        "5_score"
-      ],
-      "group": "Semiconductors"
-    },
-    "MPWR": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 1243.11 below SMA5 1327.60 \u2014 arriving from above; RSI 40 outside [45, 70]; score 46 < 75; 11 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Semiconductors"
-    },
-    "ON": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 73.36 below SMA5 76.60 \u2014 arriving from above; RSI 43 outside [45, 70]; score 46 < 75; 13 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Semiconductors"
-    },
-    "LITE": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 896.33 below SMA5 1006.34 \u2014 arriving from above; RSI 42 outside [45, 70]; score 46 < 75; group breaker warning",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker"
-      ],
-      "group": "Communications Equipment"
-    },
-    "CIEN": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 359.60 below SMA5 408.14 \u2014 arriving from above; RSI 44 outside [45, 70]; score 67 < 75; group breaker warning",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker"
-      ],
-      "group": "Communications Equipment"
-    },
-    "CSCO": {
-      "grade": "C",
-      "reasons": "close 113.64 below SMA5 115.47 \u2014 arriving from above; group breaker warning",
-      "failing": [
-        "3_approach",
-        "6_breaker"
-      ],
-      "group": "Communications Equipment"
-    },
-    "TWLO": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 271.12 below SMA5 280.12 \u2014 arriving from above; score 55 < 75; 11 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Systems Software"
-    },
-    "NTNX": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 69.85 below SMA5 72.92 \u2014 arriving from above; score 58 < 75",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "5_score"
-      ],
-      "group": "Systems Software"
-    },
-    "MSFT": {
-      "grade": "C",
-      "reasons": "close 533.69 below SMA5 535.19 \u2014 arriving from above; 10 sessions before the print (< 15)",
-      "failing": [
-        "3_approach",
-        "7_runway"
-      ],
-      "group": "Systems Software"
-    },
-    "NOW": {
-      "grade": "B",
-      "reasons": "10 sessions before the print (< 15)",
-      "failing": [
-        "7_runway"
-      ],
-      "group": "Systems Software"
-    },
-    "ALAB": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 300.28 below SMA5 327.81 \u2014 arriving from above; RSI 41 outside [45, 70]; score 46 < 75; group breaker warning; 14 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker",
-        "7_runway"
-      ],
-      "group": "Semiconductor Materials & Equipment"
-    },
-    "AMAT": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 446.63 below SMA5 485.00 \u2014 arriving from above; RSI 36 outside [45, 70]; score 51 < 75; group breaker warning",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker"
-      ],
-      "group": "Semiconductor Materials & Equipment"
-    },
-    "LRCX": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 286.92 below SMA5 307.40 \u2014 arriving from above; RSI 37 outside [45, 70]; score 51 < 75; group breaker warning; 5 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker",
-        "7_runway"
-      ],
-      "group": "Semiconductor Materials & Equipment"
-    },
-    "ASML": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 1650.00 below SMA5 1733.63 \u2014 arriving from above; RSI 38 outside [45, 70]; score 51 < 75; group breaker warning; 0 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker",
-        "7_runway"
-      ],
-      "group": "Semiconductor Materials & Equipment"
-    },
-    "Q": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 121.62 below SMA5 124.20 \u2014 arriving from above; RSI 42 outside [45, 70]; score 38 < 75; group breaker warning",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker"
-      ],
-      "group": "Semiconductor Materials & Equipment"
-    },
-    "KLAC": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 178.81 below SMA5 189.04 \u2014 arriving from above; RSI 39 outside [45, 70]; score 51 < 75; group breaker warning; 10 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker",
-        "7_runway"
-      ],
-      "group": "Semiconductor Materials & Equipment"
-    },
-    "KEYS": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 357.62 below SMA5 372.59 \u2014 arriving from above; score 58 < 75",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "5_score"
-      ],
-      "group": "Electronic Equipment & Instruments"
-    },
-    "PWR": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 660.53 below SMA5 687.09 \u2014 arriving from above; 11 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "7_runway"
-      ],
-      "group": "Construction & Engineering"
-    },
-    "BE": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 239.34 below SMA5 263.68 \u2014 arriving from above; RSI 41 outside [45, 70]; score 46 < 75; group breaker warning; 6 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker",
-        "7_runway"
-      ],
-      "group": "Electrical Components & Equipment"
-    },
-    "VRT": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 222.83 below SMA5 237.20 \u2014 arriving from above; RSI 33 outside [45, 70]; score 43 < 75; group breaker warning; 10 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker",
-        "7_runway"
-      ],
-      "group": "Electrical Components & Equipment"
-    },
-    "ETN": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 408.85 below SMA5 423.60 \u2014 arriving from above; RSI 41 outside [45, 70]; score 46 < 75; group breaker warning; 14 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker",
-        "7_runway"
-      ],
-      "group": "Electrical Components & Equipment"
-    },
-    "EMR": {
-      "grade": "C",
-      "reasons": "close 161.08 below SMA5 161.59 \u2014 arriving from above; group breaker warning",
-      "failing": [
-        "3_approach",
-        "6_breaker"
-      ],
-      "group": "Electrical Components & Equipment"
-    },
-    "AME": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 246.83 below SMA5 248.66 \u2014 arriving from above; score 58 < 75; group breaker warning; 11 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "5_score",
-        "6_breaker",
-        "7_runway"
-      ],
-      "group": "Electrical Components & Equipment"
-    },
-    "ROK": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 423.42 below SMA5 431.28 \u2014 arriving from above; RSI 41 outside [45, 70]; score 40 < 75; group breaker warning",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker"
-      ],
-      "group": "Electrical Components & Equipment"
-    },
-    "APA": {
-      "grade": "C",
-      "reasons": "extension 2.06088168552638\u00d7ATR > 1.8\u00d7",
-      "failing": [
-        "2_extension"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "COP": {
-      "grade": "C",
-      "reasons": "extension 4.003640339432554\u00d7ATR > 1.8\u00d7; RSI 71 outside [45, 70]; score 73 < 75",
-      "failing": [
-        "2_extension",
-        "4_rsi",
-        "5_score"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "OXY": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; extension 2.091304783664851\u00d7ATR > 1.8\u00d7",
-      "failing": [
-        "1_conditions",
-        "2_extension"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "EOG": {
-      "grade": "C",
-      "reasons": "extension 3.114396995961266\u00d7ATR > 1.8\u00d7",
-      "failing": [
-        "2_extension"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "DVN": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met",
-      "failing": [
-        "1_conditions"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "FANG": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; extension 2.078557695204127\u00d7ATR > 1.8\u00d7; 13 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "2_extension",
-        "7_runway"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "EQT": {
-      "grade": "C",
-      "reasons": "close 52.75 below SMA5 53.23 \u2014 arriving from above; score 48 < 75; 9 sessions before the print (< 15)",
-      "failing": [
-        "3_approach",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "CNC": {
-      "grade": "C",
-      "reasons": "extension 2.7742176909603007\u00d7ATR > 1.8\u00d7; 9 sessions before the print (< 15)",
-      "failing": [
-        "2_extension",
-        "7_runway"
-      ],
-      "group": "Managed Health Care"
-    },
-    "HUM": {
-      "grade": "A+",
-      "reasons": "",
-      "failing": [],
-      "group": "Managed Health Care"
-    },
-    "ELV": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; extension 2.318608100339309\u00d7ATR > 1.8\u00d7; 5 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "2_extension",
-        "7_runway"
-      ],
-      "group": "Managed Health Care"
-    },
-    "UNH": {
-      "grade": "A+",
-      "reasons": "",
-      "failing": [],
-      "group": "Managed Health Care"
-    },
-    "ILMN": {
-      "grade": "C",
-      "reasons": "close 271.76 below SMA5 272.47 \u2014 arriving from above; score 63 < 75; 11 sessions before the print (< 15)",
-      "failing": [
-        "3_approach",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Life Sciences Tools & Services"
-    },
-    "NTRA": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 394.75 below SMA5 395.93 \u2014 arriving from above; score 55 < 75",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "5_score"
-      ],
-      "group": "Life Sciences Tools & Services"
-    },
-    "A": {
-      "grade": "B",
-      "reasons": "score 65 < 75",
-      "failing": [
-        "5_score"
-      ],
-      "group": "Life Sciences Tools & Services"
-    },
-    "TECH": {
-      "grade": "B",
-      "reasons": "score 71 < 75",
-      "failing": [
-        "5_score"
-      ],
-      "group": "Life Sciences Tools & Services"
-    },
-    "IQV": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; score 57 < 75; 9 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Life Sciences Tools & Services"
-    },
-    "GLW": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 140.89 below SMA5 149.24 \u2014 arriving from above; RSI 41 outside [45, 70]; score 46 < 75; group breaker warning; 9 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker",
-        "7_runway"
-      ],
-      "group": "Electronic Components"
-    },
-    "COHR": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 263.32 below SMA5 291.26 \u2014 arriving from above; RSI 39 outside [45, 70]; score 51 < 75; group breaker warning",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker"
-      ],
-      "group": "Electronic Components"
-    },
-    "FLEX": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 100.35 below SMA5 112.61 \u2014 arriving from above; RSI 36 outside [45, 70]; score 43 < 75; group breaker warning; 10 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker",
-        "7_runway"
-      ],
-      "group": "Electronic Manufacturing Services"
-    },
-    "JBL": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 293.91 below SMA5 305.84 \u2014 arriving from above; RSI 43 outside [45, 70]; score 59 < 75; group breaker warning",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score",
-        "6_breaker"
-      ],
-      "group": "Electronic Manufacturing Services"
-    },
-    "TEL": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 210.25 below SMA5 215.21 \u2014 arriving from above; score 30 < 75; group breaker warning; 10 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "5_score",
-        "6_breaker",
-        "7_runway"
-      ],
-      "group": "Electronic Manufacturing Services"
-    }
   }
 }
