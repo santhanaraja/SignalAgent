@@ -144,12 +144,46 @@ for t, (ed, sh, e, st, fill, usd, R, tc, td, no, gap) in BATCH.items():
           # and therefore quotes it, so an absence test fails on a correct
           # row — which is exactly what it did on all nine.
           and "BOTH LEGS ARE COMPUTED" in c["note"])
-check(f"the nine realise ${tot:,.2f} in total",
-      abs(tot - -2543.80) < 0.01,
-      "date-independent: shares x (fill - entry), risk fixed at entry")
-check("ZBRA is the one WIN among the nine",
-      [t for t, v in BATCH.items() if v[5] > 0] == ["ZBRA"],
-      "sold 1.28% below its 2026-10-08 close but above its own entry")
+# BOTH AGGREGATES NOW READ THE LEDGER. As first written they summed the
+# BATCH table's own literals and compared the result to a constant derived
+# from those same literals, and picked the win out of the same table —
+# tautologies that read no ledger field and could not fail. The point of
+# an aggregate is to catch a row that drifted individually in a way the
+# per-row checks tolerate, which requires the ledger as the source.
+_led_sum = round(sum(_clsd[(t, v[0])]["realized_usd"] for t, v in BATCH.items()), 2)
+check(f"the nine realise ${tot:,.2f} in total, summed from the LEDGER",
+      abs(_led_sum - -2543.80) < 0.01 and abs(_led_sum - tot) < 0.01,
+      f"ledger ${_led_sum:,.2f} vs table ${tot:,.2f} — date-independent: "
+      "shares x (fill - entry), risk fixed at entry")
+_led_wins = sorted(t for t, v in BATCH.items()
+                   if _clsd[(t, v[0])]["realized_usd"] > 0)
+check("ZBRA is the one WIN among the nine, read from the LEDGER",
+      _led_wins == ["ZBRA"],
+      f"wins per the ledger: {_led_wins} — sold 1.28% below its "
+      "2026-10-08 close but above its own entry")
+
+# THE LEDGER-WIDE WORST-R RANKING, PINNED HERE BECAUSE NOTHING PINNED IT
+# WHEN IT MATTERED. test_watchlist_prune.py used to assert CFG held the
+# worst R, as a side-effect of a watch-list check; that claim was removed
+# on 2026-10-23 when APH displaced it, leaving the ranking unpinned — and
+# in the same batch ARWR 2026-07-06's committed note ("CFG's -1.9673R
+# still holds the worst-R record") went false without anything noticing.
+# A superlative in one row can be falsified by a write to another, so the
+# ranking needs a pin of its own, in a ledger-law file rather than a
+# watch-list one.
+_byr = sorted(now["closed"], key=lambda c: c["realized_r"])
+check("APH 2026-10-01 is the worst R in the ledger at -2.1289, ahead of "
+      "CFG -1.9673",
+      (_byr[0]["ticker"], _byr[0]["entry_date"]) == ("APH", "2026-10-01")
+      and _byr[0]["realized_r"] == -2.1289
+      and _byr[1]["realized_r"] == -1.9673,
+      f"worst three: {[(c['ticker'], c['realized_r']) for c in _byr[:3]]}")
+check("and no row still asserts the displaced CFG record in the present "
+      "tense",
+      not any("still holds the worst-R record" in (c.get("note") or "")
+              for c in now["closed"]),
+      "ARWR 2026-07-06 carried exactly that sentence until this batch "
+      "falsified it")
 
 print("\n(2) attribution, per name, and the override tally")
 for t, (ed, *_rest) in BATCH.items():

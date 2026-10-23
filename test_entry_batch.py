@@ -384,14 +384,28 @@ check("validate_ledger passes", raises(lambda: validate_ledger(now)) is None)
 check("no ticker is in both holdings and closed for the SAME entry_date",
       not ({(h["ticker"], h["entry_date"]) for h in now["holdings"]}
            & {(c["ticker"], c["entry_date"]) for c in now["closed"]}))
-_ftnt_prior = [c["exit_date"] for c in now["closed"]
-                if c["ticker"] == "FTNT" and c["entry_date"] != "2026-10-01"]
+# PENDING DATES ARE SEPARATED FROM REAL ONES BEFORE max(), SO THIS FAILS
+# RATHER THAN CRASHING. Since 2026-10-23 a closed row may carry
+# exit_date: None with a declared reason. max() over a list holding both
+# None and a string raises TypeError, so any OTHER FTNT round trip closed
+# pending would have turned this pin into an uncaught crash — taking every
+# check below it down, the same crash-instead-of-fail family already fixed
+# twice in this suite. An undated prior FTNT exit cannot satisfy an
+# ordering law, so it is a FAILURE with a message, not an exception.
+_ftnt_other = [c for c in now["closed"]
+               if c["ticker"] == "FTNT" and c["entry_date"] != "2026-10-01"]
+_ftnt_dated = [c["exit_date"] for c in _ftnt_other
+               if c.get("exit_date") is not None]
+_ftnt_pending = [c["entry_date"] for c in _ftnt_other
+                 if c.get("exit_date") is None]
 check("FTNT is in both arrays — a legal re-entry, exit strictly before entry",
       ("FTNT", "2026-10-01") in _all
-      and bool(_ftnt_prior)
-      and max(_ftnt_prior)
-      < by["FTNT"]["entry_date"],
-      "closed 2026-09-03, re-entered 2026-10-01")
+      and bool(_ftnt_dated)
+      and not _ftnt_pending
+      and max(_ftnt_dated) < by["FTNT"]["entry_date"],
+      f"dated prior exits {_ftnt_dated}; PENDING prior rows "
+      f"{_ftnt_pending or 'none'} — an undated exit cannot be ordered "
+      "against this entry")
 check("bug reintroduced: dated the re-entry on the exit day it is refused",
       raises(lambda: validate_ledger(
           dict(now, holdings=[dict(by["FTNT"], entry_date="2026-09-03")])))
