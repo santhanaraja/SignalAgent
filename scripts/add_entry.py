@@ -83,8 +83,22 @@ def add_entry(path, a):
         raise SystemExit(f"{a.ticker}: entry_stop {a.entry_stop} >= entry "
                          f"{a.entry_price} — R is {r_usd:+.4f}, so the "
                          "position cannot be sized in risk terms")
+    # A PENDING CLOSE BLOCKS RE-ENTRY, AND SAYS SO IN THOSE WORDS. The
+    # str() below already refused these by accident (str(None) == "None"
+    # sorts above any 2026 date), which is the safe direction but reported
+    # it as a mis-dated row. An undated close is not mis-dated; it is
+    # unorderable, and the fix is the broker record, not the dates.
+    pend = [c for c in doc.get("closed", [])
+            if c["ticker"] == a.ticker and c.get("exit_date") is None]
+    if pend:
+        raise SystemExit(
+            f"{a.ticker}: a closed row has a PENDING exit_date "
+            f"({pend[0].get('exit_date_pending')!r}) — it cannot be ordered "
+            f"against this entry {ed}, so the re-entry law cannot be "
+            "satisfied. Date that close from the broker record first.")
     late = [c for c in doc.get("closed", [])
-            if c["ticker"] == a.ticker and str(c["exit_date"]) >= ed]
+            if c["ticker"] == a.ticker and c.get("exit_date") is not None
+            and str(c["exit_date"]) >= ed]
     if late:
         raise SystemExit(
             f"{a.ticker}: a closed row exits {late[0]['exit_date']}, which is "

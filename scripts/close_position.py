@@ -139,6 +139,8 @@ def build_closed_entry(h, a):
         "shares": shares,
         "entry_stop": e_stop,
         "exit_date": a.exit_date,
+        **({"exit_date_pending": a.exit_date_pending}
+           if getattr(a, "exit_date_pending", None) else {}),
         "exit_fill": a.exit_fill,
         "fees_usd": a.fees,          # None = unmeasured, not zero
         "exit_reason": a.exit_reason,
@@ -181,11 +183,35 @@ def validate_ledger(doc):
         # duplicate it enables ("2026-7-06" alongside "2026-07-06") is then
         # two copies of one trade, both validating, double-counted in every
         # total. A date nobody can order is not a date.
+        # A PENDING EXIT DATE IS PERMITTED ONLY WHEN IT IS DECLARED, AND
+        # IT BLOCKS RE-ENTRY RATHER THAN FAILING OPEN. The 2026-10-23
+        # batch recorded nine sales whose prices the operator had and
+        # whose DATES only the broker record carries. Writing the trigger
+        # date instead is the conflation that has produced four separate
+        # errors in this ledger, and writing a bare null re-opens the hole
+        # the paragraph above closes. So null is allowed on exit_date IFF
+        # exit_date_pending carries a non-empty reason string, every other
+        # field still reconciles (realised, R and the attribution need no
+        # date), and the re-entry law below REFUSES a live holding of the
+        # same ticker instead of silently reading an unorderable date as
+        # satisfied.
+        _pending = c["exit_date"] is None
+        if _pending:
+            assert isinstance(c.get("exit_date_pending"), str) \
+                and c["exit_date_pending"].strip(), (
+                    f"{key}: exit_date is null but exit_date_pending does "
+                    "not carry a reason — an undated close must declare "
+                    "itself; a bare null is indistinguishable from a "
+                    "dropped field")
         for _f in ("entry_date", "exit_date"):
+            if _f == "exit_date" and _pending:
+                continue
             assert isinstance(c[_f], str) and _ISO_DATE.match(c[_f]), \
                 f"{key}: {_f} must be an ISO YYYY-MM-DD date, got {c[_f]!r}"
-        assert c["exit_date"] >= c["entry_date"], \
-            f"{key}: exit {c['exit_date']} precedes entry {c['entry_date']}"
+        if not _pending:
+            assert c["exit_date"] >= c["entry_date"], \
+                f"{key}: exit {c['exit_date']} precedes entry " \
+                f"{c['entry_date']}"
         assert key not in live, \
             f"{key}: present in BOTH holdings and closed — the move " \
             "left a duplicate"
@@ -217,6 +243,14 @@ def validate_ledger(doc):
             return v
         for h in doc.get("holdings", []):
             if h["ticker"] == c["ticker"]:
+                assert not _pending, (
+                    f"{key}: this closed row's exit_date is PENDING "
+                    f"({c.get('exit_date_pending')!r}) and {h['ticker']} is "
+                    f"held again from {h['entry_date']} — an undated close "
+                    "cannot be ordered against a live entry, so the "
+                    "re-entry law cannot be satisfied and must not be read "
+                    "as if it were. Date this close from the broker record "
+                    "before re-entering the ticker.")
                 _iso(c.get("exit_date"), "closed exit_date")
                 _iso(h.get("entry_date"), "open entry_date")
                 assert str(c["exit_date"]) < str(h["entry_date"]), (
@@ -355,7 +389,15 @@ def close_position(path, a):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ticker", required=True)
-    ap.add_argument("--exit-date", required=True)
+    ap.add_argument("--exit-date", default=None,
+                    help="ISO exit date; omit ONLY with "
+                         "--exit-date-pending")
+    ap.add_argument("--exit-date-pending", default=None,
+                    help="record the exit with a NULL date and this reason, "
+                         "for a fill whose price is known and whose date "
+                         "only the broker record carries. Mutually "
+                         "exclusive with --exit-date. The row then BLOCKS "
+                         "re-entry of the ticker until it is dated.")
     ap.add_argument("--exit-fill", type=float, required=True)
     ap.add_argument("--fees", required=True,
                     help='fee in USD, or "unknown" to record it as '
@@ -374,6 +416,15 @@ def main():
     ap.add_argument("--file", default=DEFAULT_PATH,
                     help="positions.json path (tests drive a copy)")
     a = ap.parse_args()
+    # EXACTLY ONE OF THE TWO, AND NEITHER DEFAULTS TO THE OTHER. Making
+    # --exit-date optional without this check would let a forgotten flag
+    # write a dateless row silently, which is the failure the pending
+    # marker exists to make loud.
+    if bool(a.exit_date) == bool(a.exit_date_pending):
+        ap.error("give exactly one of --exit-date or --exit-date-pending "
+                 "(a dated close, or a declared undated one)")
+    if a.exit_date_pending and not a.exit_date_pending.strip():
+        ap.error("--exit-date-pending needs a reason, not whitespace")
     a.fees = None if str(a.fees).lower() == "unknown" else float(a.fees)
     close_position(a.file, a)
 

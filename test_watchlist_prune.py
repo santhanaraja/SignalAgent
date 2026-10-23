@@ -255,10 +255,35 @@ check("every watch row that carries a record names a FILED trade",
 # (3) CFG is on the keep list and has the only closed row among the keepers
 print("\n(3) the one that stayed for a separate reason")
 cfg = [c for c in now["closed"] if c["ticker"] == "CFG"]
-check("CFG's -1.9673R row is still there and still the worst R on record",
+_keepers = {x["ticker"] for x in now["watching"]}
+_keepers_with_rows = sorted(t for t in _keepers
+                            if any(c["ticker"] == t for c in now["closed"]))
+# THE RANKING CLAIM IS GONE AND THAT IS A CORRECTION, NOT A LOOSENING.
+# This pin asserted CFG's -1.9673R was "still the worst R on record" by
+# comparing it to min(realized_r) over the whole ledger. That became FALSE
+# on 2026-10-23, when APH's second trade closed at -2.1289R and displaced
+# it — and the pin caught it, which is the system working. But a
+# whole-ledger ranking does not belong in the watch-list law file at all:
+# it is a fact about every other row, so any new close can falsify it, and
+# this file's subject is which watch rows may be pruned. What IS durable
+# and is what this section is really for: CFG's row is intact at its
+# recorded figures.
+check("CFG's -1.9673R row is still intact at its recorded figures",
       bool(cfg) and cfg[0]["realized_r"] == -1.9673
-      and cfg[0]["realized_r"] == min(c["realized_r"] for c in now["closed"]),
+      and cfg[0]["realized_usd"] == -404.88,
       f"CFG {cfg[0]['realized_usd']} = {cfg[0]['realized_r']}R" if cfg else "")
+# AND THE SECTION'S OWN COMMENT WAS WRONG, WHICH ONLY SHOWED UP BECAUSE
+# IT WAS ASSERTED. The heading above says CFG "has the only closed row
+# among the keepers". It does not: CRWD has one too — this same file
+# checks it two sections up, as the POINTER row naming (CRWD,
+# 2026-07-20). So the claim is recorded as refuted rather than pinned,
+# and what is asserted is the weaker true thing: both keepers that carry
+# a closed row resolve to a row that exists.
+check("every keeper that has a closed row resolves to a real one",
+      _keepers_with_rows == ["CFG", "CRWD"],
+      f"keepers {sorted(_keepers)}; with closed rows {_keepers_with_rows} — "
+      "the heading's 'only closed row among the keepers' is inaccurate and "
+      "is corrected in the comment, not asserted")
 
 print()
 if FAILS:

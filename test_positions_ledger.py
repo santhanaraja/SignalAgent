@@ -331,9 +331,17 @@ def test_re_entry_is_legal_and_the_old_rule_was_wrong():
     cp.validate_ledger(_book("2026-08-25", "2026-09-03"))
 
     # DEMONSTRATE THE FAILURES the old rule could not tell apart
+    # None NOW ASSERTS THE PENDING-DATE LAW SPECIFICALLY, WHICH IS TIGHTER
+    # THAN "ISO", NOT LOOSER. Since 2026-10-23 a null exit_date is legal
+    # when, and only when, exit_date_pending carries a reason, so an
+    # UNDECLARED null is refused by that law and names it, before the ISO
+    # check is reached. The refusal is unchanged — this case still proves
+    # a bare null cannot stand against an open entry — and requiring the
+    # message to name exit_date_pending pins WHICH law caught it. "" and
+    # "2026-9-3" are not None, so they still fall through to the ISO check.
     for bad_exit, must_say in (("2026-09-03", "strictly"),
                                ("2099-01-01", "shadows a live position"),
-                               (None, "ISO"),
+                               (None, "exit_date_pending"),
                                ("2026-9-3", "ISO"),
                                ("", "ISO")):
         try:
