@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-04T00:26:21.576852+00:00",
+  "generated_at": "2026-11-04T20:17:08.302443+00:00",
   "scorer_version": "score_stock_v2",
   "schema": "regime-b-chassis",
   "framework_version": "1.0",
@@ -42,34 +42,53 @@
         "mode": "asymmetric"
       },
       "replay": {
-        "days_used": 60,
+        "days_used": 59,
         "window": 60,
-        "start": "2026-08-11",
+        "start": "2026-08-12",
         "end": "2026-11-03"
       },
       "hy_basis": "fred_oas_pctile",
       "hy_pctile": 98.3,
       "degraded": false,
-      "degraded_reason": null
+      "degraded_reason": null,
+      "intraday_preview": {
+        "as_of": "2026-11-04",
+        "raw_state": "In-Trend-Throttled",
+        "throttles": {
+          "vix": {
+            "firing": false,
+            "value": 19.09
+          },
+          "hy": {
+            "firing": true,
+            "pctile": 96.7
+          },
+          "breadth": {
+            "firing": false,
+            "value": 3.15
+          }
+        },
+        "note": "forming bar \u2014 display only, never steps the ladder (close-basis law, ruled 2026-07-23)"
+      }
     },
     "gauges": {
       "vix_5d_avg": {
-        "value": 19.1,
+        "value": 19.09,
         "signal": "caution",
-        "detail": "VIX 5d avg 19.1 (spot 20.8)",
-        "spot": 20.83
+        "detail": "VIX 5d avg 19.1 (spot 16.8)",
+        "spot": 16.83
       },
       "hy_spread": {
-        "value": 3.43,
+        "value": 3.4,
         "signal": "caution",
-        "detail": "HY spread 3.43% (FRED BAMLH0A0HYM2)",
+        "detail": "HY spread 3.40% (FRED BAMLH0A0HYM2)",
         "source": "FRED",
-        "date": "2026-11-02"
+        "date": "2026-11-03"
       },
       "breadth": {
-        "value": 3.51,
+        "value": 3.15,
         "signal": "risk_on",
-        "detail": "RSP/SPY ratio change: +3.51% (20d) \u2014 breadth broadening",
+        "detail": "RSP/SPY ratio change: +3.15% (20d) \u2014 breadth broadening",
         "source": "RSP/SPY fallback"
       }
     },
@@ -79,10 +98,10 @@
       "open": true,
       "capped": false,
       "reason": null,
-      "value": 3.81,
-      "detail": "SPY $754.35 vs 200DMA $726.65 (+3.8%)",
-      "price": 754.35,
-      "ma200": 726.65
+      "value": 5.56,
+      "detail": "SPY $767.52 vs 200DMA $727.13 (+5.6%)",
+      "price": 767.52,
+      "ma200": 727.13
     },
     "macro_inputs": {
       "yield_curve": {
@@ -120,7 +139,7 @@
       "sector": "Energy",
       "tickers": 3,
       "weeks_in_universe": 16,
-      "breaker_status": "clear",
+      "breaker_status": "warning",
       "breaker_checks_expected": [
         "avg_ytd_negative",
         "group_avg_rsi_below_40",
@@ -164,7 +183,7 @@
       "sector": "Energy",
       "tickers": 7,
       "weeks_in_universe": 12,
-      "breaker_status": "clear",
+      "breaker_status": "warning",
       "breaker_checks_expected": [
         "group_avg_rsi_below_40",
         "majority_below_ma50",
@@ -256,7 +275,7 @@
       "sector": "Energy",
       "tickers": 4,
       "weeks_in_universe": 3,
-      "breaker_status": "clear",
+      "breaker_status": "warning",
       "breaker_checks_expected": [
         "avg_ytd_negative",
         "group_avg_rsi_below_40",
@@ -455,7 +474,7 @@
     }
   ],
   "position_signals": {
-    "generated_at": "2026-11-04T00:26:21.575510+00:00",
+    "generated_at": "2026-11-04T20:17:08.301390+00:00",
     "account": "TOS",
     "schema_version": "1.2",
     "regime_state": "Risk-on / Choppy",
@@ -473,7 +492,7 @@
             "met": true,
             "detail": "close 459.90 > SMA20 + 0.5*ATR14 (457.12)",
             "consecutive_closes_above": 15,
-            "atr14": 16.71
+            "atr14": 16.72
           },
           "3_regime_gate": {
             "met": true,
@@ -504,7 +523,7 @@
           "close": 459.8999938964844,
           "sma20": 448.7664993286133,
           "sma20_5d_ago": 440.64549865722654,
-          "atr14": 16.71142578125,
+          "atr14": 16.716424124581472,
           "consecutive_closes_above": 15,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
@@ -515,6 +534,15 @@
           "level": 448.77,
           "detail": "exit on close below SMA20 (448.77)"
         },
+        "intraday_preview": {
+          "as_of": "2026-11-04",
+          "would_state": "HELD",
+          "close": 469.82,
+          "sma20": 450.46,
+          "conditions_met": 5,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "WAT",
         "kind": "holding",
         "entry_price": 421.0,
@@ -524,9 +552,8 @@
         "group": "Life Sciences Tools & Services",
         "weeks_in_universe": 7,
         "note": "FILLED 2026-09-21: 15 @ $421.00 \u2014 Life Sciences Tools & Services, the FIRST time this group enters the book. || ONE ORDER, NOT TWO. 8 shares were visible mid-session and the full 15 filled at the same 421.00; the operator's own record carried 8 for three days and the broker position call corrected it. It is recorded as a SINGLE entry of 15 at one price, which is what the broker shows. The tape cannot confirm or contradict the split: yfinance one-minute data for 2026-09-21 is inside the 30-day window but shows only that 421.00 traded, not how many tickets the operator's fill was cut into. If the statement shows two executions at the same price, this row is still right in shares, price and date. || STOP PROVENANCE: derived FROM THE FRAME with the basis bar ASSERTED. Entry stop 412.8205 = the SMA20 on the 2026-09-18 confirmed close, over the 20 bars 2026-08-21..2026-09-18, last row verified to BE 2026-09-18, two independent fetch paths agreeing to 0.0000. The 2026-09-22 provider hole falls after the basis bar. || RISK: $8.1795 per share = 1.94% of price, $122.69 initial risk on 15 shares, a $6,315.00 position = 6.48% of capital. This is the second-tightest entry the book has taken by percent of price, after EQT's 1.14%.",
-        "next_earnings_date": "2026-11-03",
-        "days_to_earnings": 0,
-        "earnings_note": "earnings in 0d \u2014 R8: binary catalyst window",
+        "next_earnings_date": "2027-02-10",
+        "days_to_earnings": 98,
         "exit_drift": {
           "status": "ok",
           "closes_since_exit_fired": 0,
@@ -584,6 +611,15 @@
           "group_in_universe": true,
           "kind": "holding"
         },
+        "intraday_preview": {
+          "as_of": "2026-11-04",
+          "would_state": "WATCHING",
+          "close": 188.56,
+          "sma20": 215.23,
+          "conditions_met": 2,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "NTAP",
         "kind": "holding",
         "entry_price": 204.39,
@@ -594,7 +630,7 @@
         "weeks_in_universe": 16,
         "note": "FILLED 2026-09-28: 31 @ $204.39 \u2014 Technology Hardware, Storage & Peripherals. This is the group's THIRD name alongside HPE and AAPL, which puts it at the 3-name count cap. Net Prc is the fill; fill_source broker_statement, basis actual_fill, overrides ZERO, fees $0.00, capital at entry $97,500. || STOP PROVENANCE: derived FROM THE FRAME with the basis bar ASSERTED. Entry stop 190.7075 = the SMA20 on the 2026-09-25 confirmed close, over the 20 bars 2026-08-28..2026-09-25, last row verified to BE 2026-09-25, two independent fetch paths agreeing to 0.0000, reproducing this morning's reported figure exactly. No missing session against SPY over the last 25. ATR14 7.6857, 3.82% of price. || EXTENSION: 1.7803xATR on the fill, fifteen cents under the 204.5418 line \u2014 but on the 09-25 CLOSE of 201.15 it was 1.3600x, and row 2 is judged on the close. The fill moved it 0.42xATR toward the guard, which is the largest close-to-fill drift of the three entries today and the mechanism by which a passing grade can arrive at a position that would not pass on its fill. || RISK: $13.6825 per share = 6.69% of price, $424.16 initial risk on 31 shares, a $6,336.09 position = 6.50% of capital. || FILL VERSUS QUOTE: about $394 of risk at the 11:33 ET mark against $424.16 on the fill, $30.16 wider.",
         "next_earnings_date": "2026-12-01",
-        "days_to_earnings": 28,
+        "days_to_earnings": 27,
         "exit_drift": {
           "status": "action_needed",
           "closes_since_exit_fired": 3,
@@ -658,6 +694,15 @@
           "level": 328.54,
           "detail": "exit on close below SMA20 (328.54)"
         },
+        "intraday_preview": {
+          "as_of": "2026-11-04",
+          "would_state": "HELD",
+          "close": 332.42,
+          "sma20": 330.14,
+          "conditions_met": 5,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "CRL",
         "kind": "holding",
         "entry_price": 288.3,
@@ -668,8 +713,8 @@
         "weeks_in_universe": 7,
         "note": "FILLED 2026-10-01: 21 @ $288.30 \u2014 Life Sciences Tools & Services, joining WAT. Net Prc is the fill; broker_statement, actual_fill, overrides ZERO, fees $0.00, capital $97,500. || THE CHEAPEST ENTRY OF ANY NAME CURRENTLY HELD, AND IT WAS PRICE THAT MADE IT SO, NOT SIZING. $4.4300 per share = 1.5366% of the fill, $93.03 initial risk on 21 shares. THE SUPERLATIVE IS BOUNDED DELIBERATELY: it was first written as 'the cheapest entry in the live record' and that is FALSE. Measured per share as a percentage of entry across all 52 entries in closed[] and holdings[], CRL is THIRD \u2014 EQT 2026-08-26 at 1.1436% and JNJ 2026-08-27 at 1.2071% are both cheaper, and both are closed. On initial risk in DOLLARS it is sixth, behind EQT $72.06, JNJ $73.60, FANG $78.90, BIIB $91.08 and DVN $91.75. What is true and worth recording: it is the cheapest of the thirteen names now held, with WAT next at 1.9429%. The board was computed on the 2026-09-30 close of 295.01, where the same 21 shares would have carried $233.94; the price fell to 288.30 before the fill and took $140.91 of risk out of the trade without changing the stop. || STOP PROVENANCE: entry_stop is the SMA20 on the 2026-09-30 CONFIRMED CLOSE, read FROM THE FRAME with the basis bar ASSERTED \u2014 20 bars ending 2026-09-30, that bar verified present as the last row, on two reads agreeing to 0.0000 \u2014 BUT THE TWO READS ARE NOT INDEPENDENT AND THE AGREEMENT IS AN IDENTITY, NOT A MEASUREMENT. yfinance's auto_adjust=True Close IS the Yahoo v8 chart adjclose array (yfinance/scrapers/history.py fetches the same v8 chart endpoint on query2; utils.py reads indicators.adjclose[0].adjclose into 'Adj Close' and auto_adjust renames it to Close), so both reads collapse to mean(adjclose[window]) x close[basis] / adjclose[basis] and agree bit-for-bit by construction. Element-wise the two arrays differ by exactly 0.0 across all 20 bars. WHAT THE CHECK DOES COVER: the re-basing arithmetic, row alignment, and that the basis bar is present and the window is 20 bars \u2014 the holed-frame failure this project has hit three times. WHAT IT CANNOT COVER: a wrong value from Yahoo. Injecting a 10% bad print on an in-window bar moves the stop while the check still reports 0.0000 and passes. No non-Yahoo vendor was reachable to close that gap. The figure reproduces this morning's reported value and did not move. || ATR14 \u2014 TWO READINGS, NEITHER PICKED. THIS IS THE ROW AN ADVERSARIAL REVIEWER REFUSED OUTRIGHT this morning rather than average. The engine artifact carries 10.0985 and today's recomputation gives 10.1121, higher by 0.0137; the reviewer proved the closes identical by matching RSI14 to 1e-15 and showed the gap is entirely in the High/Low of the last three bars, i.e. a revision and not a hole. The entry-time extension is 0.4387x (engine) or 0.4381x (today) and the 1.8x line 302.0473 or 302.0719 \u2014 which moves the floored limit from 302.04 to 302.07. THE VALUE THAT WILL ACTUALLY FIRE IS THE SMA20 283.8700, identical on both readings and on both fetch paths; the ATR governs only the entry-time guard, which is now historical. Recorded for a future reader: scripts/auto_trader.py sizes from the COMMITTED ARTIFACT, so the limit the automation would have placed is the engine-frame 302.04, not today's 302.07. || FLOORING ON THIS TICKET IS FRAME-DEPENDENT, WHICH IS WORTH RECORDING BECAUSE IT CUTS BOTH WAYS: on the ENGINE's ATR the floored limit 302.04 is 1.7993xATR and the rounded 302.05 would have been 1.8003x, OVER the guard \u2014 a save; on TODAY's ATR floor and round both give 302.07 at 1.7998x and nothing is at stake. The same revision that moved the limit three cents moved it across a cent boundary. A $6,054.30 position = 6.21% of capital. Extension at the fill well under half an ATR \u2014 the least extended entry of the seven.",
         "next_earnings_date": "2026-11-04",
-        "days_to_earnings": 1,
-        "earnings_note": "earnings in 1d \u2014 R8: binary catalyst window",
+        "days_to_earnings": 0,
+        "earnings_note": "earnings in 0d \u2014 R8: binary catalyst window",
         "exit_drift": {
           "status": "ok",
           "closes_since_exit_fired": 0,
@@ -732,6 +777,15 @@
           "level": 48.81,
           "detail": "exit on close below SMA20 (48.81)"
         },
+        "intraday_preview": {
+          "as_of": "2026-11-04",
+          "would_state": "WATCHING",
+          "close": 44.14,
+          "sma20": 48.84,
+          "conditions_met": 3,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "APA",
         "kind": "holding",
         "entry_price": 46.425,
@@ -742,7 +796,7 @@
         "weeks_in_universe": 12,
         "note": "FILLED 2026-10-09: 130 @ $46.425 \u2014 Oil & Gas Exploration & Production, a NEW GROUP for this book and its only energy name. Graded A+ on the 2026-10-08 confirmed close. Net Prc is the fill; broker_statement, actual_fill, overrides ZERO, fees $0.00, capital $97,500 || THIS ROW IS TEN SESSIONS LATE AND THAT IS THE POINT OF RECORDING IT LOUDLY. The position filled 2026-10-09 and reached the ledger on 2026-10-23. For ten sessions the book carried an unrecorded holding: no row, no framed stop, and no risk counted in any heat or R28 figure \u2014 and the exit engine cannot see it at all, because position_signals reads holdings[] and an unrecorded ENTRY is invisible to it by construction (its own exit_drift_summary.covers field says so). The prompt that was to carry this fill (CCPrompt_20261009_positions.md, 10469B, injected 14:46:22Z) was written BEFORE the fill and never mentioned it || STOP PROVENANCE: entry_stop 43.9415 = the SMA20 on the 2026-10-08 CONFIRMED CLOSE, read from the frame with the basis bar ASSERTED \u2014 20 bars 2026-09-11..2026-10-08, that bar verified present as the last row, close_on_basis 45.47. scripts/frame_stop.py reports zero corporate actions in the window and marks its raw control INERT, so the two yfinance paths agree by identity and prove nothing on their own. THE INDEPENDENT CHECK IS NASDAQ AND IT IS EXACT: api.nasdaq.com quote/APA/historical (HTTP 200) served all 20 bars and its SMA20 is 43.9415, matching to 0.0000 on a vendor that does not share Yahoo's adjclose array || A LIVE INSTANCE OF THE AMCR TRAP WAS CAUGHT FRAMING THIS STOP, AND IT IS RECORDED BECAUSE IT WOULD HAVE UNDERSTATED THE STOP. APA went ex-$0.25 on 2026-10-22. A yfinance fetch made TODAY with auto_adjust=True back-applies that dividend to every bar before it and returns an SMA20 of 43.7202 and a basis close of 45.2410 \u2014 $0.2213 a share below the correct figure, $28.77 of risk on 130 shares. The as-of rule is what excludes it: EVERY ADJUSTMENT KNOWN AT THE TRADE DATE IS APPLIED AND NO LATER ONE IS, and on 2026-10-09 the 10-22 ex-date did not exist. 43.9415 is the as-of figure and Nasdaq confirms it; 43.7202 is the artefact || ROW 2 AT THE SIGNAL BAR, NOT AT INTRADAY VALUES. On the 2026-10-08 close: SMA20 43.9415, ATR14 1.5650 (atr_mean, the simple mean of the last 14 True Ranges, not Wilder). The exact 1.8x line is 46.7584990910. FLOORED to the cent it is 46.75, admitting 1.7946xATR; ROUNDED it is 46.76, admitting 1.8010xATR \u2014 OVER THE GUARD. THE FLOORING RULE IS THE LEDGER'S CONVENTION AND THE AUTOMATION DOES NOT IMPLEMENT IT, so 'flooring earned its keep' would be the wrong credit here. scripts/auto_trader.py:406 still places order_type='limit', limit=round(c['line'], 2) - there is no floor anywhere in that path - so the limit it would have placed for APA is 46.76, the 1.8010xATR value that is OVER the guard. What kept this ticket legal is that the fill came in at 46.425, well below either line, not that anything floored it. APA is therefore a fresh instance of the open auto_trader.py:406 defect rather than a win for the rule: the kill switch is on and that path is not wired to a workflow, which is the only reason it did not matter. The fill at 46.425 sits at 1.5869xATR, $0.3250 a share INSIDE the floored line. NO BREACH || RISK: $2.4835 per share = 5.35% of the fill, $322.85 initial risk on 130 shares, a $6,035.25 position = 6.19% of capital \u2014 inside the 5-8% band. THE OPERATOR'S 3xATR ESTIMATE OVERSTATED THE RISK, in the same direction as it did on HPE: the guess of ~$4.62 a share implies $600.60, where the frame gives $322.85, so $277.75 of risk was being quoted that the position does not carry. 3xATR here is actually $4.6950; the frame's stop distance is 1.5869xATR, not 3x, because the sma20_close stop is a mean-reversion level and not an ATR multiple",
         "next_earnings_date": "2026-11-04",
-        "days_to_earnings": 1,
+        "days_to_earnings": 0,
         "exit_drift": {
           "status": "ok",
           "closes_since_exit_fired": 0,
@@ -795,7 +849,7 @@
           "close": 228.44000244140625,
           "sma20": 218.07625045776368,
           "sma20_5d_ago": 210.7900016784668,
-          "atr14": 23.06585911342076,
+          "atr14": 23.06871577671596,
           "consecutive_closes_above": 5,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
@@ -810,7 +864,7 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension 0.4493113364076898\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension 0.44925569693407297\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": true,
@@ -830,14 +884,14 @@
             },
             "7_runway": {
               "met": false,
-              "detail": "3 sessions before the print (< 15)"
+              "detail": "2 sessions before the print (< 15)"
             }
           },
           "failing": [
             "5_score",
             "7_runway"
           ],
-          "reasons": "score 68 < 75; 3 sessions before the print (< 15)"
+          "reasons": "score 68 < 75; 2 sessions before the print (< 15)"
         },
         "grade_inputs": {
           "sma5": 221.58299865722657,
@@ -847,9 +901,18 @@
           "ytd_basis": "prior_year_close",
           "score_waived": false,
           "breaker_status": "clear",
-          "runway_sessions": 3
+          "runway_sessions": 2
         },
-        "grade_gate": "READY blocked \u2014 grade B under Choppy (A+ required): score 68 < 75; 3 sessions before the print (< 15)",
+        "grade_gate": "READY blocked \u2014 grade B under Choppy (A+ required): score 68 < 75; 2 sessions before the print (< 15)",
+        "intraday_preview": {
+          "as_of": "2026-11-04",
+          "would_state": "RE_ENTRY_READY",
+          "close": 248.6,
+          "sma20": 220.68,
+          "conditions_met": 5,
+          "a_plus_only": true,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
+        },
         "ticker": "MRNA",
         "kind": "watching",
         "theme": "Biotech",
@@ -857,8 +920,8 @@
         "weeks_in_universe": 4,
         "note": "theme momentum leader +158% YTD; dashboard score 55, outranked",
         "next_earnings_date": "2026-11-06",
-        "days_to_earnings": 3,
-        "earnings_note": "earnings in 3d \u2014 R8: binary catalyst window"
+        "days_to_earnings": 2,
+        "earnings_note": "earnings in 2d \u2014 R8: binary catalyst window"
       },
       "CFG": {
         "state": "RE_ENTRY_ARMING",
@@ -939,7 +1002,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "53 sessions before the print (\u2265 15)"
+              "detail": "52 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -953,12 +1016,21 @@
         "grade_inputs": {
           "sma5": 64.62077407836914,
           "up_close_since_swing_low": true,
-          "rsi14": 48.764599098725895,
+          "rsi14": 48.76459907628701,
           "quality_score": 61,
           "ytd_basis": "prior_year_close",
           "score_waived": false,
           "breaker_status": null,
-          "runway_sessions": 53
+          "runway_sessions": 52
+        },
+        "intraday_preview": {
+          "as_of": "2026-11-04",
+          "would_state": "RE_ENTRY_ARMING",
+          "close": 65.51,
+          "sma20": 63.93,
+          "conditions_met": 4,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "CFG",
         "kind": "watching",
@@ -967,7 +1039,7 @@
         "weeks_in_universe": null,
         "note": "added 2026-07-19 via +watch (D-017 candidate, graded A+) \u2014 Regional Banks (breaker clear), score 81 BUY NOW, +2.7% vs SMA20, RSI 61 at add",
         "next_earnings_date": "2027-01-15",
-        "days_to_earnings": 73
+        "days_to_earnings": 72
       },
       "CRWD": {
         "state": "WATCHING",
@@ -982,7 +1054,7 @@
             "met": false,
             "detail": "0/2 consecutive closes above SMA20",
             "consecutive_closes_above": 0,
-            "atr14": 13.7
+            "atr14": 13.71
           },
           "3_regime_gate": {
             "met": true,
@@ -1014,7 +1086,7 @@
           "close": 244.67999267578125,
           "sma20": 251.69299926757813,
           "sma20_5d_ago": 256.0770004272461,
-          "atr14": 13.703000749860491,
+          "atr14": 13.705501011439733,
           "consecutive_closes_above": 0,
           "regime_state": "Risk-on / Choppy",
           "group_in_universe": true,
@@ -1029,7 +1101,7 @@
             },
             "2_extension": {
               "met": true,
-              "detail": "extension -0.5117861933903988\u00d7ATR <= 1.8\u00d7"
+              "detail": "extension -0.5116928294663035\u00d7ATR <= 1.8\u00d7"
             },
             "3_approach": {
               "met": false,
@@ -1049,7 +1121,7 @@
             },
             "7_runway": {
               "met": true,
-              "detail": "20 sessions before the print (\u2265 15)"
+              "detail": "19 sessions before the print (\u2265 15)"
             }
           },
           "failing": [
@@ -1068,7 +1140,16 @@
           "ytd_basis": "prior_year_close",
           "score_waived": false,
           "breaker_status": "warning",
-          "runway_sessions": 20
+          "runway_sessions": 19
+        },
+        "intraday_preview": {
+          "as_of": "2026-11-04",
+          "would_state": "WATCHING",
+          "close": 244.33,
+          "sma20": 250.64,
+          "conditions_met": 2,
+          "a_plus_only": false,
+          "note": "forming bar \u2014 display only; the close decides (D-018). No transition, no event, no state change."
         },
         "ticker": "CRWD",
         "kind": "watching",
@@ -1077,30 +1158,10 @@
         "weeks_in_universe": 2,
         "note": "CRWD's 2026-07-20..2026-07-23 trade was MIGRATED into closed[] on 2026-09-28; that row (CRWD, entry_date 2026-07-20) is the record and this one is not. The name stays here on the reclaim watch. Summary only, authoritative figures in closed[]: sold 24 @ 189.085 on 2026-07-23 for -$264.36 = -0.9501R against a 188.5061 entry stop, overrides ZERO.",
         "next_earnings_date": "2026-12-01",
-        "days_to_earnings": 28
+        "days_to_earnings": 27
       }
     },
-    "transitions": [
-      {
-        "timestamp": "2026-11-04T00:26:20.810548+00:00",
-        "type": "position_state_change",
-        "severity": "critical",
-        "group": "Oil & Gas Exploration & Production",
-        "ticker": "APA",
-        "description": "APA: HELD \u2192 EXIT_FIRED",
-        "detail": {
-          "from_state": "HELD",
-          "to_state": "EXIT_FIRED",
-          "close": 47.77,
-          "sma20": 48.81,
-          "extension_pct": -2.13,
-          "extension_atr": -0.58,
-          "conditions_met": "3/5",
-          "stop": "exit on close below SMA20 (48.81)",
-          "bar_date": "2026-11-03"
-        }
-      }
-    ],
+    "transitions": [],
     "exit_drift_summary": {
       "status": "action_needed",
       "drifting": [
@@ -1558,34 +1619,36 @@
   "candidate_grades": {
     "MPC": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 427.34 below SMA5 435.15 \u2014 arriving from above; RSI 45 outside [45, 70]; score 58 < 75; 0 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; close 427.34 below SMA5 435.15 \u2014 arriving from above; RSI 45 outside [45, 70]; score 58 < 75; group breaker warning",
       "failing": [
         "1_conditions",
         "3_approach",
         "4_rsi",
         "5_score",
-        "7_runway"
+        "6_breaker"
       ],
       "group": "Oil & Gas Refining & Marketing"
     },
     "VLO": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 387.65 below SMA5 388.36 \u2014 arriving from above; RSI 42 outside [45, 70]; score 51 < 75",
+      "reasons": "five mechanical conditions not met; close 387.65 below SMA5 388.36 \u2014 arriving from above; RSI 42 outside [45, 70]; score 51 < 75; group breaker warning",
       "failing": [
         "1_conditions",
         "3_approach",
         "4_rsi",
-        "5_score"
+        "5_score",
+        "6_breaker"
       ],
       "group": "Oil & Gas Refining & Marketing"
     },
     "PSX": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 271.94 below SMA5 275.44 \u2014 arriving from above; score 58 < 75",
+      "reasons": "five mechanical conditions not met; close 271.94 below SMA5 275.44 \u2014 arriving from above; score 58 < 75; group breaker warning",
       "failing": [
         "1_conditions",
         "3_approach",
-        "5_score"
+        "5_score",
+        "6_breaker"
       ],
       "group": "Oil & Gas Refining & Marketing"
     },
@@ -1615,7 +1678,7 @@
     },
     "P": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 117.65 below SMA5 126.84 \u2014 arriving from above; RSI 42 outside [45, 70]; score 46 < 75; group breaker warning; 11 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; close 117.65 below SMA5 126.84 \u2014 arriving from above; RSI 42 outside [45, 70]; score 46 < 75; group breaker warning; 10 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -1640,17 +1703,16 @@
     },
     "SYRE": {
       "grade": "C",
-      "reasons": "extension 2.3211043333557355\u00d7ATR > 1.8\u00d7; score 70 < 75; 0 sessions before the print (< 15)",
+      "reasons": "extension 2.3119164684864875\u00d7ATR > 1.8\u00d7; score 70 < 75",
       "failing": [
         "2_extension",
-        "5_score",
-        "7_runway"
+        "5_score"
       ],
       "group": "Biotechnology"
     },
     "HALO": {
       "grade": "C",
-      "reasons": "extension 2.1187999923958984\u00d7ATR > 1.8\u00d7; close 128.62 below SMA5 129.94 \u2014 arriving from above; RSI 70 outside [45, 70]; 2 sessions before the print (< 15)",
+      "reasons": "extension 2.119041693550062\u00d7ATR > 1.8\u00d7; close 128.62 below SMA5 129.94 \u2014 arriving from above; RSI 70 outside [45, 70]; 1 sessions before the print (< 15)",
       "failing": [
         "2_extension",
         "3_approach",
@@ -1661,18 +1723,9 @@
     },
     "AMGN": {
       "grade": "C",
-      "reasons": "extension 2.1464026902403774\u00d7ATR > 1.8\u00d7; 0 sessions before the print (< 15)",
+      "reasons": "extension 2.146128314531601\u00d7ATR > 1.8\u00d7",
       "failing": [
-        "2_extension",
-        "7_runway"
-      ],
-      "group": "Biotechnology"
-    },
-    "BIIB": {
-      "grade": "C",
-      "reasons": "close 248.93 below SMA5 249.05 \u2014 arriving from above",
-      "failing": [
-        "3_approach"
+        "2_extension"
       ],
       "group": "Biotechnology"
     },
@@ -1681,6 +1734,14 @@
       "reasons": "extension 2.173835830959444\u00d7ATR > 1.8\u00d7",
       "failing": [
         "2_extension"
+      ],
+      "group": "Biotechnology"
+    },
+    "BIIB": {
+      "grade": "C",
+      "reasons": "close 248.93 below SMA5 249.05 \u2014 arriving from above",
+      "failing": [
+        "3_approach"
       ],
       "group": "Biotechnology"
     },
@@ -1704,7 +1765,7 @@
     },
     "PANW": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 350.20 below SMA5 368.57 \u2014 arriving from above; RSI 42 outside [45, 70]; score 46 < 75; group breaker warning; 11 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; close 350.20 below SMA5 368.57 \u2014 arriving from above; RSI 42 outside [45, 70]; score 46 < 75; group breaker warning; 10 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -1741,7 +1802,7 @@
     },
     "NET": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 273.62 below SMA5 289.70 \u2014 arriving from above; RSI 36 outside [45, 70]; score 43 < 75; group breaker warning; 2 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; close 273.62 below SMA5 289.70 \u2014 arriving from above; RSI 36 outside [45, 70]; score 43 < 75; group breaker warning; 1 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -1749,17 +1810,6 @@
         "5_score",
         "6_breaker",
         "7_runway"
-      ],
-      "group": "Systems Software"
-    },
-    "GEN": {
-      "grade": "C",
-      "reasons": "extension 4.434117532676644\u00d7ATR > 1.8\u00d7; RSI 72 outside [45, 70]; score 67 < 75; group breaker warning",
-      "failing": [
-        "2_extension",
-        "4_rsi",
-        "5_score",
-        "6_breaker"
       ],
       "group": "Systems Software"
     },
@@ -1774,80 +1824,16 @@
       ],
       "group": "Systems Software"
     },
-    "COP": {
+    "GEN": {
       "grade": "C",
-      "reasons": "close 144.40 below SMA5 148.87 \u2014 arriving from above; score 66 < 75; 2 sessions before the print (< 15)",
+      "reasons": "extension 4.434117532676644\u00d7ATR > 1.8\u00d7; RSI 72 outside [45, 70]; score 67 < 75; group breaker warning",
       "failing": [
-        "3_approach",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "EOG": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 155.17 below SMA5 160.35 \u2014 arriving from above; score 58 < 75; 2 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "OXY": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 60.43 below SMA5 62.20 \u2014 arriving from above; score 58 < 75; 4 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "DVN": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 47.62 below SMA5 50.17 \u2014 arriving from above; RSI 42 outside [45, 70]; score 46 < 75; 2 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "3_approach",
+        "2_extension",
         "4_rsi",
         "5_score",
-        "7_runway"
+        "6_breaker"
       ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "FANG": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 192.34 below SMA5 203.36 \u2014 arriving from above; RSI 43 outside [45, 70]; score 46 < 75",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "4_rsi",
-        "5_score"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "EQT": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 54.25 below SMA5 55.05 \u2014 arriving from above; score 48 < 75",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "5_score"
-      ],
-      "group": "Oil & Gas Exploration & Production"
-    },
-    "HUM": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; score 68 < 75; 3 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Managed Health Care"
+      "group": "Systems Software"
     },
     "CNC": {
       "grade": "C",
@@ -1856,6 +1842,16 @@
         "1_conditions",
         "3_approach",
         "5_score"
+      ],
+      "group": "Managed Health Care"
+    },
+    "HUM": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; score 68 < 75; 2 sessions before the print (< 15)",
+      "failing": [
+        "1_conditions",
+        "5_score",
+        "7_runway"
       ],
       "group": "Managed Health Care"
     },
@@ -1878,42 +1874,76 @@
       ],
       "group": "Managed Health Care"
     },
-    "TRGP": {
+    "COP": {
       "grade": "C",
-      "reasons": "close 298.56 below SMA5 304.82 \u2014 arriving from above; 2 sessions before the print (< 15)",
+      "reasons": "close 144.40 below SMA5 148.87 \u2014 arriving from above; score 66 < 75; group breaker warning; 1 sessions before the print (< 15)",
       "failing": [
         "3_approach",
+        "5_score",
+        "6_breaker",
         "7_runway"
       ],
-      "group": "Oil & Gas Storage & Transportation"
+      "group": "Oil & Gas Exploration & Production"
     },
-    "OKE": {
+    "EOG": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 91.94 below SMA5 93.74 \u2014 arriving from above",
-      "failing": [
-        "1_conditions",
-        "3_approach"
-      ],
-      "group": "Oil & Gas Storage & Transportation"
-    },
-    "KMI": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 32.87 below SMA5 33.22 \u2014 arriving from above; score 58 < 75",
+      "reasons": "five mechanical conditions not met; close 155.17 below SMA5 160.35 \u2014 arriving from above; score 58 < 75; group breaker warning; 1 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "3_approach",
-        "5_score"
+        "5_score",
+        "6_breaker",
+        "7_runway"
       ],
-      "group": "Oil & Gas Storage & Transportation"
+      "group": "Oil & Gas Exploration & Production"
     },
-    "WMB": {
+    "OXY": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 72.47 below SMA5 73.43 \u2014 arriving from above",
+      "reasons": "five mechanical conditions not met; close 60.43 below SMA5 62.20 \u2014 arriving from above; score 58 < 75; group breaker warning; 3 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
-        "3_approach"
+        "3_approach",
+        "5_score",
+        "6_breaker",
+        "7_runway"
       ],
-      "group": "Oil & Gas Storage & Transportation"
+      "group": "Oil & Gas Exploration & Production"
+    },
+    "FANG": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 192.34 below SMA5 203.36 \u2014 arriving from above; RSI 43 outside [45, 70]; score 46 < 75; group breaker warning",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "4_rsi",
+        "5_score",
+        "6_breaker"
+      ],
+      "group": "Oil & Gas Exploration & Production"
+    },
+    "DVN": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 47.62 below SMA5 50.17 \u2014 arriving from above; RSI 42 outside [45, 70]; score 46 < 75; group breaker warning; 1 sessions before the print (< 15)",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "4_rsi",
+        "5_score",
+        "6_breaker",
+        "7_runway"
+      ],
+      "group": "Oil & Gas Exploration & Production"
+    },
+    "EQT": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 54.25 below SMA5 55.05 \u2014 arriving from above; score 48 < 75; group breaker warning",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "5_score",
+        "6_breaker"
+      ],
+      "group": "Oil & Gas Exploration & Production"
     },
     "DVA": {
       "grade": "C",
@@ -1934,26 +1964,16 @@
     },
     "LH": {
       "grade": "C",
-      "reasons": "extension 2.0803985349286886\u00d7ATR > 1.8\u00d7; close 353.92 below SMA5 359.86 \u2014 arriving from above",
+      "reasons": "extension 2.080385161202976\u00d7ATR > 1.8\u00d7; close 353.92 below SMA5 359.86 \u2014 arriving from above",
       "failing": [
         "2_extension",
         "3_approach"
       ],
       "group": "Health Care Services"
     },
-    "CVS": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; score 57 < 75; 1 sessions before the print (< 15)",
-      "failing": [
-        "1_conditions",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Health Care Services"
-    },
     "CI": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 295.44 below SMA5 296.45 \u2014 arriving from above; score 52 < 75; 2 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; close 295.44 below SMA5 296.45 \u2014 arriving from above; score 52 < 75; 1 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -1962,9 +1982,19 @@
       ],
       "group": "Health Care Services"
     },
+    "CVS": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; score 57 < 75; 0 sessions before the print (< 15)",
+      "failing": [
+        "1_conditions",
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Health Care Services"
+    },
     "NTRA": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 388.63 below SMA5 408.45 \u2014 arriving from above; score 58 < 75; 2 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; close 388.63 below SMA5 408.45 \u2014 arriving from above; score 58 < 75; 1 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -1975,7 +2005,7 @@
     },
     "A": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 175.46 below SMA5 176.99 \u2014 arriving from above; score 66 < 75; 14 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; close 175.46 below SMA5 176.99 \u2014 arriving from above; score 66 < 75; 13 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -1986,7 +2016,7 @@
     },
     "TECH": {
       "grade": "C",
-      "reasons": "close 72.66 below SMA5 72.68 \u2014 arriving from above; score 66 < 75; 4 sessions before the print (< 15)",
+      "reasons": "close 72.66 below SMA5 72.68 \u2014 arriving from above; score 66 < 75; 3 sessions before the print (< 15)",
       "failing": [
         "3_approach",
         "5_score",
@@ -2021,7 +2051,7 @@
     },
     "UNP": {
       "grade": "C",
-      "reasons": "extension 2.0000782528353778\u00d7ATR > 1.8\u00d7",
+      "reasons": "extension 1.9954201313376867\u00d7ATR > 1.8\u00d7",
       "failing": [
         "2_extension"
       ],
@@ -2035,9 +2065,151 @@
       ],
       "group": "Rail Transportation"
     },
+    "TRGP": {
+      "grade": "C",
+      "reasons": "close 298.56 below SMA5 304.82 \u2014 arriving from above; group breaker warning; 1 sessions before the print (< 15)",
+      "failing": [
+        "3_approach",
+        "6_breaker",
+        "7_runway"
+      ],
+      "group": "Oil & Gas Storage & Transportation"
+    },
+    "OKE": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 91.94 below SMA5 93.74 \u2014 arriving from above; group breaker warning",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "6_breaker"
+      ],
+      "group": "Oil & Gas Storage & Transportation"
+    },
+    "KMI": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 32.87 below SMA5 33.22 \u2014 arriving from above; score 58 < 75; group breaker warning",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "5_score",
+        "6_breaker"
+      ],
+      "group": "Oil & Gas Storage & Transportation"
+    },
+    "WMB": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 72.47 below SMA5 73.43 \u2014 arriving from above; group breaker warning",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "6_breaker"
+      ],
+      "group": "Oil & Gas Storage & Transportation"
+    },
+    "VTRS": {
+      "grade": "C",
+      "reasons": "close 18.92 below SMA5 18.92 \u2014 arriving from above; 1 sessions before the print (< 15)",
+      "failing": [
+        "3_approach",
+        "7_runway"
+      ],
+      "group": "Pharmaceuticals"
+    },
+    "MRK": {
+      "grade": "C",
+      "reasons": "five mechanical conditions not met; close 144.67 below SMA5 145.96 \u2014 arriving from above; score 59 < 75",
+      "failing": [
+        "1_conditions",
+        "3_approach",
+        "5_score"
+      ],
+      "group": "Pharmaceuticals"
+    },
+    "JNJ": {
+      "grade": "C",
+      "reasons": "close 266.17 below SMA5 271.23 \u2014 arriving from above",
+      "failing": [
+        "3_approach"
+      ],
+      "group": "Pharmaceuticals"
+    },
+    "LLY": {
+      "grade": "C",
+      "reasons": "extension 2.8545193463693277\u00d7ATR > 1.8\u00d7; RSI 76 outside [45, 70]",
+      "failing": [
+        "2_extension",
+        "4_rsi"
+      ],
+      "group": "Pharmaceuticals"
+    },
+    "PFE": {
+      "grade": "C",
+      "reasons": "close 30.00 below SMA5 30.12 \u2014 arriving from above",
+      "failing": [
+        "3_approach"
+      ],
+      "group": "Pharmaceuticals"
+    },
+    "BMY": {
+      "grade": "C",
+      "reasons": "close 61.71 below SMA5 61.83 \u2014 arriving from above; score 61 < 75",
+      "failing": [
+        "3_approach",
+        "5_score"
+      ],
+      "group": "Pharmaceuticals"
+    },
+    "ZTS": {
+      "grade": "C",
+      "reasons": "extension 2.460238464002777\u00d7ATR > 1.8\u00d7; score 64 < 75; 1 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "5_score",
+        "7_runway"
+      ],
+      "group": "Pharmaceuticals"
+    },
+    "KO": {
+      "grade": "A+",
+      "reasons": "",
+      "failing": [],
+      "group": "Soft Drinks & Non-alcoholic Beverages"
+    },
+    "KDP": {
+      "grade": "C",
+      "reasons": "close 34.74 below SMA5 35.53 \u2014 arriving from above",
+      "failing": [
+        "3_approach"
+      ],
+      "group": "Soft Drinks & Non-alcoholic Beverages"
+    },
+    "CCEP": {
+      "grade": "C",
+      "reasons": "close 111.56 below SMA5 112.48 \u2014 arriving from above",
+      "failing": [
+        "3_approach"
+      ],
+      "group": "Soft Drinks & Non-alcoholic Beverages"
+    },
+    "MNST": {
+      "grade": "B",
+      "reasons": "1 sessions before the print (< 15)",
+      "failing": [
+        "7_runway"
+      ],
+      "group": "Soft Drinks & Non-alcoholic Beverages"
+    },
+    "PEP": {
+      "grade": "B",
+      "reasons": "score 63 < 75",
+      "failing": [
+        "5_score"
+      ],
+      "group": "Soft Drinks & Non-alcoholic Beverages"
+    },
     "KEYS": {
       "grade": "C",
-      "reasons": "five mechanical conditions not met; close 305.11 below SMA5 315.32 \u2014 arriving from above; RSI 36 outside [45, 70]; score 48 < 75; 12 sessions before the print (< 15)",
+      "reasons": "five mechanical conditions not met; close 305.11 below SMA5 315.32 \u2014 arriving from above; RSI 36 outside [45, 70]; score 48 < 75; 11 sessions before the print (< 15)",
       "failing": [
         "1_conditions",
         "3_approach",
@@ -2056,6 +2228,21 @@
         "5_score"
       ],
       "group": "Electronic Equipment & Instruments"
+    },
+    "FAST": {
+      "grade": "A+",
+      "reasons": "",
+      "failing": [],
+      "group": "Trading Companies & Distributors"
+    },
+    "FERG": {
+      "grade": "C",
+      "reasons": "extension 2.203303651520232\u00d7ATR > 1.8\u00d7; 3 sessions before the print (< 15)",
+      "failing": [
+        "2_extension",
+        "7_runway"
+      ],
+      "group": "Trading Companies & Distributors"
     },
     "SLB": {
       "grade": "C",
@@ -2088,124 +2275,6 @@
         "6_breaker"
       ],
       "group": "Oil & Gas Equipment & Services"
-    },
-    "VTRS": {
-      "grade": "C",
-      "reasons": "close 18.92 below SMA5 18.92 \u2014 arriving from above; 2 sessions before the print (< 15)",
-      "failing": [
-        "3_approach",
-        "7_runway"
-      ],
-      "group": "Pharmaceuticals"
-    },
-    "MRK": {
-      "grade": "C",
-      "reasons": "five mechanical conditions not met; close 144.67 below SMA5 145.96 \u2014 arriving from above; score 59 < 75",
-      "failing": [
-        "1_conditions",
-        "3_approach",
-        "5_score"
-      ],
-      "group": "Pharmaceuticals"
-    },
-    "LLY": {
-      "grade": "C",
-      "reasons": "extension 2.8551085039864623\u00d7ATR > 1.8\u00d7; RSI 76 outside [45, 70]",
-      "failing": [
-        "2_extension",
-        "4_rsi"
-      ],
-      "group": "Pharmaceuticals"
-    },
-    "JNJ": {
-      "grade": "C",
-      "reasons": "close 266.17 below SMA5 271.23 \u2014 arriving from above",
-      "failing": [
-        "3_approach"
-      ],
-      "group": "Pharmaceuticals"
-    },
-    "PFE": {
-      "grade": "C",
-      "reasons": "close 30.00 below SMA5 30.12 \u2014 arriving from above; 0 sessions before the print (< 15)",
-      "failing": [
-        "3_approach",
-        "7_runway"
-      ],
-      "group": "Pharmaceuticals"
-    },
-    "BMY": {
-      "grade": "C",
-      "reasons": "close 61.71 below SMA5 61.83 \u2014 arriving from above; score 61 < 75",
-      "failing": [
-        "3_approach",
-        "5_score"
-      ],
-      "group": "Pharmaceuticals"
-    },
-    "ZTS": {
-      "grade": "C",
-      "reasons": "extension 2.4599003745690564\u00d7ATR > 1.8\u00d7; score 64 < 75; 2 sessions before the print (< 15)",
-      "failing": [
-        "2_extension",
-        "5_score",
-        "7_runway"
-      ],
-      "group": "Pharmaceuticals"
-    },
-    "KO": {
-      "grade": "A+",
-      "reasons": "",
-      "failing": [],
-      "group": "Soft Drinks & Non-alcoholic Beverages"
-    },
-    "KDP": {
-      "grade": "C",
-      "reasons": "close 34.74 below SMA5 35.53 \u2014 arriving from above; 0 sessions before the print (< 15)",
-      "failing": [
-        "3_approach",
-        "7_runway"
-      ],
-      "group": "Soft Drinks & Non-alcoholic Beverages"
-    },
-    "CCEP": {
-      "grade": "C",
-      "reasons": "close 111.56 below SMA5 112.48 \u2014 arriving from above",
-      "failing": [
-        "3_approach"
-      ],
-      "group": "Soft Drinks & Non-alcoholic Beverages"
-    },
-    "MNST": {
-      "grade": "B",
-      "reasons": "2 sessions before the print (< 15)",
-      "failing": [
-        "7_runway"
-      ],
-      "group": "Soft Drinks & Non-alcoholic Beverages"
-    },
-    "PEP": {
-      "grade": "B",
-      "reasons": "score 63 < 75",
-      "failing": [
-        "5_score"
-      ],
-      "group": "Soft Drinks & Non-alcoholic Beverages"
-    },
-    "FAST": {
-      "grade": "A+",
-      "reasons": "",
-      "failing": [],
-      "group": "Trading Companies & Distributors"
-    },
-    "FERG": {
-      "grade": "C",
-      "reasons": "extension 2.203430606386859\u00d7ATR > 1.8\u00d7; 4 sessions before the print (< 15)",
-      "failing": [
-        "2_extension",
-        "7_runway"
-      ],
-      "group": "Trading Companies & Distributors"
     }
   }
 }
