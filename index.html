@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SignalAgent — the whole record</title>
+<style>
+:root{--bg:#121a22;--surface:#18232d;--line:#2b3a47;--text:#e8e3d9;--muted:#9aa6b2;--teal:#6bb8b0;--amber:#e5b25d;--coral:#e07a6a;--dim:#5d6b78}
+*{box-sizing:border-box}html{background:var(--bg)}
+body{margin:0;color:var(--text);font-family:Charter,"Bitstream Charter","Iowan Old Style","Source Serif Pro","Palatino Linotype",Georgia,serif;font-size:17px;line-height:1.55;font-variant-numeric:tabular-nums}
+.page{max-width:1060px;margin:0 auto;padding:46px 26px 80px}
+a{color:var(--teal);text-decoration:none;border-bottom:1px solid rgba(107,184,176,.35)}
+a:hover{border-bottom-color:var(--teal)}
+header h1{font-size:40px;line-height:1.08;font-weight:600;margin:0 0 12px;letter-spacing:-.012em}
+header .sub{font-size:20px;color:var(--muted);margin:0 0 20px;max-width:38em;line-height:1.35}
+header .meta{color:var(--muted);font-size:14.5px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 0;max-width:92ch}
+p{max-width:76ch;margin:0 0 15px}.lede{font-size:19px;max-width:70ch;line-height:1.5}
+section{margin-top:48px}h2{font-size:25px;font-weight:600;margin:0 0 14px}h2 span{color:var(--amber);font-weight:400;margin-right:14px}
+h3{font-size:18px;font-weight:600;margin:24px 0 8px}
+.fig{margin:20px 0 8px;background:var(--surface);border:1px solid var(--line);padding:12px 10px 8px}
+.fig svg{width:100%;height:auto;display:block}
+svg text{fill:var(--text);font-family:inherit;font-size:12.5px}svg text.m{fill:var(--muted)}svg text.s{font-size:11px}svg text.b{font-weight:600}
+svg text.a{fill:var(--amber)}svg text.c{fill:var(--coral)}svg text.t{fill:var(--teal)}
+svg a text{fill:var(--teal)}svg a:hover rect{stroke:var(--amber)}
+.cap{color:var(--muted);font-size:14.5px;max-width:92ch;margin:0 0 18px}
+.tw{overflow-x:auto;margin:14px 0 20px}
+table{border-collapse:collapse;width:100%;font-size:14.5px;line-height:1.45}
+th{text-align:left;font-weight:600;color:var(--muted);border-bottom:1px solid var(--line);padding:7px 12px 7px 0;vertical-align:bottom}
+td{border-bottom:1px solid var(--line);padding:9px 12px 9px 0;vertical-align:top}
+td.k{color:var(--muted);white-space:nowrap}
+.pos{color:var(--teal)}.neg{color:var(--coral)}
+tr.hl td{background:rgba(229,178,93,.08)}
+.start{display:flex;gap:14px;flex-wrap:wrap;margin:18px 0}
+.start a{flex:1 1 280px;background:var(--surface);border:1px solid var(--line);padding:14px 16px;display:block;border-bottom:1px solid var(--line)}
+.start a:hover{border-color:var(--amber)}
+.start .t{font-size:17px;font-weight:600;color:var(--teal)}
+.start .d{color:var(--muted);font-size:14px;margin-top:4px;line-height:1.4}
+.note{border-left:3px solid var(--amber);background:var(--surface);padding:12px 18px;max-width:84ch;margin:18px 0}
+.note.warn{border-left-color:var(--coral)}.note p:last-child{margin-bottom:0}
+pre{background:var(--surface);border:1px solid var(--line);padding:12px 14px;overflow-x:auto;font-size:13.5px;line-height:1.5;margin:10px 0 16px}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9em}
+p code,td code,li code{background:var(--surface);padding:1px 5px;border:1px solid var(--line)}
+ul{max-width:84ch}li{margin-bottom:7px}
+.foot{border-top:1px solid var(--line);margin-top:56px;padding-top:22px;color:var(--muted);font-size:15px}
+.foot h2{font-size:20px;color:var(--text)}
+@media (max-width:640px){header h1{font-size:29px}h2{font-size:22px}body{font-size:16px}.page{padding:28px 14px 60px}}
+.tag{display:inline-block;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;padding:0 6px;border:1px solid var(--line);margin:0 6px 2px 0;line-height:1.6;vertical-align:1px}
+.tag.obs{color:var(--teal)}.tag.dec{color:var(--amber)}.tag.open{color:var(--coral)}
+.chips{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px;margin:8px 0 4px}.chips a{white-space:nowrap}
+p code,li code,td code{overflow-wrap:anywhere}
+.wrapk td.k{white-space:normal}
+</style></head><body><div class="page">
+
+<header>
+  <h1>SignalAgent</h1>
+  <p class="sub">A personal swing-trading decision system that turns trader discretion into computed rules: it reads the market&rsquo;s regime, scans a GICS universe for leadership, grades each setup, tracks every holding&rsquo;s exit and re-entry state, and enforces position limits in real dollars. It runs as the <code>MarketPulse</code> web service, re-baked by GitHub Actions every 15 minutes of the US session.</p>
+  <div class="meta">This page is the map: what was built, what was tested, what each test concluded, where every file lives. Index written 10 November 2026 against commit <code>dcd8567</code>. Every link is relative &mdash; open this file from the repo root and they resolve. Sources: the goal is <a href="docs/NORTH-STAR.md">docs/NORTH-STAR.md</a>; the service is <a href="render.yaml">render.yaml</a>; the schedule is <a href=".github/workflows/update-signals.yml">update-signals.yml</a>.</div>
+</header>
+
+<section>
+  <p class="lede"><strong>Where the record stands.</strong> The live system was built between February and July 2026, and its regime gauge was rebuilt once on evidence: Build 4 showed the first gauge would have kept you out of the market for nine of eleven years, and Gauge B replaced it on 17 July. Then <strong>eight studies, seven of them pre-registered, tested the trading doctrine between 25 July and 16 August, and none adopted a change.</strong> The A+ grade&rsquo;s forward returns run inverted (A+ 0.83 &lt; B 1.15 &lt; C 1.63, mean % over 20 days); the systems replay found the doctrine &ldquo;unfalsified but unsupported&rdquo;; the extension guard, profit targets, exits and sizing each closed without a change. The joint D-011 + D-019 ruling those studies fed is still owed. Since then the work has been operating the system: a hand-kept ledger of real fills (50 closed rows and 4 open holdings at <code>dcd8567</code>), and order automation built to a shadow stage that places nothing.</p>
+</section>
+
+<section>
+  <h2><span>1</span>Start here</h2>
+  <div class="start">
+    <a href="docs/reference/glossary.html"><div class="t">Every name, with its verdict</div><div class="d">Each build, arm, scorer version, decision record and rule ID, with what it concluded. Current through Build 5.2; Builds 8 and 9 are in their own reports, linked below.</div></a>
+    <a href="docs/decisions/README.md"><div class="t">What was ruled</div><div class="d">The decision registry, D-001 to D-023: status, evidence, revisit triggers and retest recipes. <code>CHAT-RULINGS.md</code> beside it holds the in-session rulings.</div></a>
+    <a href="docs/reference/surfaces-explained.html"><div class="t">What the live pages compute</div><div class="d">Dashboard against framework: YTD, the score, the six &ldquo;signal&rdquo; quantities, and the nine places the two surfaces disagree.</div></a>
+  </div>
+</section>
+
+<section>
+  <h2><span>2</span>How the record was built</h2>
+  <div class="fig">
+  <svg viewBox="0 0 1040 590" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The path from the first dashboard in February 2026 through the live framework, the regime rebuild, eight studies of the trading doctrine, and the operating period to November 2026.">
+    <defs><marker id="ar" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polygon points="0 0, 9 3.5, 0 7" fill="#5d6b78"/></marker></defs>
+
+    <text x="14" y="22" class="m s b">BUILDING THE LIVE SYSTEM &mdash; 16 February to 25 July 2026</text>
+    <line x1="14" y1="30" x2="1026" y2="30" stroke="#2b3a47"/>
+
+    <a href="public/index.html"><rect x="14" y="44" width="152" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="90" y="63" class="b" text-anchor="middle">Market Pulse</text>
+      <text x="90" y="79" class="m s" text-anchor="middle">16&ndash;18 Feb</text>
+      <text x="90" y="94" class="m s" text-anchor="middle">dashboard, search, F&amp;G</text>
+      <text x="90" y="109" class="t s" text-anchor="middle">15-minute refresh</text></a>
+
+    <a href="public/framework.html"><rect x="184" y="44" width="152" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="260" y="63" class="b" text-anchor="middle">Framework</text>
+      <text x="260" y="79" class="m s" text-anchor="middle">12 Jun &ndash; 3 Jul</text>
+      <text x="260" y="94" class="m s" text-anchor="middle">regime, themes, rules</text>
+      <text x="260" y="109" class="t s" text-anchor="middle">weekly top-15 GICS</text></a>
+
+    <a href="docs/regime.md"><rect x="354" y="44" width="152" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="430" y="63" class="b" text-anchor="middle">Builds 1A + 1B</text>
+      <text x="430" y="79" class="m s" text-anchor="middle">5&ndash;11 Jul</text>
+      <text x="430" y="94" class="m s" text-anchor="middle">3-voter gauge, exits</text>
+      <text x="430" y="109" class="t s" text-anchor="middle">Labs, Slack pushes</text></a>
+
+    <a href="docs/backtest-regime.md"><rect x="524" y="44" width="152" height="74" fill="#18232d" stroke="#e07a6a"/>
+      <text x="600" y="63" class="b" text-anchor="middle">Build 4</text>
+      <text x="600" y="79" class="m s" text-anchor="middle">11 Jul</text>
+      <text x="600" y="94" class="m s" text-anchor="middle">regime walk-forward</text>
+      <text x="600" y="109" class="c s" text-anchor="middle">8.9% of time invested</text></a>
+
+    <a href="docs/gauge-b-throttle-sweep.md"><rect x="694" y="44" width="152" height="74" fill="#18232d" stroke="#6bb8b0"/>
+      <text x="770" y="63" class="b" text-anchor="middle">Gauge B</text>
+      <text x="770" y="79" class="m s" text-anchor="middle">13&ndash;17 Jul</text>
+      <text x="770" y="94" class="m s" text-anchor="middle">trend chassis, 240 combos</text>
+      <text x="770" y="109" class="t s" text-anchor="middle">live 17 Jul</text></a>
+
+    <a href="docs/decisions/D-007-theme-layer-retirement.md"><rect x="864" y="44" width="152" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="940" y="63" class="b" text-anchor="middle">Re-architecture</text>
+      <text x="940" y="79" class="m s" text-anchor="middle">18&ndash;25 Jul</text>
+      <text x="940" y="94" class="m s" text-anchor="middle">D-007, D-017 to D-019</text>
+      <text x="940" y="109" class="a s" text-anchor="middle">theme layer retired</text></a>
+
+    <line x1="166" y1="81" x2="182" y2="81" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <line x1="336" y1="81" x2="352" y2="81" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <line x1="506" y1="81" x2="522" y2="81" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <line x1="676" y1="81" x2="692" y2="81" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <line x1="846" y1="81" x2="862" y2="81" stroke="#5d6b78" marker-end="url(#ar)"/>
+
+    <path d="M520 126 L520 152" fill="none" stroke="#5d6b78" marker-end="url(#ar)"/>
+
+    <text x="14" y="172" class="m s b">TESTING THE DOCTRINE &mdash; eight studies, seven pre-registered, 25 July to 16 August 2026</text>
+    <line x1="14" y1="180" x2="1026" y2="180" stroke="#2b3a47"/>
+
+    <a href="docs/backtest-doctrine.md"><rect x="14" y="194" width="186" height="74" fill="#18232d" stroke="#e07a6a"/>
+      <text x="107" y="213" class="b" text-anchor="middle">Build 5 &middot; Layer A</text>
+      <text x="107" y="229" class="m s" text-anchor="middle">25 Jul</text>
+      <text x="107" y="244" class="m s" text-anchor="middle">does the A+ grade discriminate?</text>
+      <text x="107" y="259" class="c s" text-anchor="middle">inverted: 0.83 &lt; 1.15 &lt; 1.63</text></a>
+
+    <a href="docs/backtest-systems.md"><rect x="218" y="194" width="186" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="311" y="213" class="b" text-anchor="middle">Build 5B</text>
+      <text x="311" y="229" class="m s" text-anchor="middle">26 Jul &middot; pre-registered</text>
+      <text x="311" y="244" class="m s" text-anchor="middle">systems replay, five arms</text>
+      <text x="311" y="259" class="a s" text-anchor="middle">branch 5: unsupported</text></a>
+
+    <a href="docs/backtest-ablation.md"><rect x="422" y="194" width="186" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="515" y="213" class="b" text-anchor="middle">Build 5.1</text>
+      <text x="515" y="229" class="m s" text-anchor="middle">8 Aug &middot; pre-registered</text>
+      <text x="515" y="244" class="m s" text-anchor="middle">which grade rows cost?</text>
+      <text x="515" y="259" class="a s" text-anchor="middle">two suspects carried</text></a>
+
+    <a href="docs/backtest-target.md"><rect x="626" y="194" width="186" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="719" y="213" class="b" text-anchor="middle">Build 6A</text>
+      <text x="719" y="229" class="m s" text-anchor="middle">8 Aug &middot; pre-registered</text>
+      <text x="719" y="244" class="m s" text-anchor="middle">R-multiple profit targets</text>
+      <text x="719" y="259" class="c s" text-anchor="middle">no target adopted</text></a>
+
+    <a href="docs/decisions/D-020a-ytd-anchor-cap.md"><rect x="830" y="194" width="186" height="74" fill="#18232d" stroke="#6bb8b0"/>
+      <text x="923" y="213" class="b" text-anchor="middle">D-020a</text>
+      <text x="923" y="229" class="m s" text-anchor="middle">9 Aug &middot; a ruling, not a study</text>
+      <text x="923" y="244" class="m s" text-anchor="middle">one honest YTD</text>
+      <text x="923" y="259" class="t s" text-anchor="middle">scorer v2 in production</text></a>
+
+    <line x1="200" y1="231" x2="216" y2="231" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <line x1="404" y1="231" x2="420" y2="231" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <line x1="608" y1="231" x2="624" y2="231" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <line x1="812" y1="231" x2="828" y2="231" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <path d="M923 268 L923 280 L107 280 L107 290" fill="none" stroke="#5d6b78" marker-end="url(#ar)"/>
+
+    <a href="docs/backtest-carry.md"><rect x="14" y="294" width="186" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="107" y="313" class="b" text-anchor="middle">Build 7</text>
+      <text x="107" y="329" class="m s" text-anchor="middle">10 Aug &middot; pre-registered</text>
+      <text x="107" y="344" class="m s" text-anchor="middle">extension-guard carry</text>
+      <text x="107" y="359" class="a s" text-anchor="middle">branch 4: guard stays</text></a>
+
+    <a href="docs/backtest-score-ablation.md"><rect x="218" y="294" width="186" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="311" y="313" class="b" text-anchor="middle">Build 5.2</text>
+      <text x="311" y="329" class="m s" text-anchor="middle">14 Aug &middot; pre-registered</text>
+      <text x="311" y="344" class="m s" text-anchor="middle">score-component ablation</text>
+      <text x="311" y="359" class="a s" text-anchor="middle">two clears, confounded</text></a>
+
+    <a href="docs/backtest-exit.md"><rect x="422" y="294" width="186" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="515" y="313" class="b" text-anchor="middle">Build 8</text>
+      <text x="515" y="329" class="m s" text-anchor="middle">15 Aug &middot; pre-registered</text>
+      <text x="515" y="344" class="m s" text-anchor="middle">exit sweep</text>
+      <text x="515" y="359" class="a s" text-anchor="middle">E1 stays; ATR trails carried</text></a>
+
+    <a href="docs/backtest-sizing.md"><rect x="626" y="294" width="186" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="719" y="313" class="b" text-anchor="middle">Build 9</text>
+      <text x="719" y="329" class="m s" text-anchor="middle">16 Aug &middot; pre-registered</text>
+      <text x="719" y="344" class="m s" text-anchor="middle">position size and ceiling</text>
+      <text x="719" y="359" class="a s" text-anchor="middle">branch 4: 6.5% stands</text></a>
+
+    <a href="docs/decisions/CHAT-RULINGS.md"><rect x="830" y="294" width="186" height="74" fill="#18232d" stroke="#e5b25d" stroke-width="1.5"/>
+      <text x="923" y="313" class="b a" text-anchor="middle">Net result</text>
+      <text x="923" y="329" class="m s" text-anchor="middle">no study adopted a change</text>
+      <text x="923" y="344" class="m s" text-anchor="middle">D-011 + D-019 ruling owed</text>
+      <text x="923" y="359" class="c s" text-anchor="middle">CR-2026-08-09-2: open</text></a>
+
+    <line x1="200" y1="331" x2="216" y2="331" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <line x1="404" y1="331" x2="420" y2="331" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <line x1="608" y1="331" x2="624" y2="331" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <line x1="812" y1="331" x2="828" y2="331" stroke="#5d6b78" marker-end="url(#ar)"/>
+
+    <path d="M520 376 L520 402" fill="none" stroke="#5d6b78" marker-end="url(#ar)"/>
+
+    <text x="14" y="422" class="m s b">OPERATING &mdash; 18 July to 11 November 2026</text>
+    <line x1="14" y1="430" x2="1026" y2="430" stroke="#2b3a47"/>
+
+    <a href="docs/decisions/D-021-pool-builder-v2.md"><rect x="14" y="444" width="186" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="107" y="463" class="b" text-anchor="middle">Pool v2, then v3</text>
+      <text x="107" y="479" class="m s" text-anchor="middle">10&ndash;11 Aug</text>
+      <text x="107" y="494" class="m s" text-anchor="middle">D-021, D-022, D-023</text>
+      <text x="107" y="509" class="t s" text-anchor="middle">Nasdaq-100 + $5B floor</text></a>
+
+    <a href="framework/state/positions.json"><rect x="218" y="444" width="186" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="311" y="463" class="b" text-anchor="middle">Real-fill ledger</text>
+      <text x="311" y="479" class="m s" text-anchor="middle">18 Jul &ndash; 23 Oct</text>
+      <text x="311" y="494" class="m s" text-anchor="middle">40 &ldquo;positions&rdquo; commits</text>
+      <text x="311" y="509" class="t s" text-anchor="middle">50 closed, 4 held</text></a>
+
+    <a href="scripts/auto_trader.py"><rect x="422" y="444" width="186" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="515" y="463" class="b" text-anchor="middle">Order automation</text>
+      <text x="515" y="479" class="m s" text-anchor="middle">21 Sep</text>
+      <text x="515" y="494" class="m s" text-anchor="middle">Stage 0 shadow, 22 pins</text>
+      <text x="515" y="509" class="c s" text-anchor="middle">places nothing; switch on</text></a>
+
+    <a href="test_entry_floor.py"><rect x="626" y="444" width="186" height="74" fill="#18232d" stroke="#2b3a47"/>
+      <text x="719" y="463" class="b" text-anchor="middle">Entry floor</text>
+      <text x="719" y="479" class="m s" text-anchor="middle">28 Sep</text>
+      <text x="719" y="494" class="m s" text-anchor="middle">pin before mechanism</text>
+      <text x="719" y="509" class="c s" text-anchor="middle">mechanism not chosen</text></a>
+
+    <a href="public/framework.json"><rect x="830" y="444" width="186" height="74" fill="#18232d" stroke="#e5b25d" stroke-width="1.5"/>
+      <text x="923" y="463" class="b a" text-anchor="middle">Now &mdash; you are here</text>
+      <text x="923" y="479" class="m s" text-anchor="middle">11 Nov, bake dcd8567</text>
+      <text x="923" y="494" class="m s" text-anchor="middle">bot data commits only</text>
+      <text x="923" y="509" class="a s" text-anchor="middle">Risk-on / Choppy, 50% cap</text></a>
+
+    <line x1="200" y1="481" x2="216" y2="481" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <line x1="404" y1="481" x2="420" y2="481" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <line x1="608" y1="481" x2="624" y2="481" stroke="#5d6b78" marker-end="url(#ar)"/>
+    <line x1="812" y1="481" x2="828" y2="481" stroke="#5d6b78" marker-end="url(#ar)"/>
+
+    <text x="14" y="548" class="m s">Every box is a link. 1,400 commits on main at dcd8567, 16 February to 11 November 2026; 1,208 of them are the bot&rsquo;s &ldquo;data:&rdquo; runs. Between 18 February and</text>
+    <text x="14" y="564" class="m s">12 June the bot&rsquo;s runs are the only commits, and since 23 October (bd7affe) they are again. Each study box opens its report; each report names its script, results JSON and pins.</text>
+  </svg>
+  </div>
+</section>
+
+<section>
+  <h2><span>3</span>What each stage asked, and what it answered</h2>
+  <p class="cap"><span class="tag obs">observed</span>a measured result &middot; <span class="tag dec">ruled</span><span class="tag dec">built</span>a ruling, or a build that shipped &middot; <span class="tag open">open</span><span class="tag open">conflict</span>unresolved, or the record contradicts itself. Commit SHAs are on <code>main</code>.</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:10em">Stage</th><th>The question</th><th>The answer</th><th style="width:12em">Where</th></tr></thead>
+    <tbody>
+      <tr><td colspan="4" style="padding-top:14px;color:#9aa6b2;border-bottom:0"><strong>Building the live system</strong></td></tr>
+      <tr><td class="k">Market Pulse<br>16&ndash;18 Feb</td><td>No question recorded &mdash; this is the first build.</td><td><span class="tag dec">built</span>A heatmap dashboard, trade-signal columns, a Flask ticker search, sentiment, Fear &amp; Greed, and a 15-minute live refresh. No recorded conclusion.</td><td><code>e708ff2</code>&hellip;<code>c419ab6</code> &middot; <a href="public/index.html">index.html</a></td></tr>
+      <tr><td class="k">Framework + universe<br>12 Jun &ndash; 3 Jul</td><td>Add a regime layer, theme rotation and standing rules; replace the fixed ticker list.</td><td><span class="tag dec">built</span>The three-layer framework (<code>ccb6437</code>), a dynamic universe source (<code>22130c3</code>), then a top-15 GICS universe with a weekly Friday rotation (<code>a290f65</code>).</td><td><a href="public/framework.html">framework.html</a> &middot; <a href="docs/rules.md">rules.md</a></td></tr>
+      <tr><td class="k">Builds 1A + 1B<br>5&ndash;11 Jul</td><td>A swing-horizon regime gauge, and a per-ticker exit and re-entry engine.</td><td><span class="tag dec">ruled</span>Three voters plus a 200-day backdrop gate (D-001); a five-condition position engine on close-basis stops (D-003); the extension guard at 1.8&times;ATR (D-004); sentiment is not a voter (D-005); every decision logic gets a Lab (D-010).</td><td><a href="docs/regime.md">regime.md</a> &middot; <a href="docs/decisions/D-001-swing-gauge-1a.md">D-001</a> &middot; <a href="docs/decisions/D-003-1b-position-engine.md">D-003</a></td></tr>
+      <tr class="hl"><td class="k">Build 4<br>11 Jul</td><td>Run the production 3-voter gauge point-in-time over 2015&ndash;2026 through the exact production code. Does it earn its keep?</td><td><span class="tag obs">observed</span><strong>No.</strong> &ldquo;Would have kept you out of the market for nine of the last eleven years&rdquo;: time invested 8.9%, CAGR 1.85% against 13.93% buy-and-hold. The HY voter&rsquo;s absolute thresholds cast zero risk-on votes for nine years. This fired D-001&rsquo;s revisit trigger.</td><td><a href="docs/backtest-regime.md">report</a> &middot; <a href="docs/decisions/D-006-build4-protocol.md">D-006 protocol</a></td></tr>
+      <tr><td class="k">Gauge B<br>13&ndash;17 Jul</td><td>Pick the replacement&rsquo;s parameters on the D-006 protocol (train 2015&ndash;2021, validate 2022&ndash;2026). Can a looser throttle recover the naked 200-day&rsquo;s 9.83% CAGR while holding drawdown shallower than &minus;15%?</td><td><span class="tag obs">observed</span>The campaign validated the three D-008 rulings: credit as a 60-day percentile, asymmetric hysteresis N=2, the 90/50/25/5 ceiling ladder. <span class="tag dec">ruled</span>The throttle locked at the &ldquo;Quality point&rdquo; <code>k1 &middot; vix22 &middot; hy90 &middot; br&minus;0.5</code>: 9.10% CAGR at &minus;11.42% max drawdown, Sharpe 0.88. Live 17 July (<code>debf12f</code>).</td><td><a href="docs/gauge-b-campaign.md">campaign</a> &middot; <a href="docs/gauge-b-throttle-sweep.md">throttle sweep</a> &middot; <a href="docs/decisions/D-008-gauge-b-architecture.md">D-008</a></td></tr>
+      <tr><td class="k">Re-architecture<br>18&ndash;25 Jul</td><td>Remove the hand-curated theme layer; make every outage visible.</td><td><span class="tag dec">ruled</span>The scanner and quality gate are the thesis and concentration lives in R28 dollars (D-007, theme layer decommissioned 23 July, <code>e2746d5</code>). Every name on the dashboard gets a grade (D-017). Position-ladder transitions happen only on confirmed closes (D-018). A breaker records coverage, not outcome: &ldquo;an outage never impersonates safety&rdquo; (D-019).</td><td><a href="docs/decisions/D-007-theme-layer-retirement.md">D-007</a> &middot; <a href="docs/decisions/D-017-candidates-tier.md">D-017</a> &middot; <a href="docs/decisions/D-018-close-basis-position-ladder.md">D-018</a> &middot; <a href="docs/decisions/D-019-breaker-coverage.md">D-019</a></td></tr>
+
+      <tr><td colspan="4" style="padding-top:18px;color:#9aa6b2;border-bottom:0"><strong>Testing the doctrine</strong></td></tr>
+      <tr class="hl"><td class="k">Build 5 &middot; Layer A<br>25 Jul</td><td>Does the A+ grade discriminate on forward returns? (D-011&rsquo;s retest recipe, run for the first time.)</td><td><span class="tag obs">observed</span><strong>No &mdash; the ordering is inverted.</strong> Over 848,328 point-in-time ticker-days (2020-01 to 2026-07), mean 20-day forward return is A+ 0.83%, B 1.15%, C 1.63%. D-011&rsquo;s revisit trigger 1 fires on the validate span. The report reads the inversion as mostly momentum &ldquo;seen from the other side&rdquo;.</td><td><a href="docs/backtest-doctrine.md">report</a> &middot; <a href="docs/reference/build5-layer-a-verdict.html">verdict page</a></td></tr>
+      <tr><td class="k">Build 5B<br>26 Jul</td><td>With stops, sizing and the ceiling ladder in play, does any doctrine arm beat another?</td><td><span class="tag obs">observed</span>All ten arm-against-arm differences sit inside their random-selection noise bands. Pre-registered branch 5: &ldquo;the doctrine is unfalsified but unsupported&rdquo;. <span class="tag open">open</span>Softening the hard gate is left to the D-011 revisit.</td><td><a href="docs/backtest-systems.md">report</a> &middot; <a href="docs/backtest-systems-prereg.md">prereg</a> &middot; <a href="docs/reference/artifacts-and-5b-explained.html">explained</a></td></tr>
+      <tr><td class="k">Build 5.1<br>8 Aug</td><td>Which rows of the grade are expensive?</td><td><span class="tag obs">observed</span>Two suspects clear bar 1: the extension guard (its excluded days ran 1.43% against A+&rsquo;s 0.83%) and the YTD&gt;100% penalty. Both carried to a replay; production unchanged. An amendment of 9 August records that the &ldquo;YTD&rdquo; penalty actually measured a rolling six-month window.</td><td><a href="docs/backtest-ablation.md">report</a> &middot; <a href="docs/reference/build51-explained.html">explained</a></td></tr>
+      <tr><td class="k">Build 6A<br>8 Aug</td><td>Does taking profit at an R-multiple target pay?</td><td><span class="tag obs">observed</span><strong>No arm adopted.</strong> T3 prices the trade-off at 0.66 CAGR points given up per point of max drawdown saved, and is labelled FRAGILE (top three trades are 57% of the difference).</td><td><a href="docs/backtest-target.md">report</a></td></tr>
+      <tr><td class="k">D-020a<br>9 Aug</td><td>What should &ldquo;YTD&rdquo; mean, given 5.1&rsquo;s finding?</td><td><span class="tag dec">ruled</span>One honest YTD: a real prior-year-close anchor on both paths, the YTD component capped flat at the curve&rsquo;s peak, the scorer versioned (v1 frozen). It removed the penalty from production on design-coherence grounds, not on a study result. The plateau ruling is recorded as revisitable.</td><td><a href="docs/decisions/D-020a-ytd-anchor-cap.md">D-020a</a> &middot; <a href="docs/decisions/D-020a-impact-table.csv">impact table</a></td></tr>
+      <tr><td class="k">Build 7<br>10 Aug</td><td>Carried into a full replay, does the extension guard cost money?</td><td><span class="tag obs">observed</span>The first run <strong>stopped at its integrity gate</strong> on a mutable study input (<code>5ec86b7</code>); every input was then pinned (<code>f9d18f6</code>). Result: branch 4. Guard-off beats guard-on by a mean +0.40 CAGR points inside a [&minus;6.57, +6.73] band, 54% of seeds positive. The guard stays by incumbency; risk-parity sizing loses; the book is &ldquo;capacity-bound, not candidate-bound&rdquo;.</td><td><a href="docs/backtest-carry.md">report</a> &middot; <a href="docs/reference/build7-carry-replay.html">explained</a> &middot; <a href="docs/backtest-inputs.md">inputs</a></td></tr>
+      <tr><td class="k">Build 5.2<br>14 Aug</td><td>Which score components matter?</td><td><span class="tag obs">observed</span>MACD and MA formally clear bar 2, but the clear is a score-margin confound of &minus;0.09 to &minus;0.10 points on 20-day returns, which the report calls economically &ldquo;almost nothing&rdquo;. Ships nothing.</td><td><a href="docs/backtest-score-ablation.md">report</a></td></tr>
+      <tr><td class="k">Build 8<br>15 Aug</td><td>Does any exit beat the incumbent E1?</td><td><span class="tag obs">observed</span>Partly unblinded before its primary statistic was adopted &mdash; disclosed at the top of the report. No adoption: E1 stays by incumbency, both ratchets rejected. E6 and E7 (pure ATR trails) carried as candidates to a capital-feasible redeploying replay. <span class="tag open">open</span>No run of that replay is recorded.</td><td><a href="docs/backtest-exit.md">report</a> &middot; <a href="docs/backtest-exit-prereg-amendment.md">amendment 1</a></td></tr>
+      <tr><td class="k">Build 9<br>16 Aug</td><td>Is 6.5% per position and the 90/50/25/5 ceiling the right size?</td><td><span class="tag obs">observed</span>Branch 4: every arm inside the CIs on both metrics in both spans. 6.5% and 90/50/25/5 stand by incumbency. <span class="tag open">open</span>Bar 5, the ladder itself: unresolved, leaning &ldquo;earns&rdquo;. The commit subject calls &ldquo;the selection edge dies with depth&rdquo; the mechanism; the report files it among regularities &ldquo;reported as structure, not findings&rdquo;.</td><td><a href="docs/backtest-sizing.md">report</a> &middot; <a href="docs/backtest-sizing-prereg.md">prereg</a></td></tr>
+      <tr><td class="k">The ruling owed</td><td>After all of the above, what happens to the A+ gate (D-011) and the breadth throttle (D-019)?</td><td><span class="tag open">open</span>&ldquo;Evidence base complete, ruling owed&rdquo;, in the registry&rsquo;s words. The recommendation on record, explicitly not a ruling: suspend breadth as a throttle on an interim, dated basis; hold the A+ threshold and fix the actionability window; do not touch the stop, the ceiling ladder or the close-basis law.</td><td><a href="docs/decisions/CHAT-RULINGS.md">CR-2026-08-09-2</a> &middot; <a href="docs/reference/d011-d019-combined-brief.html">brief</a></td></tr>
+
+      <tr><td colspan="4" style="padding-top:18px;color:#9aa6b2;border-bottom:0"><strong>Operating</strong></td></tr>
+      <tr><td class="k">Pool v2, v3<br>10&ndash;11 Aug</td><td>Which names can the weekly rotation reach?</td><td><span class="tag dec">ruled</span>ETF top holdings &cup; S&amp;P 500 &cup; Nasdaq-100 &cup; inclusions &minus; exclusions, a $5B floor, a versioned pool (D-021). An unmeasurable market cap is not a small company (D-022). ARWR included as an entry decision (<code>fef1740</code>). A listing-venue gate followed on 21 September (<code>8ad20e5</code>). <span class="tag open">conflict</span>D-023&rsquo;s record still reads &ldquo;Proposed &mdash; staged and held for push approval&rdquo;, but its commit <code>3391326</code> is on <code>main</code>.</td><td><a href="docs/decisions/D-021-pool-builder-v2.md">D-021</a> &middot; <a href="docs/decisions/D-022-unmeasurable-market-cap.md">D-022</a> &middot; <a href="docs/decisions/D-023-classification-aliases.md">D-023</a></td></tr>
+      <tr><td class="k">Real-fill ledger<br>18 Jul &ndash; 23 Oct</td><td>Record every real entry and exit so R and dollars can be recomputed.</td><td><span class="tag obs">observed</span>Schema 1.2 added the <code>closed[]</code> ledger (<code>34e0f8d</code>); its first rows were backfilled on 19 August. Three orphan trades were migrated and &ldquo;two more found that cannot be&rdquo; (<code>6802095</code>). The last batch, 23 October, was &ldquo;recorded from prices alone, dates pending&rdquo; (<code>c8f82e9</code>), then amended for &ldquo;twelve false statements&rdquo; (<code>bd7affe</code>).</td><td><a href="framework/state/positions.json">positions.json</a></td></tr>
+      <tr><td class="k">Automation<br>21&ndash;28 Sep</td><td>Can orders be generated from the bake without trusting its holdings list?</td><td><span class="tag dec">built</span>Stage 0, shadow only: signals from the artifact, holdings from the broker, 22 guards each demonstrated by a pin. The Schwab adapter raises on every method. <span class="tag open">open</span>An entry that would fill at or below its own stop is not yet refused: the pin is written, &ldquo;the live code is untouched&rdquo;.</td><td><a href="scripts/auto_trader.py">auto_trader.py</a> &middot; <a href="test_entry_floor.py">entry-floor pin</a></td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">From 5.1 on, each study first reproduces committed numbers exactly before it reports anything &mdash; Layer A&rsquo;s 29,777 A+ days, or 5B&rsquo;s S1 block &mdash; and from 5B on, each verdict is read against branches committed before the results existed. The one production change in that window, D-020a, was a ruling on what a number should mean, not a study result.</p>
+</section>
+
+<section>
+  <h2><span>4</span>The current state</h2>
+  <h3>What is running</h3>
+  <ul>
+    <li><strong>Web service <code>MarketPulse</code></strong> on Render: <code>python ticker_api.py</code>, auto-deploy on (<a href="render.yaml">render.yaml</a>). It serves <code>public/</code> and the <code>/api/*</code> routes.</li>
+    <li><strong>Update Signal Data</strong>, every 15 minutes 13:00&ndash;21:45 UTC on weekdays (<code>*/15 13-21 * * 1-5</code>): signal engine, Fear &amp; Greed, framework runner, history manager, intraday alerts, post-close report. It commits as <code>data: update signals &hellip;</code> on <code>main</code> (<a href=".github/workflows/update-signals.yml">update-signals.yml</a>).</li>
+    <li><strong>Rotate Active Universe</strong>, Saturdays 01:07 UTC: <code>universe_builder.py --force</code> (<a href=".github/workflows/rotate-universe.yml">rotate-universe.yml</a>).</li>
+    <li><strong>Pre-market Briefing</strong>, 11:00 and 12:00 UTC on weekdays: <code>notify_premarket.py</code> (<a href=".github/workflows/premarket-briefing.yml">premarket-briefing.yml</a>).</li>
+    <li><strong>Not running on any schedule:</strong> <code>scripts/auto_trader.py</code>. No workflow and not <code>render.yaml</code> calls it, and <a href="ops/automation_switch.json">ops/automation_switch.json</a> reads <code>"kill_switch": "on"</code> &mdash; the only value that lets orders through is <code>"off"</code>.</li>
+  </ul>
+  <h3>What is configured</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:16em">Setting</th><th>Value</th><th style="width:14em">Source</th></tr></thead>
+    <tbody>
+      <tr><td class="k">Account capital</td><td><code>account_capital_usd: 97500</code>, hand-maintained, account <code>TOS</code></td><td><a href="framework/config.yaml">config.yaml</a></td></tr>
+      <tr><td class="k">R28 group caps</td><td>20% of capital and 3 positions per GICS group</td><td><a href="framework/config.yaml">config.yaml</a></td></tr>
+      <tr><td class="k">Regime engine</td><td><code>engine: "chassis"</code> (Gauge B). Revert lever: set it to <code>"parliament"</code>; do not delete the key</td><td><a href="framework/config.yaml">config.yaml</a></td></tr>
+      <tr><td class="k">Chassis parameters</td><td>hysteresis N=2 asymmetric; VIX 22; HY 60-day percentile 90; breadth &minus;0.5; any one throttle downgrades; 60-day replay</td><td><a href="framework/config.yaml">config.yaml</a> &middot; <a href="docs/decisions/D-008-gauge-b-architecture.md">D-008</a></td></tr>
+      <tr><td class="k">Ceiling ladder</td><td>90/50/25/5 by regime (D-008 Q4)</td><td><a href="docs/decisions/D-008-gauge-b-architecture.md">D-008</a></td></tr>
+      <tr><td class="k">Position size</td><td>R15 band, 5&ndash;8% of capital (<code>framework/portfolio_rules.py</code>). The study harness uses 6.5%, which Build 9 left standing by incumbency.</td><td><a href="docs/rules.md">rules.md</a> &middot; <a href="docs/backtest-sizing.md">Build 9</a></td></tr>
+      <tr><td class="k">Scorer</td><td><code>score_stock_v2</code> (D-020a)</td><td><a href="data/signals.json">signals.json</a></td></tr>
+      <tr><td class="k">Pool</td><td><code>v3-2026-08-11</code>, hash <code>5a1ce37f1d7f6099</code>; inclusion ARWR; exclusion PSTG</td><td><a href="data/universe_active.json">universe_active.json</a></td></tr>
+    </tbody>
+  </table></div>
+  <h3>One reading, as baked at <code>dcd8567</code> (2026-11-11 00:40 UTC)</h3>
+  <p>Regime label <strong>Risk-on / Choppy</strong>; the chassis state file shows confirmed <code>In-Trend-Throttled</code> with raw state <code>In-Trend-Full</code> and its upgrade counter at 1 as of 2026-11-10 (upgrades need two consecutive closes). R28 ceiling 50%, deployed 26.38% ($25,715.89), status <code>ok</code>. Holdings: WAT, NTAP, CRL, APA. Watching: MRNA, CFG, CRWD. Sources: <a href="public/framework.json">framework.json</a>, <a href="framework/state/regime_chassis_state.json">regime_chassis_state.json</a>, <a href="framework/state/positions.json">positions.json</a>. The bot overwrites all of this every 15 minutes in market hours; read the files, not this paragraph.</p>
+  <h3>What is pending</h3>
+  <ul>
+    <li><span class="tag open">open</span>The joint D-011 + D-019 ruling (<a href="docs/decisions/CHAT-RULINGS.md">CR-2026-08-09-2</a>).</li>
+    <li><span class="tag open">open</span>Nine <code>closed[]</code> rows carry <code>exit_date_pending</code>: ANET, HPE, TER, ZBRA, NVDA, FFIV, FTNT, PANW, APH. The ledger&rsquo;s <code>updated_at</code> is 2026-10-23; no &ldquo;positions&rdquo; commit has landed since.</li>
+    <li><span class="tag open">open</span>The entry-floor mechanism (<a href="test_entry_floor.py">pin</a> written, nothing wired); Stage 1 (one share) and Stage 2 (full size) are operator steps (<code>35c5889</code>).</li>
+    <li><span class="tag open">open</span>Build 8&rsquo;s carry replay of the ATR trails; Build 9&rsquo;s bar 5; the D-020a plateau revisit.</li>
+    <li><span class="tag open">parked</span><a href="docs/decisions/D-009-exit-timing-1230.md">D-009</a> (12:30 exit checkpoint), <a href="docs/decisions/D-014-tradingview-data-api.md">D-014</a> (TradingView data), <a href="docs/decisions/D-015-oss-frameworks-survey.md">D-015</a> (OSS survey), <a href="docs/decisions/D-016-extreme-fear-overlay.md">D-016</a> (extreme-fear overlay) &mdash; all Proposed.</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span>5</span>Where everything lives</h2>
+  <div class="tw"><table>
+    <thead><tr><th style="width:12em">Folder</th><th>What is in it</th></tr></thead>
+    <tbody>
+      <tr><td class="k">repo root</td><td>The engines CI runs: <code>signal_engine.py</code> (scan, score, signals), <code>history_manager.py</code> (change events, snapshots, retention), <code>fear_greed_engine.py</code>, <code>universe_builder.py</code> + <code>universe_source.py</code> (weekly rotation and pool), <code>notify_*.py</code> (Slack pushes). The app: <code>ticker_api.py</code>. Display helpers: <code>grade_view.py</code>, <code>grade_outcomes.py</code>, <code>sentiment_engine.py</code>, <code>earnings_calendar.py</code>, <code>gics_classifier.py</code>, <code>listing_venue.py</code>. And 47 <code>test_*.py</code> pin files.</td></tr>
+      <tr><td class="k">framework/</td><td><code>regime_calculator.py</code> (both gauges), <code>position_signals.py</code> (the 1B ladder), <code>portfolio_rules.py</code> (R28), <code>rule_engine.py</code>, <code>framework_runner.py</code>, <code>config.yaml</code>; <code>state/</code> holds the ledger and ladder state; <code>output/latest.json</code> is the run artifact.</td></tr>
+      <tr><td class="k">data/</td><td>Committed outputs the bot rewrites: signals, history, grade series, simulated grade outcomes, regime by day, the active universe, Fear &amp; Greed history, earnings dates; <code>snapshots/</code> (30 days in full, then one per week); <code>pool/</code> (vocabulary, inclusions, Nasdaq-100 list); <code>universe_cache/</code> (ETF holdings).</td></tr>
+      <tr><td class="k">public/</td><td>The seven served pages, the chat widget, and the JSON they read. <code>signals.json</code>, <code>history.json</code> and <code>snapshots/</code> are byte-identical mirrors of <code>data/</code>; <code>framework.json</code> mirrors <code>framework/output/latest.json</code>.</td></tr>
+      <tr><td class="k">docs/</td><td>Study reports with their pre-registrations and results JSON (<code>backtest-*</code>, <code>gauge-b-*</code>), reference docs (rules, regime, scoring, sentiment, testing), <code>decisions/</code>, <code>briefs/</code>, <code>explainers/</code>, <code>reference/</code> (styled pages), <code>img/</code> (study charts), <code>tools/ribbon/</code> (a research method backed up from outside version control).</td></tr>
+      <tr><td class="k">scripts/</td><td>One <code>backtest_*.py</code> per study, <code>audit_*_report.py</code> (report against JSON), ledger tools (<code>add_entry.py</code>, <code>close_position.py</code>, <code>amend_note.py</code>, <code>frame_stop.py</code>, <code>migrate_orphan_trade.py</code>), <code>bake.sh</code>, <code>run_pins.py</code>, <code>auto_trader.py</code> + <code>broker_adapter.py</code>, <code>study_inputs.py</code>.</td></tr>
+      <tr><td class="k">archive/</td><td>The retired theme layer (D-007 Phase 3): imported by nothing, run by nothing.</td></tr>
+      <tr><td class="k">ops/</td><td>The automation kill switch.</td></tr>
+      <tr><td class="k">.github/workflows/</td><td>The three schedules in section 4.</td></tr>
+      <tr><td class="k">.claude/</td><td>A local preview launch config.</td></tr>
+      <tr><td class="k">prompts/</td><td>Local only: untracked, not part of the repository, and not linked from this page.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2><span>6</span>How to look at the data</h2>
+  <p>Every file below is JSON written by the pipeline and committed by the bot. Field names are copied from the files at <code>dcd8567</code>.</p>
+  <h3>The scan &mdash; <a href="data/signals.json">data/signals.json</a></h3>
+<pre><code>timestamp, scorer_version, sp500_ytd, indexes{}, total_groups, total_tickers
+groups[]            name, gics_code, sector, avg_ytd, avg_score, group_signal, rank,
+                    breaker_status, breaker_checks_expected, breaker_checks_run, near_misses[]
+groups[].stocks[]   ticker, score, score_components, signal, ytd_return, ytd_basis, price,
+                    rsi, macd, ma20, ma50, ma200, volume_ratio, pct_from_52w_high,
+                    return_1m, return_3m, next_earnings_date, days_to_earnings,
+                    trade_signal, trade_reasoning
+candidate_grades{}  ticker -&gt; grade, reasons, failing, group</code></pre>
+  <h3>The framework run &mdash; <a href="public/framework.json">public/framework.json</a></h3>
+<pre><code>regime               regime (label), engine, chassis, gauges, backdrop_gate, macro_inputs
+universe_leadership  the 15 groups: rank, composite, median_ytd, tickers, breaker coverage
+position_signals     tickers (ladder state per name), transitions, exit_drift_summary
+r28                  capital_usd, ceiling_state, ceiling_pct, deployed_usd, deployed_pct,
+                     cash_pct, positions, groups
+rules                evaluations, violations, action_items</code></pre>
+  <h3>The ledger &mdash; <a href="framework/state/positions.json">framework/state/positions.json</a></h3>
+<pre><code>holdings[]  ticker, shares, entry_price, entry_date, stop_on_entry, entry_stop, note
+closed[]    ticker, entry_date, entry_price, shares, entry_stop, exit_date, exit_date_pending,
+            exit_fill, fees_usd, exit_reason, realized_usd, realized_r,
+            realized_pct_of_capital, capital_usd_at_exit, regime_at_entry, regime_at_exit,
+            fill_source, basis, overrides, note
+watching[]  ticker, status, theme, entry_gate, note</code></pre>
+  <p><code>exit_reason</code> is one of <code>system_stop</code>, <code>system_stop_modified</code>, <code>discretionary</code>. <code>realized_r</code> is derived from the stored <code>entry_stop</code>, and <code>fill_source</code> is one of <code>broker_statement</code>, <code>estimate</code>, <code>reconstructed</code> &mdash; both laws are stated in <a href="scripts/close_position.py">close_position.py</a> and pinned in <code>test_positions_ledger.py</code>. Exit shapes that are not clean stops are worked through in the commit notes (e.g. <code>1ae6442</code>, <code>5bcceeb</code>).</p>
+  <h3>The other series</h3>
+  <div class="tw"><table class="wrapk">
+    <thead><tr><th style="width:20em">File</th><th>Shape</th></tr></thead>
+    <tbody>
+      <tr><td class="k"><a href="data/history.json">data/history.json</a></td><td><code>changes[]</code> (timestamp, type, severity, group, ticker, description, detail), <code>snapshots[]</code> (the index of snapshot files), <code>last_states</code>.</td></tr>
+      <tr><td class="k"><a href="data/position_events.json">data/position_events.json</a></td><td>The same <code>changes[]</code> shape, for position-ladder transitions.</td></tr>
+      <tr><td class="k"><a href="data/grade_history.json">data/grade_history.json</a></td><td><code>grade-history-1</code>: <code>days[]</code> of date, source_commit, scorer_version, graded, grades.</td></tr>
+      <tr><td class="k"><a href="data/grade_outcomes.json">data/grade_outcomes.json</a></td><td><strong>Simulated</strong> spell trades on graded names: <code>trades[]</code> (ticker, grade, grade_date, entry, initial_stop, exit, days_held, pnl_pct, pnl_r), <code>aggregates</code> by grade. It observes; it decides nothing.</td></tr>
+      <tr><td class="k"><a href="data/regime_daily.json">data/regime_daily.json</a></td><td><code>states{date: state}</code> from 2019-01-02 under the chassis, with provenance.</td></tr>
+      <tr><td class="k"><a href="data/universe_active.json">data/universe_active.json</a></td><td>The week&rsquo;s rotation: pool version and hash, <code>rotation_config</code>, <code>mcap_coverage</code>, the selected groups.</td></tr>
+      <tr><td class="k"><a href="data/fear_greed_history.json">data/fear_greed_history.json</a></td><td>A list of date, composite, label, components.</td></tr>
+      <tr><td class="k"><a href="docs/backtest-sizing-results.json">docs/backtest-*-results.json</a></td><td>One per study, each with a <code>results_hash</code> the report cites and the pins recompute.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">On the running service the same data is at <code>/api/assessment.json</code>, <code>/api/framework/latest.json</code>, <code>/api/framework/gauges.json</code>, <code>/api/position/events.json</code>, <code>/api/grade/outcomes.json</code>, <code>/api/universe/ranking.json</code> and others (routes in <code>ticker_api.py</code>). The <code>public/*.html</code> pages read those routes; opened from disk they show their load-failure state.</p>
+</section>
+
+<section>
+  <h2><span>7</span>Running things</h2>
+  <h3>The app, locally</h3>
+<pre><code>python3 ticker_api.py              # what Render runs; binds $PORT or 5002</code></pre>
+  <h3>One pipeline pass</h3>
+<pre><code>./run_pipeline.sh                  # signal_engine, fear_greed_engine, history_manager
+./run_pipeline.sh --serve          # the same, then serves public/ on :8080 (no /api)
+bash scripts/bake.sh --no-notify   # the CI bake as one unit; --no-notify is for retries
+python universe_builder.py --force # the Saturday rotation, by hand</code></pre>
+  <h3>The pins</h3>
+<pre><code>python3 scripts/run_pins.py                                        # the whole suite
+python3 scripts/run_pins.py test_pool_builder.py test_grade_view.py  # a subset</code></pre>
+  <p class="cap">Each pin file runs in a fresh interpreter; the runner reports what the suite dirtied and restores nothing. The doctrine behind the pins is <a href="docs/testing.md">docs/testing.md</a>.</p>
+  <h3>The ledger</h3>
+<pre><code>python3 scripts/close_position.py --ticker GEN --exit-date 2026-08-18 --exit-fill 27.66 \
+    --fees 0.16 --exit-reason discretionary --fill-source broker_statement \
+    --capital 97500 --regime-at-exit "Risk-on / Trending" --overrides "..." --dry-run
+python3 scripts/add_entry.py --ticker NVDA --shares 27 --entry-price 230.76 \
+    --entry-date 2026-10-01 --entry-stop 223.1252 --note "..." --dry-run
+python3 scripts/frame_stop.py --ticker GEN --entry-date 2026-08-12</code></pre>
+  <p class="cap">The examples are the scripts&rsquo; own docstrings. <code>add_entry.py</code> warns: close before you add.</p>
+  <div class="note warn">
+    <p><strong>No credential is on this page.</strong> The workflows read theirs from GitHub Actions secrets (<a href=".github/workflows/update-signals.yml">update-signals.yml</a>); the order path is gated by <a href="ops/automation_switch.json">ops/automation_switch.json</a>, which reads as killed unless it says exactly <code>"off"</code>.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span>8</span>Every artifact</h2>
+  <div class="tw"><table class="wrapk">
+    <thead><tr><th style="width:25em">File</th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td colspan="2" style="padding-top:12px;color:#9aa6b2;border-bottom:0"><strong>The served pages</strong> &mdash; they read <code>/api/*</code>, so open them on the running service</td></tr>
+      <tr><td class="k"><a href="public/index.html">public/index.html</a></td><td>The Market Pulse dashboard: groups, heatmap, indexes.</td></tr>
+      <tr><td class="k"><a href="public/framework.html">public/framework.html</a></td><td>The framework: regime, R28, position signals, the Gauge and Position Labs.</td></tr>
+      <tr><td class="k"><a href="public/search.html">public/search.html</a></td><td>Ticker search, the grade, the Score Lab.</td></tr>
+      <tr><td class="k"><a href="public/history.html">public/history.html</a></td><td>Changes, snapshots, position transitions, grade outcomes.</td></tr>
+      <tr><td class="k"><a href="public/feargreed.html">public/feargreed.html</a> &middot; <a href="public/sentiment.html">sentiment.html</a></td><td>Fear &amp; Greed and per-ticker sentiment. Display only (D-005).</td></tr>
+      <tr><td class="k"><a href="public/architecture.html">public/architecture.html</a></td><td>The architecture diagram, last rewritten 18 July &mdash; before the theme layer was decommissioned.</td></tr>
+
+      <tr><td colspan="2" style="padding-top:16px;color:#9aa6b2;border-bottom:0"><strong>Live data</strong></td></tr>
+      <tr><td class="k"><a href="data/signals.json">data/signals.json</a> &middot; <a href="public/signals.json">public/</a></td><td>The scan (section 6).</td></tr>
+      <tr><td class="k"><a href="public/framework.json">public/framework.json</a> &middot; <a href="framework/output/latest.json">framework/output/latest.json</a></td><td>The framework run (section 6).</td></tr>
+      <tr><td class="k"><a href="data/history.json">data/history.json</a> &middot; <a href="public/history.json">public/</a></td><td>Every change event, and the snapshot index.</td></tr>
+      <tr><td class="k"><a href="data/position_events.json">data/position_events.json</a></td><td>Position-ladder transitions.</td></tr>
+      <tr><td class="k"><a href="data/grade_history.json">data/grade_history.json</a> &middot; <a href="data/grade_outcomes.json">grade_outcomes.json</a></td><td>The daily grade series, and simulated outcomes over it.</td></tr>
+      <tr><td class="k"><a href="data/regime_daily.json">data/regime_daily.json</a></td><td>The committed regime-by-day series.</td></tr>
+      <tr><td class="k"><a href="data/universe_active.json">data/universe_active.json</a> &middot; <a href="public/universe_ranking.json">universe_ranking.json</a> &middot; <a href="public/universe_candidates.json">universe_candidates.json</a></td><td>The weekly rotation: the selection, the full ranking, the candidate pool.</td></tr>
+      <tr><td class="k"><a href="data/fear_greed_history.json">data/fear_greed_history.json</a> &middot; <a href="data/earnings_calendar.json">earnings_calendar.json</a></td><td>Daily Fear &amp; Greed; cached earnings dates.</td></tr>
+      <tr><td class="k"><a href="data/last_notified">data/last_notified</a> &middot; <a href="data/last_notified_am">last_notified_am</a> &middot; <a href="data/last_intraday_alerts">last_intraday_alerts</a></td><td>The markers the Slack pushes read so each fires once: last post-close date, last pre-market date, last intraday alerts sent.</td></tr>
+      <tr><td class="k"><a href="framework/state/positions.json">framework/state/positions.json</a></td><td>The ledger: holdings, closed trades, watch list.</td></tr>
+      <tr><td class="k"><a href="framework/state/position_state.json">position_state.json</a> &middot; <a href="framework/state/regime_chassis_state.json">regime_chassis_state.json</a> &middot; <a href="framework/state/regime_history.json">regime_history.json</a></td><td>Ladder state per name; the chassis&rsquo;s hysteresis state; the regime log, one entry per day.</td></tr>
+      <tr><td class="k"><a href="data/pool/gics_vocabulary.json">data/pool/gics_vocabulary.json</a> &middot; <a href="data/pool/inclusions.json">inclusions.json</a> &middot; <a href="data/pool/nasdaq100.json">nasdaq100.json</a></td><td>The pool&rsquo;s committed inputs (D-021, D-023).</td></tr>
+      <tr><td class="k">data/universe_cache/</td><td>ETF top holdings, one file per ETF:<div class="chips"><a href="data/universe_cache/etf_AIQ.json">AIQ</a><a href="data/universe_cache/etf_GLD.json">GLD</a><a href="data/universe_cache/etf_IBIT.json">IBIT</a><a href="data/universe_cache/etf_ITA.json">ITA</a><a href="data/universe_cache/etf_IWM.json">IWM</a><a href="data/universe_cache/etf_QQQ.json">QQQ</a><a href="data/universe_cache/etf_QTUM.json">QTUM</a><a href="data/universe_cache/etf_SMH.json">SMH</a><a href="data/universe_cache/etf_SPY.json">SPY</a><a href="data/universe_cache/etf_XBI.json">XBI</a><a href="data/universe_cache/etf_XLB.json">XLB</a><a href="data/universe_cache/etf_XLC.json">XLC</a><a href="data/universe_cache/etf_XLE.json">XLE</a><a href="data/universe_cache/etf_XLF.json">XLF</a><a href="data/universe_cache/etf_XLI.json">XLI</a><a href="data/universe_cache/etf_XLK.json">XLK</a><a href="data/universe_cache/etf_XLP.json">XLP</a><a href="data/universe_cache/etf_XLRE.json">XLRE</a><a href="data/universe_cache/etf_XLU.json">XLU</a><a href="data/universe_cache/etf_XLV.json">XLV</a><a href="data/universe_cache/etf_XLY.json">XLY</a></div></td></tr>
+      <tr><td class="k">data/snapshots/</td><td>The weekly archive &mdash; one snapshot per completed week, kept permanently by the retention rule (<code>history_manager.prune_snapshots</code>):<div class="chips"><a href="data/snapshots/snapshot_20260220_214951_534868.json">2026-02-20</a><a href="data/snapshots/snapshot_20260227_215250_960083.json">2026-02-27</a><a href="data/snapshots/snapshot_20260306_215832_830093.json">2026-03-06</a><a href="data/snapshots/snapshot_20260313_214820_754226.json">2026-03-13</a><a href="data/snapshots/snapshot_20260320_215911_932021.json">2026-03-20</a><a href="data/snapshots/snapshot_20260327_215727_947378.json">2026-03-27</a><a href="data/snapshots/snapshot_20260403_215005_294169.json">2026-04-03</a><a href="data/snapshots/snapshot_20260410_220306_571780.json">2026-04-10</a><a href="data/snapshots/snapshot_20260417_220553_891673.json">2026-04-17</a><a href="data/snapshots/snapshot_20260424_222711_438808.json">2026-04-24</a><a href="data/snapshots/snapshot_20260501_220602_641464.json">2026-05-01</a><a href="data/snapshots/snapshot_20260508_223745_301256.json">2026-05-08</a><a href="data/snapshots/snapshot_20260515_223212_880846.json">2026-05-15</a><a href="data/snapshots/snapshot_20260522_221453_434811.json">2026-05-22</a><a href="data/snapshots/snapshot_20260529_225014_537463.json">2026-05-29</a><a href="data/snapshots/snapshot_20260605_224107_047937.json">2026-06-05</a><a href="data/snapshots/snapshot_20260612_221526_442415.json">2026-06-12</a><a href="data/snapshots/snapshot_20260619_223817_389582.json">2026-06-19</a><a href="data/snapshots/snapshot_20260626_221130_973248.json">2026-06-26</a><a href="data/snapshots/snapshot_20260703_221603_923916.json">2026-07-03</a><a href="data/snapshots/snapshot_20260710_224016_122932.json">2026-07-10</a><a href="data/snapshots/snapshot_20260717_215141_630696.json">2026-07-17</a><a href="data/snapshots/snapshot_20260724_221303_570187.json">2026-07-24</a><a href="data/snapshots/snapshot_20260731_223229_158675.json">2026-07-31</a><a href="data/snapshots/snapshot_20260807_221830_539337.json">2026-08-07</a><a href="data/snapshots/snapshot_20260814_215908_702857.json">2026-08-14</a><a href="data/snapshots/snapshot_20260821_214855_162800.json">2026-08-21</a><a href="data/snapshots/snapshot_20260828_225314_755997.json">2026-08-28</a><a href="data/snapshots/snapshot_20260904_231300_583700.json">2026-09-04</a><a href="data/snapshots/snapshot_20260911_215222_671638.json">2026-09-11</a><a href="data/snapshots/snapshot_20260918_214712_936827.json">2026-09-18</a><a href="data/snapshots/snapshot_20260925_234817_295946.json">2026-09-25</a><a href="data/snapshots/snapshot_20261002_221556_068421.json">2026-10-02</a><a href="data/snapshots/snapshot_20261009_225522_144433.json">2026-10-09</a><a href="data/snapshots/snapshot_20261016_223848_591894.json">2026-10-16</a><a href="data/snapshots/snapshot_20261023_233157_572174.json">2026-10-23</a><a href="data/snapshots/snapshot_20261030_223419_412237.json">2026-10-30</a><a href="data/snapshots/snapshot_20261106_235654_047590.json">2026-11-06</a></div></td></tr>
+
+      <tr><td colspan="2" style="padding-top:16px;color:#9aa6b2;border-bottom:0"><strong>The studies</strong> &mdash; report, then pre-registration and declarations, then results</td></tr>
+      <tr><td class="k"><a href="docs/backtest-regime.md">backtest-regime.md</a> &middot; <a href="docs/backtest-regime-results.json">results</a></td><td>Build 4, the regime walk-forward.</td></tr>
+      <tr><td class="k"><a href="docs/gauge-b-campaign.md">gauge-b-campaign.md</a> &middot; <a href="docs/gauge-b-campaign-results.json">results</a></td><td>Gauge B parameter campaign.</td></tr>
+      <tr><td class="k"><a href="docs/gauge-b-throttle-sweep.md">gauge-b-throttle-sweep.md</a> &middot; <a href="docs/gauge-b-throttle-results.json">results</a></td><td>The 240-combo throttle frontier.</td></tr>
+      <tr><td class="k"><a href="docs/backtest-doctrine.md">backtest-doctrine.md</a> &middot; <a href="docs/backtest-doctrine-results.json">results</a></td><td>Build 5 Layer A.</td></tr>
+      <tr><td class="k"><a href="docs/backtest-systems.md">backtest-systems.md</a> &middot; <a href="docs/backtest-systems-prereg.md">prereg</a> &middot; <a href="docs/backtest-systems-results.json">results</a> &middot; <a href="docs/backtest-systems-addendum.json">addendum</a></td><td>Build 5B and its post-registration addendum.</td></tr>
+      <tr><td class="k"><a href="docs/backtest-ablation.md">backtest-ablation.md</a> &middot; <a href="docs/backtest-ablation-prereg.md">prereg</a> &middot; <a href="docs/backtest-ablation-results.json">results</a></td><td>Build 5.1.</td></tr>
+      <tr><td class="k"><a href="docs/backtest-target.md">backtest-target.md</a> &middot; <a href="docs/backtest-target-prereg.md">prereg</a> &middot; <a href="docs/backtest-target-declarations.md">declarations</a> &middot; <a href="docs/backtest-target-results.json">results</a></td><td>Build 6A.</td></tr>
+      <tr><td class="k"><a href="docs/backtest-carry.md">backtest-carry.md</a> &middot; <a href="docs/backtest-carry-prereg.md">prereg</a> &middot; <a href="docs/backtest-carry-declarations.md">declarations</a> &middot; <a href="docs/backtest-carry-results.json">results</a></td><td>Build 7.</td></tr>
+      <tr><td class="k"><a href="docs/backtest-score-ablation.md">backtest-score-ablation.md</a> &middot; <a href="docs/backtest-score-ablation-prereg.md">prereg</a> &middot; <a href="docs/backtest-score-ablation-results.json">results</a></td><td>Build 5.2.</td></tr>
+      <tr><td class="k"><a href="docs/backtest-exit.md">backtest-exit.md</a> &middot; <a href="docs/backtest-exit-prereg.md">prereg</a> &middot; <a href="docs/backtest-exit-prereg-amendment.md">amendment</a> &middot; <a href="docs/backtest-exit-results.json">results</a></td><td>Build 8.</td></tr>
+      <tr><td class="k"><a href="docs/backtest-sizing.md">backtest-sizing.md</a> &middot; <a href="docs/backtest-sizing-prereg.md">prereg</a> &middot; <a href="docs/backtest-sizing-results.json">results</a></td><td>Build 9.</td></tr>
+      <tr><td class="k"><a href="docs/backtest-inputs.md">backtest-inputs.md</a></td><td>The 38 study inputs across five studies, which were pinned and which were not.</td></tr>
+      <tr><td class="k"><a href="docs/grade-history.md">grade-history.md</a></td><td>The grade series contract, the backfill, and the outcome tracker.</td></tr>
+      <tr><td class="k"><a href="docs/img/backtest_equity.png">backtest_equity</a> &middot; <a href="docs/img/backtest_drawdowns.png">drawdowns</a> &middot; <a href="docs/img/backtest_regime_ribbon.png">regime_ribbon</a></td><td>Build 4 charts.</td></tr>
+      <tr><td class="k"><a href="docs/img/gaugeb_equity.png">gaugeb_equity</a> &middot; <a href="docs/img/gaugeb_drawdowns.png">drawdowns</a> &middot; <a href="docs/img/gaugeb_chassis_ribbon.png">chassis_ribbon</a> &middot; <a href="docs/img/gaugeb_throttle_frontier.png">throttle_frontier</a></td><td>Gauge B charts.</td></tr>
+      <tr><td class="k"><a href="docs/img/systems_equity.png">systems_equity</a> &middot; <a href="docs/img/systems_r_dist.png">systems_r_dist</a></td><td>Build 5B charts.</td></tr>
+
+      <tr><td colspan="2" style="padding-top:16px;color:#9aa6b2;border-bottom:0"><strong>Decisions</strong></td></tr>
+      <tr><td class="k"><a href="docs/decisions/README.md">decisions/README.md</a> &middot; <a href="docs/decisions/TEMPLATE.md">TEMPLATE</a> &middot; <a href="docs/decisions/CHAT-RULINGS.md">CHAT-RULINGS</a></td><td>The registry, the record template, and the in-session rulings. The registry&rsquo;s index omits D-021.</td></tr>
+      <tr><td class="k"><a href="docs/decisions/D-001-swing-gauge-1a.md">D-001</a> &middot; <a href="docs/decisions/D-002-r4-sunday-cadence.md">D-002</a> &middot; <a href="docs/decisions/D-003-1b-position-engine.md">D-003</a> &middot; <a href="docs/decisions/D-004-extension-guard.md">D-004</a> &middot; <a href="docs/decisions/D-005-sentiment-not-a-voter.md">D-005</a> &middot; <a href="docs/decisions/D-006-build4-protocol.md">D-006</a></td><td>1A gauge; R4 Sunday cadence; 1B position engine; extension guard; sentiment not a voter; the backtest protocol.</td></tr>
+      <tr><td class="k"><a href="docs/decisions/D-007-theme-layer-retirement.md">D-007</a> &middot; <a href="docs/decisions/D-008-gauge-b-architecture.md">D-008</a> &middot; <a href="docs/decisions/D-009-exit-timing-1230.md">D-009</a> &middot; <a href="docs/decisions/D-010-lab-pattern-laws.md">D-010</a> &middot; <a href="docs/decisions/D-011-aplus-doctrine.md">D-011</a> &middot; <a href="docs/decisions/D-012-fear-greed-rebuild.md">D-012</a></td><td>Theme layer retired; Gauge B; 12:30 exit (proposed); the Lab laws; the A+ doctrine; Fear &amp; Greed rebuild.</td></tr>
+      <tr><td class="k"><a href="docs/decisions/D-013-sentiment-rebuild.md">D-013</a> &middot; <a href="docs/decisions/D-014-tradingview-data-api.md">D-014</a> &middot; <a href="docs/decisions/D-015-oss-frameworks-survey.md">D-015</a> &middot; <a href="docs/decisions/D-016-extreme-fear-overlay.md">D-016</a> &middot; <a href="docs/decisions/D-017-candidates-tier.md">D-017</a> &middot; <a href="docs/decisions/D-018-close-basis-position-ladder.md">D-018</a></td><td>Sentiment rebuild; TradingView (proposed); OSS survey (proposed); extreme-fear overlay (proposed); candidates tier; close-basis ladder.</td></tr>
+      <tr><td class="k"><a href="docs/decisions/D-019-breaker-coverage.md">D-019</a> &middot; <a href="docs/decisions/D-020a-ytd-anchor-cap.md">D-020a</a> &middot; <a href="docs/decisions/D-020a-impact-table.csv">impact CSV</a> &middot; <a href="docs/decisions/D-021-pool-builder-v2.md">D-021</a> &middot; <a href="docs/decisions/D-022-unmeasurable-market-cap.md">D-022</a> &middot; <a href="docs/decisions/D-023-classification-aliases.md">D-023</a></td><td>Breaker coverage; one honest YTD and its per-ticker impact; pool v2; unmeasurable caps; GICS aliases.</td></tr>
+      <tr><td class="k"><a href="docs/briefs/README.md">briefs/README.md</a></td><td>Deliberation briefs: the analysis before a ruling.</td></tr>
+      <tr><td class="k"><a href="docs/briefs/gauge-b-design-brief.md">gauge-b-design</a> &middot; <a href="docs/briefs/aplus-doctrine-brief.md">aplus-doctrine</a> &middot; <a href="docs/briefs/candidates-tier-brief.md">candidates-tier</a> &middot; <a href="docs/briefs/fear-greed-redesign-brief.md">fear-greed-redesign</a> &middot; <a href="docs/briefs/sentiment-rebuild-brief.md">sentiment-rebuild</a></td><td>The briefs behind D-008, D-011, D-017, D-012 and D-013.</td></tr>
+      <tr><td class="k"><a href="docs/briefs/q1-parliament-vs-chassis.mermaid">q1-parliament-vs-chassis</a> &middot; <a href="docs/briefs/knife-vs-landing.mermaid">knife-vs-landing</a></td><td>Mermaid diagram sources used by the briefs.</td></tr>
+
+      <tr><td colspan="2" style="padding-top:16px;color:#9aa6b2;border-bottom:0"><strong>Reference and teaching</strong></td></tr>
+      <tr><td class="k"><a href="docs/reference/README.md">reference/README.md</a></td><td>The index of the styled pages below.</td></tr>
+      <tr><td class="k"><a href="docs/reference/glossary.html">glossary.html</a></td><td>Every identifier with its verdict, through Build 5.2.</td></tr>
+      <tr><td class="k"><a href="docs/reference/surfaces-explained.html">surfaces-explained.html</a> &middot; <a href="docs/reference/surfaces-explained.md">.md</a></td><td>Dashboard against framework, and where they disagree.</td></tr>
+      <tr><td class="k"><a href="docs/reference/grades-complete.html">grades-complete.html</a></td><td>The A+/B/C rule from source: seven rows, five ladders, seven traps.</td></tr>
+      <tr><td class="k"><a href="docs/reference/backtest-doctrine-explained.html">backtest-doctrine-explained</a> &middot; <a href="docs/reference/build5-layer-a-verdict.html">build5-layer-a-verdict</a></td><td>Build 5&rsquo;s machinery, and its verdict.</td></tr>
+      <tr><td class="k"><a href="docs/reference/artifacts-and-5b-explained.html">artifacts-and-5b-explained</a> &middot; <a href="docs/reference/build51-explained.html">build51-explained</a> &middot; <a href="docs/reference/build7-carry-replay.html">build7-carry-replay</a></td><td>Builds 5B, 5.1 and 7 in plain terms.</td></tr>
+      <tr><td class="k"><a href="docs/reference/row7-findings.html">row7-findings.html</a></td><td>The earnings-runway rule measured, and the fail-open fix.</td></tr>
+      <tr><td class="k"><a href="docs/reference/d011-revisit-brief.html">d011-revisit-brief</a> &middot; <a href="docs/reference/d011-d019-combined-brief.html">d011-d019-combined-brief</a></td><td>The briefs for the ruling still owed.</td></tr>
+      <tr><td class="k"><a href="docs/NORTH-STAR.md">NORTH-STAR.md</a></td><td>The goal, the principles, and a changelog that stops at 13 July.</td></tr>
+      <tr><td class="k"><a href="docs/rules.md">rules.md</a> &middot; <a href="docs/regime.md">regime.md</a> &middot; <a href="docs/scoring.md">scoring.md</a> &middot; <a href="docs/sentiment.md">sentiment.md</a></td><td>R1&ndash;R28; the 1A gauge and the 1B engine; the composite score; Fear &amp; Greed and sentiment formulas.</td></tr>
+      <tr><td class="k"><a href="docs/testing.md">testing.md</a></td><td>The pin doctrine: three laws, each learned from a defect.</td></tr>
+      <tr><td class="k"><a href="docs/explainers/README.md">explainers/README.md</a></td><td>The teaching layer; explainers never rule anything.</td></tr>
+      <tr><td class="k"><a href="docs/explainers/regime-first-throttle-fire-2026-07-21.md">first-throttle-fire</a> &middot; <a href="docs/explainers/n2-asymmetric-hysteresis.md">n2-hysteresis</a> &middot; <a href="docs/explainers/counterfactual-reasoning.md">counterfactual-reasoning</a> &middot; <a href="docs/explainers/market-mechanics-primer.md">market-mechanics</a></td><td>Gauge B&rsquo;s first defensive call; the upgrade rule; the evaluation method; close-basis and MOC mechanics.</td></tr>
+
+      <tr><td colspan="2" style="padding-top:16px;color:#9aa6b2;border-bottom:0"><strong>The ribbon probe and the archive</strong></td></tr>
+      <tr><td class="k"><a href="docs/tools/ribbon/README.md">tools/ribbon/README.md</a></td><td>A research method backed up because it had no other copy. Its data files are deliberately not committed.</td></tr>
+      <tr><td class="k"><a href="docs/tools/ribbon/ribbon-lab-v2.html">v2</a> &middot; <a href="docs/tools/ribbon/ribbon-lab-v4.html">v4</a> &middot; <a href="docs/tools/ribbon/ribbon-lab-v5.html">v5</a> &middot; <a href="docs/tools/ribbon/ribbon-lab-v6.html">v6</a> &middot; <a href="docs/tools/ribbon/ribbon-lab-v7.html">v7</a> &middot; <a href="docs/tools/ribbon/ribbon-lab-v9.html">v9</a></td><td>The lab page&rsquo;s versions. v9 in this repo always shows synthetic demo data.</td></tr>
+      <tr><td class="k"><a href="docs/tools/ribbon/regen_data.py">regen_data.py</a> &middot; <a href="docs/tools/ribbon/probe.py">probe.py</a> &middot; <a href="docs/tools/ribbon/part2.py">part2.py</a></td><td>The method itself.</td></tr>
+      <tr><td class="k"><a href="archive/README.md">archive/README.md</a></td><td>What was retired on 23 July and what replaced it.</td></tr>
+      <tr><td class="k"><a href="archive/qualified_themes.json">qualified_themes.json</a> &middot; <a href="archive/theme_history.json">theme_history.json</a></td><td>The theme layer&rsquo;s last state.</td></tr>
+      <tr><td class="k"><a href="archive/theme_ranker.py">theme_ranker.py</a> &middot; <a href="archive/constituent_ranker.py">constituent_ranker.py</a> &middot; <a href="archive/test_r4_qualification.py">test_r4_qualification.py</a></td><td>The retired code.</td></tr>
+
+      <tr><td colspan="2" style="padding-top:16px;color:#9aa6b2;border-bottom:0"><strong>Configuration</strong></td></tr>
+      <tr><td class="k"><a href="framework/config.yaml">framework/config.yaml</a></td><td>Capital, R28 caps, the regime engine and every chassis parameter.</td></tr>
+      <tr><td class="k"><a href="ops/automation_switch.json">ops/automation_switch.json</a></td><td>The kill switch.</td></tr>
+      <tr><td class="k"><a href="render.yaml">render.yaml</a> &middot; <a href="requirements.txt">requirements.txt</a> &middot; <a href=".claude/launch.json">.claude/launch.json</a></td><td>The Render service, its dependencies, the local preview config.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">Not listed: the snapshots of the last 30 days that retention will prune (the live index is <code>snapshots[]</code> in <a href="data/history.json">data/history.json</a>), the byte-identical copies under <code>public/snapshots/</code>, and source code, which section 5 maps by folder.</p>
+</section>
+
+<div class="foot">
+  <h2>What this record does not establish</h2>
+  <ul>
+    <li><strong>That the doctrine has an edge.</strong> Layer A found the A+ ordering inverted; 5B found it &ldquo;unfalsified but unsupported&rdquo;; every later study closed without adopting anything. Layer A&rsquo;s population is today&rsquo;s pool, which its report says makes the inversion partly survivorship; 5B records the same caveat as inherited.</li>
+    <li><strong>That every study was blind.</strong> Build 8 was partly unblinded before its primary statistic was adopted, and says so at the top of its report.</li>
+    <li><strong>That the ledger is complete.</strong> Nine closed rows have no exit date, two orphan trades could not be migrated (<code>6802095</code>), and nothing has been recorded since 23 October.</li>
+    <li><strong>That the written docs describe today&rsquo;s system.</strong> <code>regime.md</code> (12 July) describes the 3-voter gauge and never mentions the chassis that replaced it; <code>scoring.md</code> (5 July) predates the v2 scorer; <code>architecture.html</code> (18 July) still draws the theme layer; the North Star changelog stops at 13 July; the glossary stops at Build 5.2; the registry index omits D-021 and lists D-023 as held although it is on <code>main</code>.</li>
+    <li><strong>What happened between 18 February and 12 June.</strong> Only the bot committed in that window. No record says what was decided.</li>
+    <li><strong>That the automation works with real orders.</strong> Only the shadow stage exists, and its broker adapter raises on every call (<code>35c5889</code>). The repo records no run of it.</li>
+  </ul>
+</div>
+
+</div></body></html>
